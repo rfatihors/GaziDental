@@ -1,9 +1,12 @@
 import json
+from pathlib import Path
 from PIL import Image, ImageDraw
-import os  # os modülünü ekleyin
+import os
+
+from config import ANNOTATION_DIR, MASKS_DIR
 
 # COCO JSON dosyasını oku (örneğin, 'coco_annotations.json' olarak adlandırılmış)
-coco_json_path = '/local/annotation/formatted_file.json'  # COCO JSON dosyanızın yolu
+coco_json_path = ANNOTATION_DIR / 'formatted_file.json'
 
 with open(coco_json_path, 'r') as json_file:
     coco_data = json.load(json_file)
@@ -29,12 +32,11 @@ if target_image_data:
             draw.polygon(segment, outline=None, fill=255)  # fill parametresini sabit bir değerle değiştirin (255 beyaz renktir)
 
     # Klasörün varlığını kontrol et ve yoksa oluştur
-    masks_folder_path = '/local/masks/'
-    if not os.path.exists(masks_folder_path):
-        os.makedirs(masks_folder_path)
+    masks_folder_path = MASKS_DIR
+    masks_folder_path.mkdir(parents=True, exist_ok=True)
 
     # Maskeyi BMP olarak kaydedin
-    mask_save_path = os.path.join(masks_folder_path, f'{target_image_data["file_name"]}_mask.bmp')  # Hedef görselin adını kullanarak maske dosyasının adını oluşturun
+    mask_save_path = masks_folder_path / f'{target_image_data["file_name"]}_mask.bmp'
     mask.save(mask_save_path)
 
     print(f"Maske kaydedildi: {mask_save_path}")

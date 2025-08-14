@@ -11,6 +11,8 @@ import time
 from tqdm import tqdm
 from torch.nn import functional as F
 
+from config import GUMMY_SMILE_GUNCEL_DT_DIR
+
 
 # Adjust file path to your local environment
 class CustomSegmentationDataset(Dataset):
@@ -67,7 +69,7 @@ def get_dls(root, transformations, bs, split=[0.9, 0.1], nws=8):
     return tr_dl, val_dl, test_dl, n_cls
 
 
-root = "/home/ahmetko/Projects/yapay-zeka/local/gummy_smile_guncel_dt"  # Adjust this path to your local directory
+root = str(GUMMY_SMILE_GUNCEL_DT_DIR)  # Adjusted to project-relative path
 mean, std, im_h, im_w = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], 512, 512
 trans = A.Compose(
     [A.Resize(im_h, im_w), A.augmentations.transforms.Normalize(mean=mean, std=std), ToTensorV2(transpose_mask=True)])

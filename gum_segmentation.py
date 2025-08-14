@@ -8,6 +8,8 @@ from tqdm import tqdm
 import random
 from torchvision import transforms as tfs
 
+from config import ROOT_DIR
+
 class CustomSegmentationDataset(Dataset):
 
     def __init__(self, root, data, transformations=None):
@@ -61,7 +63,7 @@ def get_dls(root, transformations, bs, split=[0.9, 0.1], nws=8):
     return tr_dl, val_dl, test_dl, n_cls
 
 
-root = "/home/ahmetko/Projects/yapay-zeka/data/gumTest"
+root = str(ROOT_DIR / "data/gumTest")
 mean, std, im_h, im_w = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], 512, 512
 trans = A.Compose(
     [A.Resize(im_h, im_w), A.augmentations.transforms.Normalize(mean=mean, std=std), ToTensorV2(transpose_mask=True)])
@@ -323,7 +325,7 @@ def inference(dl, model, device, n_ims=15):
         count = plot(cols, rows, count, im=pred, title="Predicted Mask")
 
 
-model = torch.load("saved_models/dental_best_model.pt")
+model = torch.load(ROOT_DIR / "saved_models/dental_best_model.pt")
 inference(test_dl, model=model, device=device)
 
 plt.show()

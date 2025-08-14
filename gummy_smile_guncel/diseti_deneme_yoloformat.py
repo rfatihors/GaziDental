@@ -1,5 +1,8 @@
 import json
 import os
+from pathlib import Path
+
+from config import LOCAL_DIR, TXT_FILES_DIR
 
 def normalize_coordinates(coordinates, width, height):
     normalized_coords = []
@@ -45,8 +48,8 @@ def process_json(json_path, output_folder):
                 txt_file.write(txt_content)
 
 if __name__ == "__main__":
-    json_path = "local/gum_detect/gum/gum/labels/IMG_24555.json"
-    output_folder = "/home/ahmetko/Projects/yapay-zeka/local/txt_files"
+    json_path = LOCAL_DIR / "gum_detect/gum/gum/labels/IMG_24555.json"
+    output_folder = TXT_FILES_DIR
 
     process_json(json_path, output_folder)
 
@@ -84,8 +87,8 @@ def draw_outline(image_path, coordinates, color=(0, 255, 0), thickness=2):
 
 if __name__ == "__main__":
     # Replace with your image and txt file paths
-    image_path = "local/gum_detect/gum/gum/images/IMG_111.jpg"
-    txt_path = "local/txt_files/IMG_111.txt"
+    image_path = LOCAL_DIR / "gum_detect/gum/gum/images/IMG_111.jpg"
+    txt_path = TXT_FILES_DIR / "IMG_111.txt"
 
 
     # Read coordinates from the txt file
@@ -133,17 +136,17 @@ def draw_on_image(image_path, coordinates):
     cv2.destroyAllWindows()
 
 
-if __name__ == "__main__":
-    # Replace with your image and txt file paths
-    image_path = "local/gum_detect/gum/gum/images/IMG_111.jpg"
-    txt_path = "local/txt_files/IMG_111.txt"
+  if __name__ == "__main__":
+      # Replace with your image and txt file paths
+      image_path = LOCAL_DIR / "gum_detect/gum/gum/images/IMG_111.jpg"
+      txt_path = TXT_FILES_DIR / "IMG_111.txt"
 
-    # Read coordinates from the txt file
-    with open(txt_path, 'r') as txt_file:
-        lines = txt_file.readlines()
-        coordinates = lines[0].split()
+      # Read coordinates from the txt file
+      with open(txt_path, 'r') as txt_file:
+          lines = txt_file.readlines()
+          coordinates = lines[0].split()
 
-    # Draw on the image
-    draw_on_image(image_path, coordinates)
+      # Draw on the image
+      draw_on_image(image_path, coordinates)
 
 """

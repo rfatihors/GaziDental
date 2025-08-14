@@ -4,9 +4,11 @@ from glob import glob
 from torch.utils.data import random_split, Dataset, DataLoader
 from albumentations.pytorch import ToTensorV2
 from torchvision import transforms as tfs
-from structures.dental.gummy_smile import  image_to_pixel_min
+from structures.dental.gummy_smile import image_to_pixel_min
 import xgboost as xgb
 import pandas as pd
+
+from config import ROOT_DIR
 
 class CustomSegmentationDataset(Dataset):
 
@@ -129,17 +131,17 @@ def return_to_numpy(dl, model, device):
         images.append(dl.dataset.im_paths[idx].split("/")[-1].split(".jpg")[0])
     return preds, images
 
-root = "/home/ahmetko/Projects/yapay-zeka/data/gumTest"
+root = str(ROOT_DIR / "data/gumTest")
 mean, std, im_h, im_w = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], 1808, 2704
 trans = A.Compose(
     [A.Resize(im_h, im_w), A.augmentations.transforms.Normalize(mean=mean, std=std), ToTensorV2(transpose_mask=True)])
 tr_dl, val_dl, test_dl, n_cls = get_dls(root=root, transformations=trans, bs=32)
 
 regressor = xgb.XGBRegressor()
-regressor.load_model("saved_models/xgboost_regressor.json")
+regressor.load_model(str(ROOT_DIR / "saved_models/xgboost_regressor.json"))
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model = torch.load("saved_models/dental_best_model_large.pt")
+model = torch.load(str(ROOT_DIR / "saved_models/dental_best_model_large.pt"))
 inference(test_dl, model=model, device=device)
 plt.show()
 
@@ -163,7 +165,7 @@ Y_predictions = regressor.predict(Xtest)
 df_pred = pd.DataFrame(Y_predictions,columns=['1p','2p','3p','4p','5p','6p'])
 df_pred["image numarası"] = df_pixels["image numarası"].tolist()
 
-df = pd.read_excel("data/ölçümler ai.xlsx", sheet_name="Sheet2")
+df = pd.read_excel(ROOT_DIR / "data/ölçümler ai.xlsx", sheet_name="Sheet2")
 col_list = df.columns.to_list()
 for index, row in df.iterrows():
     for col in col_list:
