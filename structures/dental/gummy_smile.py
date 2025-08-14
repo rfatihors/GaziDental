@@ -1,8 +1,10 @@
 import numpy as np
 import pandas as pd
 
+
 def image_to_pixel_min(numpy_array):
-    data_return=pd.DataFrame()
+    """Locate local minima of white pixel counts along both sides."""
+    data_return = pd.DataFrame()
     non_black_pixels_mask = numpy_array > 0
     height, width = non_black_pixels_mask.shape
     start = int(width * 0.47)
@@ -62,7 +64,7 @@ def image_to_pixel_min(numpy_array):
 
 
     ## left ##
-    data_return = data_return._append(local_min_vals)
+    data_return = pd.concat([data_return, local_min_vals])
 
     left_most_white_pixel = None
     for i in range(non_black_pixels_mask.shape[1]):
@@ -104,5 +106,6 @@ def image_to_pixel_min(numpy_array):
         if len(local_min_vals) <= 3:
             break
 
-    data_return = data_return._append(local_min_vals)
+    data_return = pd.concat([data_return, local_min_vals])
     return data_return
+
