@@ -2,7 +2,7 @@ import os
 import cv2
 from tqdm import tqdm
 
-from dental.gazi_gum_project.combine_gum_smile import test_data_pred
+from gummy_smile_guncel.combine_gum_smile_guncel import test_data_pred
 
 image_dir = "local/gummy_smile_guncel/images"
 mask_dir = "local/gummy_smile_guncel/masks"

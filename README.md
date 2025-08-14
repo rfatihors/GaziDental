@@ -1,5 +1,6 @@
 # GaziDental
 
+
 Bu depo, diş hekimliği alanında segmentasyon, regresyon ve istatistik analizleri için geliştirilen çalışmaları içermektedir.
 
 ## Ortam Kurulumu
@@ -38,4 +39,11 @@ pip install -r requirements.txt
 - pandas
 - numpy
 - scipy
+=======
+This repository contains experiments and tools for gum and tooth analysis.
+
+## Segmentation Model
+
+The gum segmentation model is implemented only in [`gummy_smile_guncel/gum_segmentation_guncel.py`](gummy_smile_guncel/gum_segmentation_guncel.py).
+
 
