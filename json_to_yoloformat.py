@@ -1,146 +1,122 @@
-"""""
+import argparse
 import json
 import os
+from typing import List
 
-def normalize_coordinates(coordinates, width, height):
-    normalized_coords = []
+import cv2
+import numpy as np
+
+from config import DATASET_ROOT
+
+
+# ---------------------- JSON -> YOLO ----------------------
+
+def normalize_coordinates(coordinates: List[float], width: int, height: int) -> List[float]:
+    normalized = []
     for i in range(0, len(coordinates), 2):
         x = coordinates[i] / width
         y = coordinates[i + 1] / height
-        normalized_coords.extend([x, y])
-    return normalized_coords
+        normalized.extend([x, y])
+    return normalized
 
-def create_txt_content(category_id, segmentation, bbox, area, width, height):
-    normalized_coords = normalize_coordinates(segmentation, width, height)
-    txt_content = f"{category_id} {' '.join(map(str, normalized_coords))}\n"
-    return txt_content
 
-def process_json(json_path, output_folder):
-    with open(json_path, 'r') as json_file:
+def create_txt_content(category_id: int, segmentation: List[float], width: int, height: int) -> str:
+    coords = normalize_coordinates(segmentation, width, height)
+    return f"{category_id} {' '.join(map(str, coords))}\n"
+
+
+def process_json(json_path: str, output_folder: str) -> None:
+    with open(json_path, "r") as json_file:
         data = json.load(json_file)
 
-        images = data['images']
-        annotations = data['annotations']
+    images = data["images"]
+    annotations = data["annotations"]
 
-        for image in images:
-            image_id = image['id']
-            image_filename = image['file_name']
-            image_width = image['width']
-            image_height = image['height']
+    os.makedirs(output_folder, exist_ok=True)
+    for image in images:
+        image_id = image["id"]
+        image_filename = image["file_name"]
+        width = image["width"]
+        height = image["height"]
 
-            txt_content = ""
+        txt_content = ""
+        for ann in annotations:
+            if ann["image_id"] == image_id:
+                segmentation = ann["segmentation"][0]
+                txt_content += create_txt_content(ann["category_id"], segmentation, width, height)
 
-            for annotation in annotations:
-                if annotation['image_id'] == image_id:
-                    category_id = annotation['category_id']
-                    segmentation = annotation['segmentation'][0]
-                    bbox = annotation['bbox']
-                    area = annotation['area']
+        txt_filename = os.path.splitext(image_filename)[0] + ".txt"
+        with open(os.path.join(output_folder, txt_filename), "w") as txt_file:
+            txt_file.write(txt_content)
 
-                    txt_content += create_txt_content(category_id, segmentation, bbox, area, image_width, image_height)
 
-            txt_filename = os.path.splitext(image_filename)[0] + '.txt'
-            txt_path = os.path.join(output_folder, txt_filename)
+# ---------------------- Drawing utilities ----------------------
 
-            with open(txt_path, 'w') as txt_file:
-                txt_file.write(txt_content)
-
-if __name__ == "__main__":
-    json_path = "/home/ahmetko/Projects/yapay-zeka/local/annotation/formatted_file.json"
-    output_folder = "/home/ahmetko/Projects/yapay-zeka/local/txt_files"
-
-    process_json(json_path, output_folder)
-
-"""""
-#############################
-
-"""""
-
-### Tüm görsel üzerinde etiketi çizdirme
-
-import cv2
-import numpy as np
-
-def draw_outline(image_path, coordinates, color=(0, 255, 0), thickness=2):
-    # Load image
+def draw_outline(image_path: str, coordinates: List[str]) -> None:
     image = cv2.imread(image_path)
-
-    # Normalize coordinates to match the image size
-    coordinates = [(int(float(coordinates[i]) * image.shape[1]), int(float(coordinates[i + 1]) * image.shape[0])) for i in range(1, len(coordinates), 2)]
-
-    # Convert coordinates to numpy array
-    coordinates = np.array(coordinates, dtype=np.int32)
-
-    # Draw outline on a black image
+    coords = [
+        (int(float(coordinates[i]) * image.shape[1]), int(float(coordinates[i + 1]) * image.shape[0]))
+        for i in range(1, len(coordinates), 2)
+    ]
     mask = np.zeros_like(image)
-    cv2.polylines(mask, [coordinates], isClosed=True, color=color, thickness=thickness)
-
-    # Add the outline to the original image
+    cv2.polylines(mask, [np.array(coords, dtype=np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
     result = cv2.addWeighted(image, 1, mask, 1, 0)
-
-    # Display the result
-    cv2.imshow('Image with Outline', result)
+    cv2.imshow("Image with Outline", result)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-if __name__ == "__main__":
-    # Replace with your image and txt file paths
-    image_path = "/home/ahmetko/Projects/yapay-zeka/local/images/2024-02-20 231035.png"
-    txt_path = "/home/ahmetko/Projects/yapay-zeka/local/txt_files/2024-02-20 231035.txt"
 
-    # Read coordinates from the txt file
-    with open(txt_path, 'r') as txt_file:
-        lines = txt_file.readlines()
-        coordinates = lines[0].split()
-
-    # Draw outline on the image
-    draw_outline(image_path, coordinates)
-    
-
-"""""
-###########################
-
-
-# Sadece maskeyi görüntüleme
-
-import cv2
-import numpy as np
-
-def create_mask(image_shape, coordinates):
-    mask = np.zeros(image_shape[:2], dtype=np.uint8)
-    pts = np.array(coordinates[1:], dtype=np.int32).reshape((-1, 2))
-    cv2.fillPoly(mask, [pts], color=255)
-    return mask
-
-def draw_on_image(image_path, coordinates):
-    # Load image
+def draw_on_image(image_path: str, coordinates: List[str]) -> None:
     image = cv2.imread(image_path)
-
-    # Normalize coordinates to match the image size
-    coordinates = [(int(float(coordinates[i]) * image.shape[1]), int(float(coordinates[i + 1]) * image.shape[0])) for i in range(1, len(coordinates), 2)]
-
-    # Create mask
-    mask = create_mask(image.shape, coordinates)
-
-    # Apply the mask to the image
+    coords = [
+        (int(float(coordinates[i]) * image.shape[1]), int(float(coordinates[i + 1]) * image.shape[0]))
+        for i in range(1, len(coordinates), 2)
+    ]
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    cv2.fillPoly(mask, [np.array(coords, dtype=np.int32)], color=255)
     result = cv2.bitwise_and(image, image, mask=mask)
-
-    # Display the result
-    cv2.imshow('Image with Mask', result)
+    cv2.imshow("Image with Mask", result)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+
+# ---------------------- CLI ----------------------
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="JSON'dan YOLO formatına dönüştürme ve görselleştirme")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    default_json = os.path.join(DATASET_ROOT, "annotation", "formatted_file.json")
+    default_txt = os.path.join(DATASET_ROOT, "txt_files")
+    default_img = os.path.join(DATASET_ROOT, "images", "image.png")
+
+    convert_parser = subparsers.add_parser("convert", help="COCO JSON'u YOLO txt dosyalarına dönüştür")
+    convert_parser.add_argument("--json-path", default=default_json, help="COCO JSON dosyasının yolu")
+    convert_parser.add_argument("--output-folder", default=default_txt, help="TXT dosyalarının kaydedileceği klasör")
+
+    outline_parser = subparsers.add_parser("draw-outline", help="YOLO txt dosyasından kontur çiz")
+    outline_parser.add_argument("--image-path", default=default_img, help="Görselin yolu")
+    outline_parser.add_argument("--txt-path", default=os.path.join(default_txt, "example.txt"), help="TXT dosyasının yolu")
+
+    mask_parser = subparsers.add_parser("draw-mask", help="YOLO txt dosyasından maske uygula")
+    mask_parser.add_argument("--image-path", default=default_img, help="Görselin yolu")
+    mask_parser.add_argument("--txt-path", default=os.path.join(default_txt, "example.txt"), help="TXT dosyasının yolu")
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    if args.command == "convert":
+        process_json(args.json_path, args.output_folder)
+    else:
+        with open(args.txt_path, "r") as txt_file:
+            coordinates = txt_file.readlines()[0].split()
+        if args.command == "draw-outline":
+            draw_outline(args.image_path, coordinates)
+        elif args.command == "draw-mask":
+            draw_on_image(args.image_path, coordinates)
+
+
 if __name__ == "__main__":
-    # Replace with your image and txt file paths
-    image_path = "/local/images/2024-02-20 231035.png"
-    txt_path = "/local/txt_files/2024-02-20 231035.txt"
-
-    # Read coordinates from the txt file
-    with open(txt_path, 'r') as txt_file:
-        lines = txt_file.readlines()
-        coordinates = lines[0].split()
-
-    # Draw on the image
-    draw_on_image(image_path, coordinates)
-
-
+    main()
