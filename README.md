@@ -52,6 +52,11 @@ pip install -r requirements.txt
 - pandas
 - numpy
 - scipy
+
+### Derin Öğrenme
+- tensorflow
+- keras
+- tensorflow-datasets
 =======
 This repository contains experiments and tools for gum and tooth analysis.
 
