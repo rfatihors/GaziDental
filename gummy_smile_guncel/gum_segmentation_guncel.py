@@ -1,7 +1,9 @@
+import argparse
+import importlib.util
 import json, os, torch, cv2, numpy as np, albumentations as A
+from pathlib import Path
 from PIL import Image
 from matplotlib import pyplot as plt
-from glob import glob
 from torch.utils.data import random_split, Dataset, DataLoader
 from albumentations.pytorch import ToTensorV2
 import random
@@ -12,12 +14,32 @@ from tqdm import tqdm
 from torch.nn import functional as F
 
 
-# Adjust file path to your local environment
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_config():
+    """Load dataset root from config.py if available."""
+    config_path = BASE_DIR / "config.py"
+    if not config_path.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("config", config_path)
+    config = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(config)
+    return getattr(config, "DATASET_ROOT", None)
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Gum segmentation training script")
+    parser.add_argument("--root", type=str, help="Path to dataset root directory")
+    return parser.parse_args()
+
+
 class CustomSegmentationDataset(Dataset):
 
     def __init__(self, root, data, transformations=None):
-        self.im_paths = sorted(glob(f"{root}/{data}/images/*.jpg"))
-        self.gt_paths = sorted(glob(f"{root}/{data}/mask/*.bmp"))
+        self.root = Path(root)
+        self.im_paths = sorted((self.root / data / "images").glob("*.jpg"))
+        self.gt_paths = sorted((self.root / data / "mask").glob("*.bmp"))
         self.transformations = transformations
         self.n_cls = 2
 
@@ -35,8 +57,8 @@ class CustomSegmentationDataset(Dataset):
         return self.read_im(im_path, gt_path)
 
     def read_im(self, im_path, gt_path):
-        return cv2.cvtColor(cv2.imread(im_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB), cv2.cvtColor(
-            cv2.imread(gt_path, cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(cv2.imread(str(im_path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB), cv2.cvtColor(
+            cv2.imread(str(gt_path), cv2.IMREAD_COLOR), cv2.COLOR_BGR2GRAY)
 
     def apply_transformations(self, im, gt):
         transformed = self.transformations(image=im, mask=gt)
@@ -67,10 +89,21 @@ def get_dls(root, transformations, bs, split=[0.9, 0.1], nws=8):
     return tr_dl, val_dl, test_dl, n_cls
 
 
-root = "/home/ahmetko/Projects/yapay-zeka/local/gummy_smile_guncel_dt"  # Adjust this path to your local directory
+args = _parse_args()
+config_root = _load_config()
+root = args.root or config_root
+if root is None:
+    raise ValueError("Dataset root path must be provided via --root argument or config.py")
+root = Path(root)
+if not root.is_absolute():
+    root = (BASE_DIR / root).resolve()
+
 mean, std, im_h, im_w = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225], 512, 512
-trans = A.Compose(
-    [A.Resize(im_h, im_w), A.augmentations.transforms.Normalize(mean=mean, std=std), ToTensorV2(transpose_mask=True)])
+trans = A.Compose([
+    A.Resize(im_h, im_w),
+    A.augmentations.transforms.Normalize(mean=mean, std=std),
+    ToTensorV2(transpose_mask=True),
+])
 tr_dl, val_dl, test_dl, n_cls = get_dls(root=root, transformations=trans, bs=32)
 
 

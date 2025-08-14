@@ -59,4 +59,18 @@ This repository contains experiments and tools for gum and tooth analysis.
 
 The gum segmentation model is implemented only in [`gummy_smile_guncel/gum_segmentation_guncel.py`](gummy_smile_guncel/gum_segmentation_guncel.py).
 
+### Usage
+
+Gum segmentation expects a dataset directory containing `Train` and `Test` folders. Specify the dataset location either via a command line argument or by editing `config.py`:
+
+```bash
+# Option 1: provide the path explicitly
+python gummy_smile_guncel/gum_segmentation_guncel.py --root path/to/gummy_smile_guncel_dt
+
+# Option 2: edit config.py and run without arguments
+python gummy_smile_guncel/gum_segmentation_guncel.py
+```
+
+If a relative path is supplied, it is resolved with respect to the project root.
+
 
