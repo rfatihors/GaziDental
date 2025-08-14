@@ -73,4 +73,16 @@ python gummy_smile_guncel/gum_segmentation_guncel.py
 
 If a relative path is supplied, it is resolved with respect to the project root.
 
+## Path-based utilities
+
+`mask_bmp.py`, `json_to_yoloformat.py` ve `gummy_smile_project/sam2_segmentation.py` varsayılan olarak yolları `config.py` içindeki `DATASET_ROOT` değerinden türetir. İstenirse komut satırından farklı yollar verilebilir:
+
+```bash
+python mask_bmp.py --json-path path/to/formatted_file.json --output-dir path/to/masks
+python json_to_yoloformat.py convert --json-path path/to/formatted_file.json --output-folder path/to/txt_files
+python gummy_smile_project/sam2_segmentation.py --image path/to/image.jpg
+```
+
+Argümanlar sağlanmadığında örneklerdeki yollar `DATASET_ROOT` ile ilişkilendirilmiş varsayılan değerlerdir.
+
 
