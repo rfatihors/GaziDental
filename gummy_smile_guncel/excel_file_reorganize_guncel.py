@@ -17,7 +17,7 @@ for index, row in df.iterrows():
             if "-" in str(row[col]):
                 row[col] = 0
             if len(str(row[col])) == 4 and str(row[col])[0] != '0':
-                row[col] = row[col]/1000
+                row[col] = float(row[col]) / 1000
 
 
 #df["image numarası"] = df["image numarası"].str.upper() + '.jpg'
@@ -153,9 +153,9 @@ for index, row in df.iterrows():
             elif "-" in cell_str:
                 row[col] = 0
             elif len(cell_str) == 4 and cell_str[0] != '0':
-                row[col] = float(cell_str) / 1000
+                row[col] = pd.to_numeric(cell_str, errors='coerce') / 1000
             elif len(cell_str) == 5 and cell_str[0] != '0':
-                row[col] = float(cell_str) / 1000
+                row[col] = pd.to_numeric(cell_str, errors='coerce') / 1000
 
 res = glob.glob('local/gummy_smile_guncel/masks/*.bmp')
 
@@ -306,9 +306,9 @@ for index, row in df.iterrows():
             elif "-" in cell_str:
                 row[col] = 0
             elif len(cell_str) == 4 and cell_str[0] != '0':
-                row[col] = float(cell_str) / 1000
+                row[col] = pd.to_numeric(cell_str, errors='coerce') / 1000
             elif len(cell_str) == 5 and cell_str[0] != '0':
-                row[col] = float(cell_str) / 1000
+                row[col] = pd.to_numeric(cell_str, errors='coerce') / 1000
 
 # Maskeleri oku
 res = glob.glob('local/gummy_smile_guncel/masks/*.bmp')
