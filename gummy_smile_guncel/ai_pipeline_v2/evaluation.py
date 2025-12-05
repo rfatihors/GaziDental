@@ -150,6 +150,70 @@ def _align_manual_auto(df) -> Tuple[List[float], List[float]]:
     return manual_values, auto_values
 
 
+def _detect_case_column(df) -> Optional[str]:
+    candidates = ["case_id", "patient_id", "image", "filename", "id"]
+    for candidate in candidates:
+        if candidate in df.columns:
+            return candidate
+    return None
+
+
+def _prepare_manual_dataframe(manual_df: "pd.DataFrame") -> "pd.DataFrame":
+    case_col = _detect_case_column(manual_df) or "case_id"
+    if case_col not in manual_df.columns:
+        manual_df = manual_df.copy()
+        manual_df[case_col] = [f"case_{idx}" for idx in range(len(manual_df))]
+
+    measurement_cols = [
+        col
+        for col in manual_df.columns
+        if (col.lower().startswith("manual_mm_") or col.lower().startswith("mm")) and any(char.isdigit() for char in col)
+    ]
+    measurement_cols = measurement_cols[:6]
+    numeric = manual_df[measurement_cols].apply(pd.to_numeric, errors="coerce") if measurement_cols else pd.DataFrame()
+    renamed = {}
+    for idx, col in enumerate(numeric.columns, start=1):
+        renamed[col] = f"manual_mm_{idx}"
+    numeric = numeric.rename(columns=renamed)
+    manual_ready = pd.concat([manual_df[[case_col]].rename(columns={case_col: "case_id"}), numeric], axis=1)
+    if not numeric.empty:
+        manual_ready["manual_mean_mm"] = numeric.mean(axis=1)
+        manual_ready["manual_max_mm"] = numeric.max(axis=1)
+    return manual_ready
+
+
+def _align_manual_auto_split(auto_df: "pd.DataFrame", manual_df: Optional["pd.DataFrame"]):
+    if manual_df is None:
+        return _align_manual_auto(auto_df)
+
+    case_col = _detect_case_column(auto_df) or "case_id"
+    auto_df = auto_df.copy()
+    if case_col != "case_id" and case_col in auto_df.columns:
+        auto_df = auto_df.rename(columns={case_col: "case_id"})
+
+    manual_ready = _prepare_manual_dataframe(manual_df)
+    merged = auto_df.merge(manual_ready, on="case_id", how="inner")
+    if merged.empty:
+        raise ValueError("No overlapping cases between manual and automatic measurements.")
+
+    auto_cols = [col for col in merged.columns if col.startswith("mm_model_")]
+    if not auto_cols:
+        raise ValueError("Automatic measurement columns (mm_model_*) are missing.")
+    auto_mean = merged[auto_cols].mean(axis=1)
+
+    manual_candidates = [col for col in merged.columns if col.startswith("manual_mm_")]
+    manual_series = merged["manual_mean_mm"] if "manual_mean_mm" in merged.columns else None
+    if manual_series is None and manual_candidates:
+        manual_series = merged[manual_candidates].mean(axis=1)
+    if manual_series is None:
+        raise ValueError("Manual measurement columns are missing from manual_measurements.csv")
+
+    paired = pd.concat([manual_series, auto_mean], axis=1, keys=["manual", "auto"]).dropna()
+    if paired.empty:
+        raise ValueError("No overlapping manual/auto measurements after dropping NaNs.")
+    return paired["manual"].tolist(), paired["auto"].tolist()
+
+
 def _safe_accuracy(preds: List[float], truth: List[float]) -> float:
     paired = [(p, t) for p, t in zip(preds, truth) if not (math.isnan(p) or math.isnan(t))]
     if not paired:
@@ -161,21 +225,24 @@ def _safe_accuracy(preds: List[float], truth: List[float]) -> float:
 def _load_legacy_predictions(path: Path):
     if HAS_STACK:
         df = pd.read_csv(path)
-        case_col = None
-        for candidate in ["case_id", "patient_id", "image_id", "filename"]:
+        case_col = _detect_case_column(df) or "case_id"
+        if case_col not in df.columns:
+            df[case_col] = [f"case_{idx}" for idx in range(len(df))]
+        legacy_col = None
+        for candidate in [
+            "legacy_predicted_severity",
+            "predicted_severity_legacy",
+            "severity_pred",
+            "prediction",
+            "predicted_severity",
+        ]:
             if candidate in df.columns:
-                case_col = candidate
+                legacy_col = candidate
                 break
-        pred_col = None
-        for candidate in ["predicted_severity", "severity_pred", "prediction", "severity"]:
-            if candidate in df.columns:
-                pred_col = candidate
-                break
-        if pred_col is None:
+        if legacy_col is None:
             raise KeyError("Legacy file does not contain a severity prediction column.")
-        predictions = df[pred_col].astype(float)
-        if case_col:
-            predictions.index = df[case_col].astype(str)
+        df = df.rename(columns={case_col: "case_id"})
+        predictions = df[legacy_col].astype(float)
         truth = df["severity"].astype(float) if "severity" in df.columns else None
         return predictions, truth
     rows = []
@@ -187,6 +254,47 @@ def _load_legacy_predictions(path: Path):
     predictions = {row.get("case_id", str(idx)): float(row.get("predicted_severity", row.get("prediction", 0))) for idx, row in enumerate(rows)}
     truth = {row.get("case_id", str(idx)): float(row.get("severity", "nan")) for idx, row in enumerate(rows)} if any("severity" in r for r in rows) else None
     return predictions, truth
+
+
+def _load_prediction_pairs(path: Path):
+    if not path.exists():
+        return None, None, None
+    if HAS_STACK:
+        df = pd.read_csv(path)
+        case_col = _detect_case_column(df) or "case_id"
+        if case_col not in df.columns:
+            df[case_col] = [f"case_{idx}" for idx in range(len(df))]
+        df = df.rename(columns={case_col: "case_id"})
+
+        new_preds = df["predicted_severity"].astype(float) if "predicted_severity" in df.columns else None
+        legacy_preds = None
+        for candidate in ["legacy_predicted_severity", "predicted_severity_legacy", "severity_pred", "prediction"]:
+            if candidate in df.columns:
+                legacy_preds = df[candidate].astype(float)
+                break
+        if legacy_preds is None and "predicted_severity" in df.columns and new_preds is None:
+            legacy_preds = df["predicted_severity"].astype(float)
+
+        case_index = df["case_id"].astype(str)
+        if new_preds is not None:
+            new_preds.index = case_index
+        if legacy_preds is not None:
+            legacy_preds.index = case_index
+
+        truth = df["severity"].astype(float) if "severity" in df.columns else None
+        return new_preds, legacy_preds, truth
+
+    rows: List[Dict[str, str]] = []
+    with path.open() as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            rows.append(row)
+    if not rows:
+        return None, None, None
+    new_preds = {r.get("case_id", str(idx)): float(r.get("predicted_severity", math.nan)) for idx, r in enumerate(rows)} if "predicted_severity" in rows[0] else None
+    legacy_preds = {r.get("case_id", str(idx)): float(r.get("legacy_predicted_severity", r.get("prediction", math.nan))) for idx, r in enumerate(rows)}
+    truth = {r.get("case_id", str(idx)): float(r.get("severity", math.nan)) for idx, r in enumerate(rows)} if "severity" in rows[0] else None
+    return new_preds, legacy_preds, truth
 
 
 def _compute_basic_metrics(manual: List[float], auto: List[float]) -> Dict[str, float]:
@@ -205,22 +313,45 @@ def _compute_basic_metrics(manual: List[float], auto: List[float]) -> Dict[str, 
 
 def evaluate_measurements(
     measurement_path: Optional[Path] = None,
+    manual_path: Optional[Path] = None,
     legacy_xgboost_csv: Optional[Path] = None,
     legacy_manual_csv: Optional[Path] = None,
 ) -> Dict[str, float]:
     base_dir = Path(__file__).resolve().parent
     _ensure_workspace_dirs(base_dir)
     measurement_path = measurement_path or base_dir / "data" / "auto_measurements.csv"
+    manual_path = manual_path or legacy_manual_csv or base_dir / "data" / "manual_measurements.csv"
+    legacy_xgboost_csv = legacy_xgboost_csv or base_dir / "data" / "severity_predictions.csv"
 
     df = _load_measurements(measurement_path)
-    manual, auto = _align_manual_auto(df)
+
+    manual_df = None
+    if HAS_STACK and manual_path and Path(manual_path).exists():
+        try:
+            manual_df = pd.read_csv(manual_path)
+        except Exception:
+            manual_df = None
+
+    try:
+        if HAS_STACK:
+            manual, auto = _align_manual_auto_split(df, manual_df)
+        else:
+            manual, auto = _align_manual_auto(df)
+        manual_comparison_done = True
+    except Exception as exc:  # noqa: BLE001 - surfaced for visibility
+        print(f"Manual vs automatic alignment failed: {exc}")
+        manual_comparison_done = False
+        manual, auto = [], []
 
     if HAS_STACK:
-        mae = mean_absolute_error(manual, auto)
-        rmse = mean_squared_error(manual, auto, squared=False)
-        r2 = r2_score(manual, auto)
-        icc = _icc_two_way_random(np.column_stack([manual, auto]))
-        results = {"mae": mae, "rmse": rmse, "r2": r2, "icc": icc}
+        if manual and auto:
+            mae = mean_absolute_error(manual, auto)
+            rmse = mean_squared_error(manual, auto, squared=False)
+            r2 = r2_score(manual, auto)
+            icc = _icc_two_way_random(np.column_stack([manual, auto]))
+            results = {"mae": mae, "rmse": rmse, "r2": r2, "icc": icc}
+        else:
+            results = {"mae": float("nan"), "rmse": float("nan"), "r2": float("nan"), "icc": float("nan")}
     else:
         results = _compute_basic_metrics(manual, auto)
 
@@ -229,35 +360,38 @@ def evaluate_measurements(
 
     benchmark: Dict[str, float] = {}
 
-    if legacy_xgboost_csv:
-        legacy_preds, legacy_truth = _load_legacy_predictions(legacy_xgboost_csv)
-        new_pred_path = base_dir / "data" / "severity_predictions.csv"
-        if new_pred_path.exists():
-            new_rows = _load_measurements(new_pred_path)
-            if HAS_STACK:
-                new_series = new_rows.set_index("case_id")["predicted_severity"].astype(float)
-                truth_series = new_rows.set_index("case_id")["severity"].astype(float) if "severity" in new_rows.columns else None
-            else:
-                new_series = {row.get("case_id", str(idx)): float(row.get("predicted_severity", 0)) for idx, row in enumerate(new_rows)}
-                truth_series = {row.get("case_id", str(idx)): float(row.get("severity", "nan")) for idx, row in enumerate(new_rows)} if any("severity" in r for r in new_rows) else None
-            if HAS_STACK:
-                common = new_series.index.intersection(legacy_preds.index)
+    if legacy_xgboost_csv and Path(legacy_xgboost_csv).exists():
+        new_preds, legacy_preds, truth_series = _load_prediction_pairs(legacy_xgboost_csv)
+        if new_preds is None and legacy_preds is None:
+            try:
+                legacy_preds, truth_series = _load_legacy_predictions(legacy_xgboost_csv)
+            except Exception as exc:  # noqa: BLE001
+                print(f"Failed to load legacy predictions: {exc}")
+                legacy_preds = None
+
+        if HAS_STACK:
+            if new_preds is not None and legacy_preds is not None:
+                common = new_preds.index.intersection(legacy_preds.index)
                 if len(common) > 0:
-                    benchmark["prediction_agreement"] = float((new_series.loc[common] == legacy_preds.loc[common]).mean())
+                    benchmark["prediction_agreement"] = float((new_preds.loc[common] == legacy_preds.loc[common]).mean())
                 if truth_series is not None:
-                    new_acc = _safe_accuracy(new_series.tolist(), truth_series.tolist())
-                    legacy_acc = _safe_accuracy(legacy_preds.tolist(), truth_series.reindex(legacy_preds.index).tolist())
+                    new_acc = _safe_accuracy(new_preds.tolist(), truth_series.tolist())
+                    legacy_acc = _safe_accuracy(legacy_preds.tolist(), truth_series.tolist())
                     benchmark["new_accuracy"] = new_acc
                     benchmark["legacy_accuracy"] = legacy_acc
                     benchmark["delta_accuracy"] = new_acc - legacy_acc if not math.isnan(new_acc) and not math.isnan(legacy_acc) else float("nan")
-            else:
-                common_keys = set(new_series.keys()) & set(legacy_preds.keys())
+            elif legacy_preds is not None:
+                if truth_series is not None:
+                    benchmark["legacy_accuracy"] = _safe_accuracy(legacy_preds.tolist(), truth_series.tolist())
+        else:
+            if isinstance(new_preds, dict) and isinstance(legacy_preds, dict):
+                common_keys = set(new_preds.keys()) & set(legacy_preds.keys())
                 if common_keys:
-                    agreement = sum(1 for k in common_keys if new_series[k] == legacy_preds[k]) / len(common_keys)
+                    agreement = sum(1 for k in common_keys if new_preds[k] == legacy_preds[k]) / len(common_keys)
                     benchmark["prediction_agreement"] = agreement
                 if truth_series:
-                    truth_list = [truth_series.get(k, math.nan) for k in new_series.keys()]
-                    new_acc = _safe_accuracy(list(new_series.values()), truth_list)
+                    truth_list = [truth_series.get(k, math.nan) for k in new_preds.keys()]
+                    new_acc = _safe_accuracy(list(new_preds.values()), truth_list)
                     legacy_acc = _safe_accuracy(list(legacy_preds.values()), [truth_series.get(k, math.nan) for k in legacy_preds.keys()])
                     benchmark["new_accuracy"] = new_acc
                     benchmark["legacy_accuracy"] = legacy_acc
@@ -265,7 +399,11 @@ def evaluate_measurements(
 
     if benchmark:
         benchmark_path = base_dir / "results" / "benchmark_comparison.json"
-        benchmark_payload = {"measurement": results, "benchmark": benchmark}
+        benchmark_payload = {
+            "measurement": results,
+            "benchmark": benchmark,
+            "manual_comparison": manual_comparison_done,
+        }
         benchmark_path.write_text(json.dumps(benchmark_payload, indent=2))
         print(f"Benchmark results saved to: {benchmark_path}")
 
@@ -283,10 +421,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate automatic measurements and optional legacy benchmarks.")
     parser.add_argument("--legacy_xgboost_csv", type=Path, default=None, help="Optional legacy XGBoost severity predictions CSV")
     parser.add_argument("--legacy_manual_csv", type=Path, default=None, help="Optional legacy manual measurement CSV")
+    parser.add_argument("--manual_path", type=Path, default=None, help="Optional manual measurement CSV to compare against auto")
     args = parser.parse_args()
 
     evaluate_measurements(
         legacy_xgboost_csv=args.legacy_xgboost_csv,
         legacy_manual_csv=args.legacy_manual_csv,
+        manual_path=args.manual_path,
     )
     print("Sample usage: python evaluation.py --legacy_xgboost_csv ../old/results.csv")
