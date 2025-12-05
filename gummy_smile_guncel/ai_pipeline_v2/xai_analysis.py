@@ -7,6 +7,7 @@ lip reference lines. All artifacts are stored inside the ai_pipeline_v2
 workspace.
 """
 
+import argparse
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -238,7 +239,7 @@ def render_visual_overlay(
     cv2.imwrite(str(output_path), mask_overlay)
 
 
-def run_xai_analysis(sample_index: int = 0) -> Path:
+def run_xai_analysis(sample_index: int = 0, class_index: Optional[int] = None) -> Path:
     base_dir = Path(__file__).resolve().parent
     _ensure_workspace_dirs(base_dir)
 
@@ -248,7 +249,8 @@ def run_xai_analysis(sample_index: int = 0) -> Path:
     explainer, shap_values, expected_value = compute_shap_values(model, features)
 
     class_probs = model.predict_proba(features)
-    target_class = int(np.argmax(class_probs[sample_index]))
+    inferred_class = int(np.argmax(class_probs[sample_index]))
+    target_class = int(class_index) if class_index is not None else inferred_class
 
     audit_record = _collect_audit_record(
         df,
@@ -289,9 +291,30 @@ def run_xai_analysis(sample_index: int = 0) -> Path:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run XAI analysis on a sample.")
+    parser.add_argument(
+        "--sample-index",
+        type=int,
+        default=0,
+        help="Row index from auto_measurements.csv to explain (default: 0)",
+    )
+    parser.add_argument(
+        "--class-index",
+        type=int,
+        default=None,
+        help=(
+            "Optional target class for SHAP visualizations; defaults to the model's "
+            "predicted class for the selected sample."
+        ),
+    )
+
+    args = parser.parse_args()
+
     try:
-        output_folder = run_xai_analysis()
+        output_folder = run_xai_analysis(
+            sample_index=args.sample_index, class_index=args.class_index
+        )
         print(f"XAI artifacts saved to: {output_folder}")
-        print("Sample usage: python xai_analysis.py")
+        print("Sample usage: python xai_analysis.py --sample-index 3 --class-index 2")
     except Exception as exc:  # noqa: BLE001 - surfaced for CLI visibility
         print(f"XAI analysis failed: {exc}")
