@@ -7,8 +7,9 @@ lip reference lines. All artifacts are stored inside the ai_pipeline_v2
 workspace.
 """
 
+import json
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import joblib
@@ -72,12 +73,54 @@ def _load_inputs(base_dir: Path) -> Tuple[pd.DataFrame, object]:
     return df, model
 
 
+def _extract_case_identifier(df: pd.DataFrame, sample_index: int) -> str:
+    """Return a human-readable case identifier for the selected row."""
+
+    for candidate in ["case_id", "patient_id", "image", "filename"]:
+        if candidate in df.columns:
+            return str(df.iloc[sample_index][candidate])
+    return f"sample_{sample_index}"
+
+
 def _select_class_specific_values(shap_values, expected_value, class_index: int):
     if isinstance(shap_values, list):
         values = shap_values[class_index]
         base = expected_value[class_index] if isinstance(expected_value, list) else expected_value
         return values, base
     return shap_values, expected_value
+
+
+def _collect_audit_record(
+    df: pd.DataFrame,
+    features: pd.DataFrame,
+    shap_values,
+    expected_value,
+    class_probs: np.ndarray,
+    class_index: int,
+    sample_index: int,
+) -> Dict[str, object]:
+    """Build a serializable audit record for the selected sample."""
+
+    values, base = _select_class_specific_values(shap_values, expected_value, class_index)
+    shap_vector = values[sample_index]
+    feature_attributions = {
+        feature: float(shap_vector[idx]) for idx, feature in enumerate(features.columns)
+    }
+
+    record: Dict[str, object] = {
+        "case_id": _extract_case_identifier(df, sample_index),
+        "predicted_class": int(class_index),
+        "predicted_probabilities": class_probs[sample_index].tolist(),
+        "expected_value": float(base if np.isscalar(base) else base[class_index]),
+        "feature_values": features.iloc[sample_index].to_dict(),
+        "feature_attributions": feature_attributions,
+    }
+
+    for optional in ["mean_mm", "max_mm", "min_mm", "mm_per_pixel"]:
+        if optional in df.columns:
+            record[optional] = float(df.iloc[sample_index][optional])
+
+    return record
 
 
 def compute_shap_values(model, features: pd.DataFrame):
@@ -116,6 +159,25 @@ def save_force_plot(
     values, base = _select_class_specific_values(shap_values, expected_value, class_index)
     force = shap.force_plot(base, values[sample_index], features.iloc[sample_index], matplotlib=False)
     shap.save_html(str(output_path), force)
+
+
+def _write_audit_log(output_dir: Path, record: Dict[str, object]) -> Path:
+    """Append the audit record to a JSON log file inside results/xai."""
+
+    log_path = output_dir / "audit_log.json"
+    if log_path.exists():
+        try:
+            existing = json.loads(log_path.read_text())
+            if not isinstance(existing, list):
+                existing = [existing]
+        except json.JSONDecodeError:
+            existing = []
+    else:
+        existing = []
+
+    existing.append(record)
+    log_path.write_text(json.dumps(existing, indent=2))
+    return log_path
 
 
 def _choose_image_and_mask(base_dir: Path) -> Tuple[Optional[Path], Optional[Path]]:
@@ -188,6 +250,16 @@ def run_xai_analysis(sample_index: int = 0) -> Path:
     class_probs = model.predict_proba(features)
     target_class = int(np.argmax(class_probs[sample_index]))
 
+    audit_record = _collect_audit_record(
+        df,
+        features,
+        shap_values,
+        expected_value,
+        class_probs,
+        target_class,
+        sample_index,
+    )
+
     output_dir = base_dir / "results" / "xai"
     global_path = output_dir / "global_feature_importance.png"
     save_global_importance(shap_values, features, global_path, target_class)
@@ -203,6 +275,8 @@ def run_xai_analysis(sample_index: int = 0) -> Path:
         force_path,
     )
 
+    log_path = _write_audit_log(output_dir, audit_record)
+
     image_path, mask_path = _choose_image_and_mask(base_dir)
     if image_path and mask_path:
         overlay_path = output_dir / "visual_overlay.png"
@@ -210,6 +284,7 @@ def run_xai_analysis(sample_index: int = 0) -> Path:
     else:
         print("No matching image/mask pair found for visual overlay; skipping.")
 
+    print(f"Audit log updated: {log_path}")
     return output_dir
 
 
