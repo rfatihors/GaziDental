@@ -14,6 +14,7 @@ from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+from scipy.stats import ttest_ind
 from sklearn.metrics import confusion_matrix, mean_absolute_error, mean_squared_error
 
 from .rule_based_cds import assign_clinical_codes
@@ -108,6 +109,38 @@ def _resolve_truth_labels(
     etiology_truth = _resolve_column("etiology_code", combined_ids)
     treatment_truth = _resolve_column("treatment_code", combined_ids)
     return etiology_truth, treatment_truth
+
+
+def _measurement_column(df: pd.DataFrame, idx: int) -> pd.Series:
+    for candidate in (f"mm{idx}", f"manual_mm_{idx}", f"mm_model_{idx}"):
+        if candidate in df.columns:
+            return pd.to_numeric(df[candidate], errors="coerce")
+    return pd.Series(dtype=float)
+
+
+def _compute_ttests(
+    manual_df: pd.DataFrame, auto_df: pd.DataFrame, xgb_df: pd.DataFrame
+) -> Dict[str, Dict[str, float]]:
+    results: Dict[str, Dict[str, float]] = {}
+    for idx in range(1, 7):
+        manual_series = _measurement_column(manual_df, idx).dropna()
+        auto_series = _measurement_column(auto_df, idx).dropna()
+        xgb_series = _measurement_column(xgb_df, idx).dropna()
+
+        auto_p = float("nan")
+        xgb_p = float("nan")
+
+        if not manual_series.empty and not auto_series.empty:
+            _, auto_p = ttest_ind(manual_series, auto_series, equal_var=False)
+
+        if not manual_series.empty and not xgb_series.empty:
+            _, xgb_p = ttest_ind(manual_series, xgb_series, equal_var=False)
+
+        results[f"mm{idx}"] = {
+            "auto_vs_manual_p": float(auto_p),
+            "xgb_vs_manual_p": float(xgb_p),
+        }
+    return results
 
 
 def _bootstrap_delta_accuracy(
@@ -237,12 +270,17 @@ def evaluate() -> None:
 
     benchmark_path = RESULTS_DIR / "benchmark_comparison.json"
     etiology_path = RESULTS_DIR / "etiology_treatment_metrics.json"
+    stats_path = RESULTS_DIR / "statistical_tests.json"
+
+    ttest_results = _compute_ttests(manual_df, auto_df, xgb_df)
 
     benchmark_path.write_text(json.dumps(benchmark_payload, indent=2))
     etiology_path.write_text(json.dumps(etiology_treatment_payload, indent=2))
+    stats_path.write_text(json.dumps(ttest_results, indent=2))
 
     print(f"Benchmark metrics saved to: {benchmark_path}")
     print(f"Etiology/treatment metrics saved to: {etiology_path}")
+    print(f"Statistical tests saved to: {stats_path}")
 
 
 if __name__ == "__main__":

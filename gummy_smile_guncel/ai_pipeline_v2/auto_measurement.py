@@ -78,17 +78,35 @@ if HAS_STACK:
 
     def _estimate_lip_line_y(image: np.ndarray, contour: np.ndarray) -> float:
         topmost = contour[:, :, 1].min()
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        sobel_y = cv2.Sobel(blurred, cv2.CV_64F, 0, 1, ksize=3)
+
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
+        a_channel = lab[:, :, 1]
+        l_channel = lab[:, :, 0]
+
+        _, color_mask = cv2.threshold(a_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        l_blurred = cv2.GaussianBlur(l_channel, (5, 5), 0)
+        sobel_y = cv2.Sobel(l_blurred, cv2.CV_64F, 0, 1, ksize=3)
         abs_sobel_y = cv2.convertScaleAbs(sobel_y)
-        _, edges = cv2.threshold(abs_sobel_y, 50, 255, cv2.THRESH_BINARY)
-        search_band = edges[max(topmost - 40, 0): topmost + 5, :]
-        edge_points = np.argwhere(search_band == 255)
-        if edge_points.size == 0:
+        _, edge_mask = cv2.threshold(abs_sobel_y, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        lip_mask = cv2.bitwise_and(color_mask, edge_mask)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        lip_mask = cv2.morphologyEx(lip_mask, cv2.MORPH_OPEN, kernel, iterations=2)
+
+        search_start = max(topmost - 50, 0)
+        search_end = topmost + 10
+        search_band = lip_mask[search_start:search_end, :]
+        if search_band.size == 0 or cv2.countNonZero(search_band) == 0:
             return float(topmost)
-        lip_y_local = edge_points[:, 0].min()
-        return float(max(topmost - 40, 0) + lip_y_local)
+
+        contours, _ = cv2.findContours(search_band, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return float(topmost)
+
+        highest_contour = min(contours, key=lambda cnt: cnt[:, :, 1].min())
+        highest_y_local = highest_contour[:, :, 1].min()
+
+        return float(search_start + highest_y_local)
 
 
     def _split_regions(bbox: Tuple[int, int, int, int], regions: int = 6) -> List[Tuple[int, int]]:

@@ -24,7 +24,9 @@ def _ensure_dirs() -> None:
 def assign_clinical_codes(mean_mm: float) -> Tuple[str, str]:
     """Apply the official E1–T1 clinical standard."""
 
-    if mean_mm < 4:
+    if pd.isna(mean_mm):
+        return "E0", "T0"
+    elif mean_mm < 4:
         return "E1", "T1"
     elif mean_mm < 6:
         return "E2", "T2"
