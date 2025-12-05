@@ -8,14 +8,21 @@ without touching any legacy code or paths.
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
 
 NOISE_TOKENS = {"*", "-", "(mesafe yok)", "(mesafe yok )", "mesafe yok", ""}
-SEVERITY_MAP = {"low": 0, "normal": 1, "high": 2}
+SEVERITY_MAP = {
+    "low smile line": 0,
+    "normal smile line": 1,
+    "high smile line (gummy smile)": 2,
+    "low": 0,
+    "normal": 1,
+    "high": 2,
+}
 
 
 def load_raw_measurements(excel_path: Path) -> pd.DataFrame:
@@ -35,10 +42,10 @@ def clean_measurement_values(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]
     cleaned = df.copy()
     cleaned = cleaned.replace(list(NOISE_TOKENS), np.nan)
 
-    # Trim whitespace and normalize tokens in object columns
-    for col in cleaned.select_dtypes(include=["object"]).columns:
-        cleaned[col] = cleaned[col].astype(str).str.strip()
-        cleaned[col] = cleaned[col].replace(list(NOISE_TOKENS), np.nan)
+    for col in cleaned.columns:
+        if cleaned[col].dtype == object:
+            cleaned[col] = cleaned[col].astype(str).str.strip()
+            cleaned[col] = cleaned[col].replace(list(NOISE_TOKENS), np.nan)
 
     measurement_cols: List[str] = []
     for col in cleaned.columns:
@@ -47,7 +54,6 @@ def clean_measurement_values(df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]
             continue
 
         if cleaned[col].dtype == object:
-            # Skip textual categorical columns (contain letters)
             if cleaned[col].astype(str).str.contains(r"[A-Za-z]", na=False).any():
                 continue
 
@@ -89,9 +95,7 @@ def assign_severity(df: pd.DataFrame, folder_column: Optional[str] = None) -> pd
     if folder_column and folder_column in df.columns:
         folder_values = df[folder_column].astype(str).str.lower()
         df["severity"] = folder_values.apply(
-            lambda value: next(
-                (sev for key, sev in SEVERITY_MAP.items() if key in value), np.nan
-            )
+            lambda value: _map_severity_token(value, SEVERITY_MAP.keys())
         )
     else:
         df["severity"] = np.nan
@@ -99,12 +103,30 @@ def assign_severity(df: pd.DataFrame, folder_column: Optional[str] = None) -> pd
     return df
 
 
+def _map_severity_token(value: str, keys: Iterable[str]) -> float:
+    for key in keys:
+        if key in value:
+            return float(SEVERITY_MAP[key])
+    return np.nan
+
+
+def _ensure_workspace_dirs(base_dir: Path) -> None:
+    required_dirs: Sequence[Path] = [
+        base_dir / "data",
+        base_dir / "models",
+        base_dir / "results",
+        base_dir / "results" / "xai",
+    ]
+    for directory in required_dirs:
+        directory.mkdir(parents=True, exist_ok=True)
+
+
 def run_data_prep() -> Path:
     """Execute the data preparation workflow and return the output path."""
     base_dir = Path(__file__).resolve().parent
     excel_path = base_dir.parent / "olcumler_duzenlenmis.xlsx"
     output_path = base_dir / "data" / "clean_measurements.csv"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_workspace_dirs(base_dir)
 
     raw_df = load_raw_measurements(excel_path)
     cleaned_df, measurement_cols = clean_measurement_values(raw_df)
