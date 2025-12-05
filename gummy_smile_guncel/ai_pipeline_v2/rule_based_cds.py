@@ -24,15 +24,14 @@ def _ensure_dirs() -> None:
 def assign_clinical_codes(mean_mm: float) -> Tuple[str, str]:
     """Apply the official E1–T1 clinical standard."""
 
-    if mean_mm > 8:
-        return "E4", "T4"
     if mean_mm < 4:
         return "E1", "T1"
-    if mean_mm <= 6:
+    elif mean_mm < 6:
         return "E2", "T2"
-    if mean_mm <= 8:
+    elif mean_mm < 8:
         return "E3", "T3"
-    return "E1", "T1"
+    else:
+        return "E4", "T4"
 
 
 def _load_auto_measurements(path: Path) -> pd.DataFrame:
