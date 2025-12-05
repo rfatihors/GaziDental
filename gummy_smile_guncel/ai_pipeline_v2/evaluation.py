@@ -55,8 +55,12 @@ def _icc_two_way_random(data: np.ndarray) -> float:
 
 def _load_dataframe(path: Path, required_cols: List[str], default_id: str) -> pd.DataFrame:
     df = pd.read_csv(path)
-    if default_id not in df.columns:
-        df.insert(0, default_id, [f"{default_id}_{idx}" for idx in range(len(df))])
+    if "patient_id" in df.columns:
+        pass
+    elif "case_id" in df.columns:
+        df = df.rename(columns={"case_id": "patient_id"})
+    else:
+        df.insert(0, "patient_id", [f"{default_id}_{idx}" for idx in range(len(df))])
     missing = [col for col in required_cols if col not in df.columns]
     if missing:
         raise KeyError(f"Missing required columns {missing} in {path}")
@@ -188,13 +192,23 @@ def evaluate() -> None:
     if not common_ids:
         raise ValueError("No overlapping patient_ids between auto and xgboost predictions for classification metrics.")
 
-    etiology_true_list = truth_etiology.reindex(common_ids).tolist()
-    treatment_true_list = truth_treatment.reindex(common_ids).tolist()
+    etiology_truth_series = truth_etiology.reindex(common_ids)
+    auto_etiology_pred_series = auto_pred_df.loc[common_ids, "etiology_pred"]
+    xgb_etiology_pred_series = xgb_pred_df.loc[common_ids, "etiology_pred"]
 
-    auto_etiology_pred = auto_pred_df.loc[common_ids, "etiology_pred"].tolist()
-    auto_treatment_pred = auto_pred_df.loc[common_ids, "treatment_pred"].tolist()
-    xgb_etiology_pred = xgb_pred_df.loc[common_ids, "etiology_pred"].tolist()
-    xgb_treatment_pred = xgb_pred_df.loc[common_ids, "treatment_pred"].tolist()
+    etiology_mask = etiology_truth_series.notna()
+    etiology_true_list = etiology_truth_series[etiology_mask].tolist()
+    auto_etiology_pred = np.array(auto_etiology_pred_series)[etiology_mask].tolist()
+    xgb_etiology_pred = np.array(xgb_etiology_pred_series)[etiology_mask].tolist()
+
+    treatment_truth_series = truth_treatment.reindex(common_ids)
+    auto_treatment_pred_series = auto_pred_df.loc[common_ids, "treatment_pred"]
+    xgb_treatment_pred_series = xgb_pred_df.loc[common_ids, "treatment_pred"]
+
+    treatment_mask = treatment_truth_series.notna()
+    treatment_true_list = treatment_truth_series[treatment_mask].tolist()
+    auto_treatment_pred = np.array(auto_treatment_pred_series)[treatment_mask].tolist()
+    xgb_treatment_pred = np.array(xgb_treatment_pred_series)[treatment_mask].tolist()
 
     etiology_auto_metrics = _classification_metrics(etiology_true_list, auto_etiology_pred)
     etiology_xgb_metrics = _classification_metrics(etiology_true_list, xgb_etiology_pred)

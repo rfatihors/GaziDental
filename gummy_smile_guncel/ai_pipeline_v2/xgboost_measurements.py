@@ -53,6 +53,8 @@ def _train_model(X: pd.DataFrame, y: pd.Series, ids: pd.Series) -> Tuple[XGBRegr
         max_depth=4,
         subsample=0.8,
         colsample_bytree=0.8,
+        objective="reg:squarederror",
+        eval_metric="rmse",
         random_state=42,
     )
     model.fit(X_train, y_train)
