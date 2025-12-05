@@ -78,7 +78,14 @@ def run_rule_based_decisions() -> Path:
     merged = auto_df.merge(clinician_df, on="patient_id", how="left")
 
     merged[["etiology_code", "treatment_code"]] = merged["mean_mm"].apply(assign_clinical_codes).tolist()
-    merged["proposed_treatment"] = merged["treatment_code"]
+
+    treatment_descriptions = {
+        "T1": "Gingivectomy / Gingivoplasty",
+        "T2": "Lip repositioning / Botox",
+        "T3": "Orthodontic treatment / Osteotomy",
+        "T4": "LeFort I Osteotomy",
+    }
+    merged["proposed_treatment"] = merged["treatment_code"].map(treatment_descriptions).fillna(merged["treatment_code"])
 
     merged.to_csv(output_path, index=False)
     return output_path

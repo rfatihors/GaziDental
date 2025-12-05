@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -81,10 +81,66 @@ def _classification_metrics(true_labels: List[str], pred_labels: List[str]) -> D
     return {"accuracy": float(accuracy), "confusion_matrix": confusion}
 
 
+def _resolve_truth_labels(
+    manual_df: pd.DataFrame,
+    auto_df: pd.DataFrame,
+    xgb_df: pd.DataFrame,
+    merged_auto: pd.DataFrame,
+    merged_xgb: pd.DataFrame,
+) -> Tuple[pd.Series, pd.Series]:
+    sources = []
+    for df in (manual_df, auto_df, xgb_df):
+        if "patient_id" in df.columns:
+            sources.append(df.set_index("patient_id"))
+
+    def _resolve_column(column: str, ids: Sequence[str]) -> pd.Series:
+        resolved = pd.Series(index=ids, dtype=object)
+        for source in sources:
+            if column in source.columns:
+                resolved = resolved.fillna(source.reindex(ids)[column])
+        return resolved
+
+    combined_ids = sorted(set(merged_auto["patient_id"]) | set(merged_xgb["patient_id"]))
+    etiology_truth = _resolve_column("etiology_code", combined_ids)
+    treatment_truth = _resolve_column("treatment_code", combined_ids)
+    return etiology_truth, treatment_truth
+
+
+def _bootstrap_delta_accuracy(
+    true_labels: Sequence[str],
+    auto_preds: Sequence[str],
+    xgb_preds: Sequence[str],
+    n_resamples: int = 1000,
+) -> Dict[str, float]:
+    if not true_labels:
+        return {"delta_accuracy_mean": float("nan"), "delta_accuracy_95CI_low": float("nan"), "delta_accuracy_95CI_high": float("nan")}
+
+    rng = np.random.default_rng(42)
+    truth = np.array(true_labels)
+    auto_arr = np.array(auto_preds)
+    xgb_arr = np.array(xgb_preds)
+    deltas = []
+    for _ in range(n_resamples):
+        sample_idx = rng.integers(0, len(truth), len(truth))
+        auto_acc = (truth[sample_idx] == auto_arr[sample_idx]).mean()
+        xgb_acc = (truth[sample_idx] == xgb_arr[sample_idx]).mean()
+        deltas.append(xgb_acc - auto_acc)
+
+    delta_array = np.array(deltas)
+    return {
+        "delta_accuracy_mean": float(delta_array.mean()),
+        "delta_accuracy_95CI_low": float(np.percentile(delta_array, 2.5)),
+        "delta_accuracy_95CI_high": float(np.percentile(delta_array, 97.5)),
+    }
+
+
 def _merge_sources() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     manual_path = DATA_DIR / "manual_cleaned.csv"
     auto_path = DATA_DIR / "auto_measurements.csv"
-    xgb_path = DATA_DIR / "xgboost_predictions.csv"
+    xgb_path = DATA_DIR / "xgboost_full_predictions.csv"
+
+    if not xgb_path.exists():
+        xgb_path = DATA_DIR / "xgboost_predictions.csv"
 
     manual_df = _load_dataframe(manual_path, ["mean_mm"], "patient_id")
     auto_df = _load_dataframe(auto_path, [], "patient_id")
@@ -112,33 +168,47 @@ def evaluate() -> None:
     auto_metrics = _measurement_metrics(merged_auto["mean_mm_manual"], merged_auto["mean_mm_auto"])
     xgb_metrics = _measurement_metrics(merged_xgb["mean_mm"], merged_xgb["predicted_mean_mm"])
 
-    etiology_true = merged_xgb["etiology_code"] if "etiology_code" in merged_xgb.columns else merged_auto.get("etiology_code")
-    treatment_true = merged_xgb["treatment_code"] if "treatment_code" in merged_xgb.columns else merged_auto.get("treatment_code")
-
-    if etiology_true is None or treatment_true is None:
-        etiology_true = merged_auto.get("etiology_code") or manual_df.get("etiology_code")
-        treatment_true = merged_auto.get("treatment_code") or manual_df.get("treatment_code")
+    truth_etiology, truth_treatment = _resolve_truth_labels(manual_df, auto_df, xgb_df, merged_auto, merged_xgb)
 
     auto_codes = merged_auto["mean_mm_auto"].apply(assign_clinical_codes)
-    auto_etiology_pred = [code[0] for code in auto_codes]
-    auto_treatment_pred = [code[1] for code in auto_codes]
+    auto_pred_df = pd.DataFrame({
+        "patient_id": merged_auto["patient_id"],
+        "etiology_pred": [code[0] for code in auto_codes],
+        "treatment_pred": [code[1] for code in auto_codes],
+    }).set_index("patient_id")
 
     xgb_codes = merged_xgb["predicted_mean_mm"].apply(assign_clinical_codes)
-    xgb_etiology_pred = [code[0] for code in xgb_codes]
-    xgb_treatment_pred = [code[1] for code in xgb_codes]
+    xgb_pred_df = pd.DataFrame({
+        "patient_id": merged_xgb["patient_id"],
+        "etiology_pred": [code[0] for code in xgb_codes],
+        "treatment_pred": [code[1] for code in xgb_codes],
+    }).set_index("patient_id")
 
-    etiology_true_list = etiology_true.tolist() if isinstance(etiology_true, pd.Series) else list(etiology_true)
-    treatment_true_list = treatment_true.tolist() if isinstance(treatment_true, pd.Series) else list(treatment_true)
+    common_ids = sorted(set(auto_pred_df.index) & set(xgb_pred_df.index))
+    if not common_ids:
+        raise ValueError("No overlapping patient_ids between auto and xgboost predictions for classification metrics.")
+
+    etiology_true_list = truth_etiology.reindex(common_ids).tolist()
+    treatment_true_list = truth_treatment.reindex(common_ids).tolist()
+
+    auto_etiology_pred = auto_pred_df.loc[common_ids, "etiology_pred"].tolist()
+    auto_treatment_pred = auto_pred_df.loc[common_ids, "treatment_pred"].tolist()
+    xgb_etiology_pred = xgb_pred_df.loc[common_ids, "etiology_pred"].tolist()
+    xgb_treatment_pred = xgb_pred_df.loc[common_ids, "treatment_pred"].tolist()
 
     etiology_auto_metrics = _classification_metrics(etiology_true_list, auto_etiology_pred)
     etiology_xgb_metrics = _classification_metrics(etiology_true_list, xgb_etiology_pred)
     treatment_auto_metrics = _classification_metrics(treatment_true_list, auto_treatment_pred)
     treatment_xgb_metrics = _classification_metrics(treatment_true_list, xgb_treatment_pred)
 
+    delta_accuracy = _bootstrap_delta_accuracy(
+        etiology_true_list, auto_etiology_pred, xgb_etiology_pred, n_resamples=1000
+    )
+
     benchmark_payload = {
         "auto_vs_manual": auto_metrics,
         "xgboost_vs_manual": xgb_metrics,
-        "delta_accuracy": float(etiology_xgb_metrics["accuracy"] - etiology_auto_metrics["accuracy"]),
+        "delta_accuracy": delta_accuracy,
     }
     etiology_treatment_payload = {
         "etiology": {
