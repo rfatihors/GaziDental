@@ -53,14 +53,29 @@ def run_inference(
         verbose=False,
     )
 
-    records: List[Dict[str, str]] = []
+    records: List[Dict[str, str | None]] = []
     for result, image_path in zip(results, image_paths):
         if result.masks is None or result.masks.data is None or len(result.masks.data) == 0:
+            records.append(
+                {
+                    "patient_id": image_path.stem,
+                    "image_path": str(image_path),
+                    "mask_path": None,
+                    "status": "no_mask",
+                }
+            )
             continue
         combined_mask = result.masks.data.max(dim=0).values.cpu().numpy()
         mask_path = output_dir / "masks" / f"{image_path.stem}.png"
         _save_mask(combined_mask, mask_path)
-        records.append({"patient_id": image_path.stem, "image_path": str(image_path), "mask_path": str(mask_path)})
+        records.append(
+            {
+                "patient_id": image_path.stem,
+                "image_path": str(image_path),
+                "mask_path": str(mask_path),
+                "status": "ok",
+            }
+        )
 
     df = pd.DataFrame(records)
     output_csv = output_dir / "yolo_predictions.csv"
@@ -94,7 +109,20 @@ def predict_and_measure(
     measurement_rows: List[Dict[str, object]] = []
     for _, row in predictions_df.iterrows():
         image_path = Path(row["image_path"])
-        mask_path = Path(row["mask_path"])
+        mask_value = row.get("mask_path")
+        status = row.get("status", "ok")
+        if pd.isna(mask_value) or mask_value in ("", None):
+            measurement_rows.append(
+                {
+                    "patient_id": image_path.stem,
+                    "mean_mm": float("nan"),
+                    "mm_per_pixel": mm_per_pixel,
+                    "status": "no_mask",
+                }
+            )
+            continue
+
+        mask_path = Path(mask_value)
         measurement = measure_from_mask(
             image_path=image_path,
             mask_path=mask_path,
@@ -105,6 +133,7 @@ def predict_and_measure(
             "patient_id": measurement.patient_id,
             "mean_mm": measurement.mean_mm,
             "mm_per_pixel": measurement.mm_per_pixel,
+            "status": status,
         }
         row_data.update(measurement.measurements)
         measurement_rows.append(row_data)

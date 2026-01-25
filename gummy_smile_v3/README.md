@@ -50,6 +50,7 @@ The pipeline performs:
 1. **YOLOv11x-seg inference + measurements**
    - `yolo/infer_yolo_seg.py` runs inference and writes
      `results/yolo_measurements.csv`.
+   - Images with no predicted mask are kept with `status=no_mask` and `mean_mm=NaN`.
 
 2. **Model comparison**
    - `evaluation/method_comparison.py` computes MAE, RMSE, ICC, and Bland-Altman
