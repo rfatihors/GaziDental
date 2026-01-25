@@ -1,0 +1,24 @@
+paths:
+  images_dir: data/raw_images
+  weights: yolo/weights/best.pt
+  inference_output_dir: results/yolo_predictions
+  measurement_output: results/yolo_measurements.csv
+  diagnosis_output: results/diagnosis_recommendations.csv
+  manual_measurements: data/manual_measurements/manual_measurements.csv
+  v1_predictions: methods/v1/xgboost_predictions.csv
+  smileline_labels: data/labels_smileline.csv
+  comparison_summary: results/v1_vs_v3_summary.csv
+  comparison_by_smileline: results/v1_vs_v3_by_smileline.csv
+  intra_observer_first: data/manual_measurements/calibration-first.xlsx
+  intra_observer_last: data/manual_measurements/calibration-last.xlsx
+  intra_observer_report: results/intra_observer_report.csv
+
+yolo:
+  imgsz: 1024
+  conf: 0.25
+  iou: 0.5
+  max_det: 5
+
+measurement:
+  regions: 6
+  mm_per_pixel: 1.0
