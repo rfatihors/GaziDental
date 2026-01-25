@@ -1,10 +1,9 @@
 paths:
-  data_dir: data/roboflow_yolo
-  images_dir: data/roboflow_yolo/images/test
-  labels_dir: data/roboflow_yolo/labels/test
+  images_dir: data/raw_images
   weights: yolo/weights/best.pt
   inference_output_dir: results/yolo_predictions
   measurement_output: results/yolo_measurements.csv
+  diagnosis_output: results/diagnosis_recommendations.csv
   manual_measurements: data/manual_measurements/manual_measurements.csv
   v1_predictions: methods/v1/xgboost_predictions.csv
   smileline_labels: data/labels_smileline.csv

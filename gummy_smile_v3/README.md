@@ -1,9 +1,9 @@
 # GummySmile v3
 
-GummySmile v3 integrates Roboflow YOLO segmentation with V1 (XGBoost) outputs to
-produce automated gingival measurements and run model comparisons. The project
-now focuses on **inference + comparison**, while training is optional and driven
-by the `train_yolo_seg.py` utility.
+GummySmile v3 integrates YOLO segmentation with V1 (XGBoost) outputs to
+produce automated gingival measurements, model comparisons, and clinical
+recommendations. The project now focuses on **inference + comparison** only;
+no retraining is required beyond supplying the `best.pt` weight file.
 
 ## Repository Layout
 
@@ -21,13 +21,11 @@ by the `train_yolo_seg.py` utility.
 
 ## Data Preparation
 
-1. **Roboflow dataset**
-   - Export the Roboflow dataset in YOLO segmentation format.
-   - Place it under `data/roboflow_yolo/` following the structure in
-     `data/roboflow_yolo/README.md`.
-
-2. **YOLOv11x-seg weights**
+1. **YOLOv11x-seg weights**
    - Copy `best.pt` into `yolo/weights/best.pt`.
+
+2. **Inference images**
+   - Place inference images under `data/raw_images/`.
 
 3. **Manual measurements (ground truth)**
    - Save clinician measurements to `data/manual_measurements/manual_measurements.csv`.
@@ -60,18 +58,15 @@ The pipeline performs:
      - V3 (YOLO) vs manual
      - V1 vs V3
 
-3. **Intra-observer analysis**
+3. **Etiology + treatment recommendation**
+   - `methods/v3/diagnosis.py` assigns etiology/treatment codes (E1–E4, T1–T4)
+     based on mean gingival display and writes `results/diagnosis_recommendations.csv`.
+   - Rule precedence (derived from the clinical table):  
+     `<4 mm → E1`, `4–6 mm → E2`, `6–8 mm → E3`, `>8 mm → E4`.
+
+4. **Intra-observer analysis**
    - `evaluation/intra_observer.py` generates `results/intra_observer_report.csv`
      when calibration files exist.
-
-## Optional: Training
-
-```bash
-python yolo/train_yolo_seg.py \
-  --data data/roboflow_yolo/data.yaml \
-  --weights yolo/weights/best.pt \
-  --output results/yolo_training
-```
 
 ## Outputs
 
@@ -79,4 +74,5 @@ python yolo/train_yolo_seg.py \
 - `results/yolo_measurements.csv`: YOLO-derived measurements.
 - `results/v1_vs_v3_summary.csv`: comparison summary table.
 - `results/v1_vs_v3_by_smileline.csv`: comparison by smileline type.
+- `results/diagnosis_recommendations.csv`: etiology and treatment recommendations.
 - `results/intra_observer_report.csv`: intra-observer reliability report.

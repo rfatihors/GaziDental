@@ -7,6 +7,7 @@ from typing import Any, Dict
 import yaml
 
 from gummy_smile_v3.evaluation import compare_methods, run_intra_observer
+from gummy_smile_v3.methods.v3 import generate_diagnosis
 from gummy_smile_v3.yolo import predict_and_measure
 
 
@@ -46,6 +47,7 @@ def run_pipeline(config_path: Path) -> None:
         max_det=yolo_cfg.get("max_det", 5),
     )
 
+    diagnosis_output = _resolve_path(repo_root, paths["diagnosis_output"])
     manual_path = _resolve_path(repo_root, paths["manual_measurements"])
     v1_path = _resolve_path(repo_root, paths["v1_predictions"])
     v3_path = measurement_output
@@ -62,6 +64,9 @@ def run_pipeline(config_path: Path) -> None:
         by_smileline_output=by_smileline_output,
         smileline_labels=smileline_labels,
     )
+
+    print("[Pipeline] Generating etiology + treatment recommendations...")
+    generate_diagnosis(measurement_output, diagnosis_output)
 
     intra_first = _resolve_path(repo_root, paths["intra_observer_first"])
     intra_last = _resolve_path(repo_root, paths["intra_observer_last"])

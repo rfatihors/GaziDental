@@ -1,6 +1,6 @@
 # YOLOv11x-seg Weights
 
-Place the trained YOLOv11x-seg weights file at:
+Only the trained YOLOv11x-seg weights file is required for inference:
 
 ```
 yolo/weights/best.pt
