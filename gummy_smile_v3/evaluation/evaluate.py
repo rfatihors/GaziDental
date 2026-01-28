@@ -11,11 +11,27 @@ from gummy_smile_v3.measurement.measurement_metrics import bundle_to_dict, evalu
 
 
 def _load_manual(manual_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(manual_path)
-    if "case_id" in df.columns and "patient_id" not in df.columns:
-        df = df.rename(columns={"case_id": "patient_id"})
+    if manual_path.suffix.lower() in {".xlsx", ".xls"}:
+        df = pd.read_excel(manual_path, sheet_name=0)
+    else:
+        df = pd.read_csv(manual_path)
+    if "patient_id" not in df.columns:
+        rename_map = {
+            "case_id": "patient_id",
+            "RESİM": "patient_id",
+            "image numarası": "patient_id",
+        }
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
     if "mean_mm" not in df.columns:
-        raise KeyError("manual_measurements.csv must contain mean_mm column.")
+        measurement_cols = [col for col in df.columns if str(col).strip().isdigit()]
+        if measurement_cols:
+            df["mean_mm"] = df[measurement_cols].apply(pd.to_numeric, errors="coerce").mean(axis=1)
+        else:
+            raise KeyError(
+                "Manual measurements must include mean_mm or numeric measurement columns (1-6)."
+            )
+    if "patient_id" not in df.columns:
+        raise KeyError("Manual measurements must include patient_id (or RESİM / image numarası).")
     return df[["patient_id", "mean_mm"]]
 
 
@@ -37,7 +53,7 @@ def evaluate_if_available(
     output_path: Path,
 ) -> Dict[str, object]:
     if not manual_path.exists():
-        return {"status": "SKIP", "reason": "manual_measurements.csv not found."}
+        return {"status": "SKIP", "reason": "Manual measurements file not found."}
 
     manual_df = _load_manual(manual_path)
     manual_value = _extract_value(manual_df, patient_id, "mean_mm")

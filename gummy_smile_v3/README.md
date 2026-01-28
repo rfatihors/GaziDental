@@ -59,9 +59,15 @@ This bypasses YOLO weights with a synthetic mask; use only for tests.
 ## Manual Measurements (Optional)
 
 Place manual measurements at `data/manual_measurements/manual_measurements.csv`
-with columns:
+or an Excel file (e.g. `data/manual_measurements/calibration-last.xlsx`). The
+first sheet should include:
 
 - `patient_id`
 - `mean_mm`
 
-If this file is missing, evaluation is skipped and `evaluation.json` reports `SKIP`.
+If you use the calibration spreadsheets, the loader also accepts:
+
+- `RESİM` or `image numarası` as the patient identifier.
+- Numeric measurement columns named `1`–`6` (mean is computed as `mean_mm`).
+
+If the file is missing, evaluation is skipped and `evaluation.json` reports `SKIP`.
