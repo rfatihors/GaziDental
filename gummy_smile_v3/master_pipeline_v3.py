@@ -54,6 +54,7 @@ def run_pipeline(config_path: Path) -> None:
     )
 
     diagnosis_output = _resolve_path(repo_root, paths["diagnosis_output"])
+    severity_output = _resolve_path(repo_root, paths["severity_metrics"])
     manual_path = _resolve_path(repo_root, paths["manual_measurements"])
     v1_path = _resolve_path(repo_root, paths["v1_predictions"])
     v3_path = measurement_output
