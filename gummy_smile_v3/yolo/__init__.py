@@ -1,3 +1,3 @@
-from gummy_smile_v3.yolo.infer_yolo_seg import predict_and_measure, run_inference
+from gummy_smile_v3.yolo.infer_yolo import run_yolo_segmentation
 
-__all__ = ["run_inference", "predict_and_measure"]
+__all__ = ["run_yolo_segmentation"]

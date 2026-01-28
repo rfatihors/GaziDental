@@ -1,13 +1,3 @@
-from gummy_smile_v3.evaluation.intra_observer import run_intra_observer
-from gummy_smile_v3.evaluation.method_comparison import (
-    compare_methods,
-    compute_severity_metrics,
-    derive_severity_labels,
-)
+from gummy_smile_v3.evaluation.evaluate import evaluate_if_available
 
-__all__ = [
-    "compare_methods",
-    "compute_severity_metrics",
-    "derive_severity_labels",
-    "run_intra_observer",
-]
+__all__ = ["evaluate_if_available"]

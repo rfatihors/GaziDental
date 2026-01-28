@@ -1,106 +1,67 @@
 # GummySmile v3
 
-GummySmile v3 integrates YOLO segmentation with V1 (XGBoost) outputs to
-produce automated gingival measurements, model comparisons, and clinical
-recommendations. The project now focuses on **inference + comparison** only;
-no retraining is required beyond supplying the `best.pt` weight file.
+GummySmile v3 runs a **single-image** pipeline that combines YOLOv11x-seg
+gingival segmentation with a legacy **V1 (XGBoost + pixel counting)** approach.
+It outputs gingival visibility measurements, etiology/treatment recommendations,
+and optional evaluation metrics under `gummy_smile_v3/results/`.
 
 ## Repository Layout
 
 ```
-'gummy_smile_v3/
+gummy_smile_v3/
 ├── configs/              # Config files (paths + hyper-parameters)
 ├── data/                 # Roboflow dataset + manual measurements
 ├── methods/              # V1 (XGBoost) + V3 (YOLO) method helpers
-├── yolo/                 # YOLO inference + optional training scripts
+├── yolo/                 # YOLO inference helpers
 ├── measurement/          # Measurement extraction + metrics
-├── evaluation/           # Model comparison + intra-observer analysis
+├── evaluation/           # Evaluation helpers
 ├── master_pipeline_v3.py # Single-command pipeline
 └── README.md
 ```
 
-## Data Preparation
+## Configuration
 
-1. **YOLOv11x-seg weights**
-   - Copy `best.pt` into `yolo/weights/best.pt`.
+Edit `configs/config.yaml` for defaults:
 
-2. **Inference images**
-   - Place inference images under `data/raw_images/`.
-
-3. **Manual measurements (ground truth)**
-   - Save clinician measurements to `data/manual_measurements/manual_measurements.csv`.
-   - Required columns: `patient_id`, `mean_mm`.
-
-4. **V1 (XGBoost) predictions**
-   - Save V1 predictions to `methods/v1/xgboost_predictions.csv`.
-   - Required columns: `patient_id`, `predicted_mean_mm`.
-
-5. **Smileline labels (optional)**
-   - Save labels in `data/labels_smileline.csv` with `patient_id` and
-     `smileline_type` (or `smileline`) columns.
-
-## Optional: Training/Preprocessing (COCO → YOLO)
-
-If you need to re-generate YOLO segmentation labels from the Roboflow COCO
-exports under `data/coco_dataset/**/_annotations.coco.json`, validate and load
-them with the COCO loader before converting to YOLO format. The loader ensures
-required fields exist and exposes segmentation metadata that can be fed into a
-conversion step.
-
-```python
-from pathlib import Path
-
-from gummy_smile_v3.data.annotations import (
-    build_segmentation_metadata,
-    load_coco_annotations,
-)
-
-dataset = load_coco_annotations(
-    Path(\"data/coco_dataset/normal/train/_annotations.coco.json\")
-)
-segments = build_segmentation_metadata(dataset)
-```
-
-Use the `segments` output as input to any COCO→YOLO conversion or training
-preprocessing step before running YOLO training scripts.
+- `weights_path`: optional (can be overridden by `--weights`).
+- `px_per_mm`: pixels-per-mm calibration. If missing, pipeline reports **px-only** and
+  notes that rules are applied on px values.
+- `output_dir`: base output directory (run subfolders are created automatically).
+- `metadata_source`: `filename`, `csv`, `yaml`, or `none`.
+- `ambiguous_policy`: how to resolve the 4–6 mm overlap (E2 vs E3).
 
 ## Running the Pipeline
 
 ```bash
-python master_pipeline_v3.py --config configs/config.yaml
+python master_pipeline_v3.py \
+  --image data/raw_images/high/IMG_7285.jpg \
+  --weights /path/to/best.pt
 ```
 
-The pipeline performs:
+Outputs are written to `results/run_YYYYMMDD_HHMMSS/`:
 
-1. **YOLOv11x-seg inference + measurements**
-   - `segmentation_model.py` wraps `yolo/infer_yolo_seg.py` to run inference and write
-     `results/yolo_measurements.csv`.
-   - Images with no predicted mask are kept with `status=no_mask` and `mean_mm=NaN`.
+- `v3_yolo_predictions.csv`
+- `v1_xgboost_predictions.csv`
+- `report.json`
+- `evaluation.json` (if manual measurements exist)
+- overlay/mask images in the same run folder
 
-2. **Model comparison**
-   - `xgboost_comparison.py` wraps `evaluation/method_comparison.py` to compute MAE, RMSE, ICC, and Bland-Altman
-     metrics for:
-     - V1 (XGBoost) vs manual
-     - V3 (YOLO) vs manual
-     - V1 vs V3
+### Optional: stub mode (for smoke tests)
 
-3. **Etiology + treatment recommendation**
-   - `treatment_predictor.py` wraps `methods/v3/diagnosis.py` to assign etiology/treatment codes (E1–E4, T1–T4)
-     based on mean gingival display and writes `results/diagnosis_recommendations.csv`.
-   - Rule precedence (derived from the clinical table):  
-     `<4 mm → E1`, `4–6 mm → E2`, `6–8 mm → E3`, `>8 mm → E4`.
-   - The diagnosis output also includes `severity_ground_truth` (if metadata is
-     available) and `severity_predicted` (rule-based from `mean_mm`).
+```bash
+python master_pipeline_v3.py \
+  --image data/raw_images/high/IMG_7285.jpg \
+  --stub-model
+```
 
-4. **Intra-observer analysis**
-   - `evaluation/intra_observer.py` generates `results/intra_observer_report.csv`
-     when calibration files exist.
+This bypasses YOLO weights with a synthetic mask; use only for tests.
 
-## Outputs
+## Manual Measurements (Optional)
 
-- `results/yolo_predictions/yolo_predictions.csv`: image-to-mask mapping.
-- `results/yolo_measurements.csv`: YOLO-derived measurements.
-- `results/v1_vs_v3_summary.csv`: comparison summary table.
-- `results/v1_vs_v3_by_smileline.csv`: comparison by smileline type.
-- `results/diagnosis_recommendations.csv`: etiology and treatment recommendations.
-- `results/intra_observer_report.csv`: intra-observer reliability report.
+Place manual measurements at `data/manual_measurements/manual_measurements.csv`
+with columns:
+
+- `patient_id`
+- `mean_mm`
+
+If this file is missing, evaluation is skipped and `evaluation.json` reports `SKIP`.
