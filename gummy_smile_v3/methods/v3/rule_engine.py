@@ -84,6 +84,15 @@ def assign_etiology(
     ambiguous_policy: Dict[str, object],
     value_unit: str = "mm",
 ) -> EtiologyResult:
+    if value_unit != "mm":
+        return EtiologyResult(
+            etiology_class="UNCLASSIFIED",
+            treatment_class="UNCLASSIFIED",
+            etiology_candidates=[],
+            treatment_recommendations=[],
+            ambiguous=True,
+            notes="Non-mm units are not supported for rule matching; classification skipped.",
+        )
     if gum_visibility_value is None or (isinstance(gum_visibility_value, float) and np.isnan(gum_visibility_value)):
         return EtiologyResult(
             etiology_class="E1",
