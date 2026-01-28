@@ -24,8 +24,8 @@ gummy_smile_v3/
 Edit `configs/config.yaml` for defaults:
 
 - `weights_path`: optional (can be overridden by `--weights`).
-- `px_per_mm`: pixels-per-mm calibration. If missing, pipeline reports **px-only** and
-  notes that rules are applied on px values.
+- `px_per_mm`: pixels-per-mm calibration. If missing, pipeline reports **px-only** measurements
+  and skips etiology/treatment classification (rules are defined in mm).
 - `output_dir`: base output directory (run subfolders are created automatically).
 - `metadata_source`: `filename`, `csv`, `yaml`, or `none`.
 - `ambiguous_policy`: how to resolve the 4–6 mm overlap (E2 vs E3).
