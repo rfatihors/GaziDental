@@ -48,19 +48,19 @@ python master_pipeline_v3.py --config configs/config.yaml
 The pipeline performs:
 
 1. **YOLOv11x-seg inference + measurements**
-   - `yolo/infer_yolo_seg.py` runs inference and writes
+   - `segmentation_model.py` wraps `yolo/infer_yolo_seg.py` to run inference and write
      `results/yolo_measurements.csv`.
    - Images with no predicted mask are kept with `status=no_mask` and `mean_mm=NaN`.
 
 2. **Model comparison**
-   - `evaluation/method_comparison.py` computes MAE, RMSE, ICC, and Bland-Altman
+   - `xgboost_comparison.py` wraps `evaluation/method_comparison.py` to compute MAE, RMSE, ICC, and Bland-Altman
      metrics for:
      - V1 (XGBoost) vs manual
      - V3 (YOLO) vs manual
      - V1 vs V3
 
 3. **Etiology + treatment recommendation**
-   - `methods/v3/diagnosis.py` assigns etiology/treatment codes (E1–E4, T1–T4)
+   - `treatment_predictor.py` wraps `methods/v3/diagnosis.py` to assign etiology/treatment codes (E1–E4, T1–T4)
      based on mean gingival display and writes `results/diagnosis_recommendations.csv`.
    - Rule precedence (derived from the clinical table):  
      `<4 mm → E1`, `4–6 mm → E2`, `6–8 mm → E3`, `>8 mm → E4`.
