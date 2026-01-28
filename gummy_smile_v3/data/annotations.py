@@ -130,6 +130,8 @@ def load_coco_annotations(annotation_path: Path) -> CocoDataset:
             if not segment_list:
                 raise ValueError("Segmentation segments cannot be empty")
             segmentation_list.append(segment_list)
+        if not segmentation_list:
+            raise ValueError("Segmentation segments cannot be empty")
 
         bbox = [float(value) for value in _ensure_list(annotation["bbox"], "bbox")]
         if len(bbox) != 4:
