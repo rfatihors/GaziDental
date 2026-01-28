@@ -4,7 +4,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 import yaml
@@ -12,7 +12,7 @@ import yaml
 from gummy_smile_v3.evaluation import evaluate_if_available
 from gummy_smile_v3.measurement import measure_gum_visibility
 from gummy_smile_v3.methods.v1 import run_xgboost
-from gummy_smile_v3.methods.v3 import assign_etiology
+from gummy_smile_v3.methods.v3 import EtiologyResult, assign_etiology
 from gummy_smile_v3.yolo import run_yolo_segmentation
 
 
@@ -37,13 +37,16 @@ def _parse_px_per_mm(value: Any) -> Optional[float]:
     return parsed if parsed > 0 else None
 
 
-def _load_metadata_lookup(config: Dict[str, Any], repo_root: Path) -> Dict[str, str]:
+def _load_metadata_lookup(config: Dict[str, Any], repo_root: Path) -> Tuple[Dict[str, str], Optional[str]]:
     source = str(config.get("metadata_source", "filename")).lower()
     if source not in {"csv", "yaml"}:
-        return {}
+        return {}, None
     metadata_path = _resolve_optional_path(repo_root, config.get("metadata_path"))
     if metadata_path is None or not metadata_path.exists():
-        return {}
+        warning = "Metadata source set to csv/yaml but metadata_path is missing."
+        if metadata_path is not None:
+            warning = f"Metadata source set to csv/yaml but file not found: {metadata_path}"
+        return {}, warning
     if source == "csv":
         df = pd.read_csv(metadata_path)
         if "case_id" in df.columns and "patient_id" not in df.columns:
@@ -54,10 +57,10 @@ def _load_metadata_lookup(config: Dict[str, Any], repo_root: Path) -> Dict[str, 
                 label_col = candidate
                 break
         if label_col is None:
-            return {}
-        return dict(zip(df["patient_id"].astype(str), df[label_col].astype(str)))
+            return {}, None
+        return dict(zip(df["patient_id"].astype(str), df[label_col].astype(str))), None
     data = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
-    return {str(key): str(value) for key, value in (data or {}).items()}
+    return {str(key): str(value) for key, value in (data or {}).items()}, None
 
 
 def _metadata_from_filename(image_path: Path) -> Optional[str]:
@@ -101,6 +104,17 @@ def _build_output_row(
         "ambiguous": etiology.ambiguous,
         "notes": notes,
     }
+
+
+def _etiology_without_calibration(note: str) -> EtiologyResult:
+    return EtiologyResult(
+        etiology_class="UNCLASSIFIED",
+        treatment_class="UNCLASSIFIED",
+        etiology_candidates=[],
+        treatment_recommendations=[],
+        ambiguous=True,
+        notes=note,
+    )
 
 
 def run_pipeline(
@@ -155,13 +169,16 @@ def run_pipeline(
         gum_visibility_px = None
         gum_visibility_mm = None
 
-    metadata_lookup = _load_metadata_lookup(config, repo_root)
+    metadata_lookup, metadata_warning = _load_metadata_lookup(config, repo_root)
     metadata = _get_metadata(image_path, config, metadata_lookup)
     ambiguous_policy = config.get("ambiguous_policy", {})
 
     value_unit = "mm" if gum_visibility_mm is not None else "px"
     value_for_rule = gum_visibility_mm if gum_visibility_mm is not None else gum_visibility_px
-    v3_etiology = assign_etiology(value_for_rule, metadata, ambiguous_policy, value_unit=value_unit)
+    if px_per_mm is None:
+        v3_etiology = _etiology_without_calibration("px_per_mm not set; E/T classification skipped.")
+    else:
+        v3_etiology = assign_etiology(value_for_rule, metadata, ambiguous_policy, value_unit=value_unit)
     v3_notes = v3_etiology.notes
     if metadata:
         v3_notes = "; ".join([note for note in [v3_notes, f"metadata={metadata}"] if note])
@@ -201,13 +218,18 @@ def run_pipeline(
         v1_gum_visibility_mm = None
         v1_model_note = "XGBoost prediction used for mm estimate."
 
-    v1_etiology = assign_etiology(
-        v1_gum_visibility_mm,
-        metadata,
-        ambiguous_policy,
-        value_unit="mm" if v1_gum_visibility_mm is not None else "px",
+    if px_per_mm is None:
+        v1_etiology = _etiology_without_calibration("px_per_mm not set; E/T classification skipped.")
+    else:
+        v1_etiology = assign_etiology(
+            v1_gum_visibility_mm,
+            metadata,
+            ambiguous_policy,
+            value_unit="mm" if v1_gum_visibility_mm is not None else "px",
+        )
+    v1_notes = "; ".join(
+        note for note in [v1_etiology.notes, "XGBoost prediction used for mm estimate."] if note
     )
-    v1_notes = "; ".join(note for note in [v1_etiology.notes, v1_model_note] if note)
 
     v1_row = _build_output_row(
         image_path=image_path,
@@ -235,11 +257,13 @@ def run_pipeline(
         "image_path": str(image_path),
         "weights_path": str(weights_path) if weights_path else None,
         "px_per_mm": px_per_mm,
+        "measurement_unit": "mm" if px_per_mm is not None else "px",
         "output_dir": str(run_dir),
         "yolo": yolo_result,
         "v3_result": v3_row,
         "v1_result": v1_row,
         "evaluation": evaluation,
+        "metadata_warning": metadata_warning,
     }
     report_path = run_dir / "report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
