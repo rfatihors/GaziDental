@@ -9,8 +9,7 @@ paths:
   smileline_labels: data/labels_smileline.csv
   comparison_summary: results/v1_vs_v3_summary.csv
   comparison_by_smileline: results/v1_vs_v3_by_smileline.csv
-  severity_annotations_glob: data/coco_dataset/**/_annotations.coco.json
-  severity_labels_csv: data/labels_severity.csv
+  severity_metrics: results/severity_metrics.csv
   intra_observer_first: data/manual_measurements/calibration-first.xlsx
   intra_observer_last: data/manual_measurements/calibration-last.xlsx
   intra_observer_report: results/intra_observer_report.csv

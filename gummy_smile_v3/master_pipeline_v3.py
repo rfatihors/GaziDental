@@ -4,9 +4,15 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict
 
+import pandas as pd
 import yaml
 
-from gummy_smile_v3.evaluation import compare_methods, run_intra_observer
+from gummy_smile_v3.evaluation import (
+    compare_methods,
+    compute_severity_metrics,
+    derive_severity_labels,
+    run_intra_observer,
+)
 from gummy_smile_v3.methods.v3 import generate_diagnosis
 from gummy_smile_v3.yolo import predict_and_measure
 
@@ -80,6 +86,31 @@ def run_pipeline(config_path: Path) -> None:
         coco_glob=severity_glob_path,
         labels_csv=severity_labels_path,
     )
+
+    if manual_path.exists() and diagnosis_output.exists():
+        manual_df = pd.read_csv(manual_path)
+        if "case_id" in manual_df.columns and "patient_id" not in manual_df.columns:
+            manual_df = manual_df.rename(columns={"case_id": "patient_id"})
+        if "patient_id" in manual_df.columns and "mean_mm" in manual_df.columns:
+            diagnosis_df = pd.read_csv(diagnosis_output)
+            if "patient_id" in diagnosis_df.columns and "etiology_code" in diagnosis_df.columns:
+                manual_df["severity_label"] = derive_severity_labels(manual_df["mean_mm"])
+                merged = manual_df.merge(
+                    diagnosis_df[["patient_id", "etiology_code"]],
+                    on="patient_id",
+                    how="inner",
+                )
+                compute_severity_metrics(
+                    merged["severity_label"].tolist(),
+                    merged["etiology_code"].tolist(),
+                    severity_output,
+                )
+            else:
+                print("[Pipeline] Skipping severity metrics (missing diagnosis columns).")
+        else:
+            print("[Pipeline] Skipping severity metrics (missing manual measurement columns).")
+    else:
+        print("[Pipeline] Skipping severity metrics (files not found).")
 
     intra_first = _resolve_path(repo_root, paths["intra_observer_first"])
     intra_last = _resolve_path(repo_root, paths["intra_observer_last"])
