@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import precision_recall_fscore_support
 
 from gummy_smile_v3.measurement.measurement_metrics import bundle_to_dict, evaluate_measurements
+from gummy_smile_v3.methods.v3.diagnosis import DIAGNOSIS_RULES
 
 
 def _load_dataframe(path: Path, required: Optional[Dict[str, str]] = None) -> pd.DataFrame:
@@ -43,6 +45,116 @@ def _metric_row(label: str, truth: np.ndarray, pred: np.ndarray) -> Dict[str, ob
     row = {"comparison": label}
     row.update(bundle_to_dict(bundle))
     return row
+
+
+def _severity_labels_from_rules() -> List[str]:
+    return [rule["label"] for rule in DIAGNOSIS_RULES]
+
+
+def _severity_label_from_mm(mean_mm: float) -> Optional[str]:
+    for rule in DIAGNOSIS_RULES:
+        min_mm = rule["min_mm"]
+        max_mm = rule["max_mm"]
+        lower_ok = True if min_mm is None else mean_mm >= min_mm
+        upper_ok = True if max_mm is None else mean_mm < max_mm
+        if lower_ok and upper_ok:
+            return rule["label"]
+    return None
+
+
+def derive_severity_labels(mean_mm_values: Sequence[float]) -> pd.Series:
+    labels = []
+    for value in mean_mm_values:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            labels.append(None)
+        else:
+            labels.append(_severity_label_from_mm(float(value)))
+    return pd.Series(labels)
+
+
+def compute_severity_metrics(
+    truth_labels: Sequence[Optional[str]],
+    predicted_labels: Sequence[Optional[str]],
+    output_path: Path,
+    label_order: Optional[Iterable[str]] = None,
+) -> pd.DataFrame:
+    if len(truth_labels) != len(predicted_labels):
+        raise ValueError("truth_labels and predicted_labels must be the same length")
+
+    metrics_df = pd.DataFrame({"truth": truth_labels, "pred": predicted_labels}).dropna()
+    if metrics_df.empty:
+        raise ValueError("No overlapping severity labels to evaluate")
+
+    if label_order is None:
+        ordered_labels = _severity_labels_from_rules()
+    else:
+        ordered_labels = list(label_order)
+
+    present = set(metrics_df["truth"]).union(set(metrics_df["pred"]))
+    labels = [label for label in ordered_labels if label in present]
+    if not labels:
+        labels = sorted(present)
+
+    precision, recall, f1, support = precision_recall_fscore_support(
+        metrics_df["truth"],
+        metrics_df["pred"],
+        labels=labels,
+        zero_division=0,
+    )
+
+    rows = []
+    for label, prec, rec, f1_score, count in zip(labels, precision, recall, f1, support):
+        rows.append(
+            {
+                "label": label,
+                "precision": prec,
+                "recall": rec,
+                "f1": f1_score,
+                "support": int(count),
+                "average": "class",
+            }
+        )
+
+    macro_precision, macro_recall, macro_f1, _ = precision_recall_fscore_support(
+        metrics_df["truth"],
+        metrics_df["pred"],
+        labels=labels,
+        average="macro",
+        zero_division=0,
+    )
+    micro_precision, micro_recall, micro_f1, _ = precision_recall_fscore_support(
+        metrics_df["truth"],
+        metrics_df["pred"],
+        labels=labels,
+        average="micro",
+        zero_division=0,
+    )
+    total_support = int(support.sum())
+    rows.extend(
+        [
+            {
+                "label": "macro_avg",
+                "precision": macro_precision,
+                "recall": macro_recall,
+                "f1": macro_f1,
+                "support": total_support,
+                "average": "macro",
+            },
+            {
+                "label": "micro_avg",
+                "precision": micro_precision,
+                "recall": micro_recall,
+                "f1": micro_f1,
+                "support": total_support,
+                "average": "micro",
+            },
+        ]
+    )
+
+    output_df = pd.DataFrame(rows)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_df.to_csv(output_path, index=False)
+    return output_df
 
 
 def compare_methods(
