@@ -23,6 +23,9 @@ DIAGNOSIS_RULES = [
         "label": "E1",
         "min_mm": None,
         "max_mm": 4.0,
+        "min_inclusive": False,
+        "max_inclusive": False,
+        "priority": 1,
         "etiology": [
             "Gecikmiş pasif erüpsiyon",
             "Gingival hipertrofi",
@@ -36,8 +39,11 @@ DIAGNOSIS_RULES = [
     },
     {
         "label": "E2",
-        "min_mm": 4.0,
+        "min_mm": 3.0,
         "max_mm": 6.0,
+        "min_inclusive": True,
+        "max_inclusive": True,
+        "priority": 2,
         "etiology": [
             "Hiperaktif (Hipermobil) üst dudak",
             "Kısa üst dudak (<20 mm)",
@@ -50,8 +56,11 @@ DIAGNOSIS_RULES = [
     },
     {
         "label": "E3",
-        "min_mm": 6.0,
+        "min_mm": 4.0,
         "max_mm": 8.0,
+        "min_inclusive": True,
+        "max_inclusive": True,
+        "priority": 3,
         "etiology": [
             "Dentoalveolar ekstrüzyon",
             "Derin kapanış",
@@ -66,6 +75,9 @@ DIAGNOSIS_RULES = [
         "label": "E4",
         "min_mm": 8.0,
         "max_mm": None,
+        "min_inclusive": False,
+        "max_inclusive": False,
+        "priority": 4,
         "etiology": [
             "Artmış vertikal maxiller yükseklik",
         ],
@@ -78,19 +90,47 @@ DIAGNOSIS_RULES = [
 
 
 def _match_rule(mean_mm: float) -> Optional[DiagnosisResult]:
+    """Return the diagnosis for a mean gingival display in millimeters.
+
+    Overlapping ranges are resolved by priority: E4 > E3 > E2 > E1. This keeps
+    a consistent single-label assignment for values that fall into multiple
+    ranges (e.g., 3-4 mm or 4-6 mm).
+    """
+
+    matched_rules = []
     for rule in DIAGNOSIS_RULES:
         min_mm = rule["min_mm"]
         max_mm = rule["max_mm"]
-        lower_ok = True if min_mm is None else mean_mm >= min_mm
-        upper_ok = True if max_mm is None else mean_mm < max_mm
+        min_inclusive = rule["min_inclusive"]
+        max_inclusive = rule["max_inclusive"]
+
+        if min_mm is None:
+            lower_ok = True
+        elif min_inclusive:
+            lower_ok = mean_mm >= min_mm
+        else:
+            lower_ok = mean_mm > min_mm
+
+        if max_mm is None:
+            upper_ok = True
+        elif max_inclusive:
+            upper_ok = mean_mm <= max_mm
+        else:
+            upper_ok = mean_mm < max_mm
+
         if lower_ok and upper_ok:
-            return DiagnosisResult(
-                etiology_code=rule["label"],
-                etiology=rule["etiology"],
-                treatment_code=rule["treatment_code"],
-                treatment=rule["treatment"],
-            )
-    return None
+            matched_rules.append(rule)
+
+    if not matched_rules:
+        return None
+
+    selected_rule = max(matched_rules, key=lambda item: item["priority"])
+    return DiagnosisResult(
+        etiology_code=selected_rule["label"],
+        etiology=selected_rule["etiology"],
+        treatment_code=selected_rule["treatment_code"],
+        treatment=selected_rule["treatment"],
+    )
 
 
 def generate_diagnosis(measurements_path: Path, output_path: Path) -> Path:
