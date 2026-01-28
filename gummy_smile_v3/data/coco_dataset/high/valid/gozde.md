@@ -1,0 +1,1 @@
+can karım canım karım
