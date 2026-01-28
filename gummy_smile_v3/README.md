@@ -89,6 +89,8 @@ The pipeline performs:
      based on mean gingival display and writes `results/diagnosis_recommendations.csv`.
    - Rule precedence (derived from the clinical table):  
      `<4 mm → E1`, `4–6 mm → E2`, `6–8 mm → E3`, `>8 mm → E4`.
+   - The diagnosis output also includes `severity_ground_truth` (if metadata is
+     available) and `severity_predicted` (rule-based from `mean_mm`).
 
 4. **Intra-observer analysis**
    - `evaluation/intra_observer.py` generates `results/intra_observer_report.csv`
