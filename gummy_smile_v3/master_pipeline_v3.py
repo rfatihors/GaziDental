@@ -196,10 +196,15 @@ def run_pipeline(
     v3_df.to_csv(v3_csv, index=False)
 
     v1_model_path = _resolve_optional_path(repo_root, config.get("v1_model_path"))
-    if v1_model_path is None or not v1_model_path.exists():
+    v1_model_missing = v1_model_path is None or not v1_model_path.exists()
+    if v1_model_missing and not use_stub:
         raise FileNotFoundError("V1 XGBoost model not found. Please configure v1_model_path.")
 
-    if yolo_result["status"] == "ok" and yolo_result["mask_path"]:
+    if v1_model_missing:
+        v1_gum_visibility_px = None
+        v1_gum_visibility_mm = None
+        v1_model_note = "v1 model missing; skipped."
+    elif yolo_result["status"] == "ok" and yolo_result["mask_path"]:
         v1_prediction = run_xgboost(
             mask_path=Path(yolo_result["mask_path"]),
             model_path=v1_model_path,
@@ -207,9 +212,11 @@ def run_pipeline(
         )
         v1_gum_visibility_px = v1_prediction.gum_visibility_px
         v1_gum_visibility_mm = v1_prediction.predicted_mean_mm
+        v1_model_note = "XGBoost prediction used for mm estimate."
     else:
         v1_gum_visibility_px = None
         v1_gum_visibility_mm = None
+        v1_model_note = "XGBoost prediction used for mm estimate."
 
     if px_per_mm is None:
         v1_etiology = _etiology_without_calibration("px_per_mm not set; E/T classification skipped.")

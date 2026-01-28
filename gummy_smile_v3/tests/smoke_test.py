@@ -40,6 +40,19 @@ def main() -> None:
     if not v3_result.get("etiology_class") or not v3_result.get("treatment_class"):
         raise AssertionError("Etiology/treatment not populated in report.json.")
 
+    v1_result = report.get("v1_result", {})
+    required_v1_keys = {
+        "method",
+        "gum_visibility_px",
+        "gum_visibility_mm",
+        "etiology_class",
+        "treatment_class",
+        "notes",
+    }
+    missing_v1_keys = required_v1_keys - set(v1_result)
+    if missing_v1_keys:
+        raise AssertionError(f"report.json missing v1 fields: {sorted(missing_v1_keys)}")
+
 
 if __name__ == "__main__":
     main()
