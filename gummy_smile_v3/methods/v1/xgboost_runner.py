@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import xgboost as xgb
 
-from structures.dental.gummy_smile import image_to_pixel_min
+from .pixel_features import image_to_pixel_min
 
 
 @dataclass
