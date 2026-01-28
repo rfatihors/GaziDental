@@ -39,6 +39,31 @@ no retraining is required beyond supplying the `best.pt` weight file.
    - Save labels in `data/labels_smileline.csv` with `patient_id` and
      `smileline_type` (or `smileline`) columns.
 
+## Optional: Training/Preprocessing (COCO → YOLO)
+
+If you need to re-generate YOLO segmentation labels from the Roboflow COCO
+exports under `data/coco_dataset/**/_annotations.coco.json`, validate and load
+them with the COCO loader before converting to YOLO format. The loader ensures
+required fields exist and exposes segmentation metadata that can be fed into a
+conversion step.
+
+```python
+from pathlib import Path
+
+from gummy_smile_v3.data.annotations import (
+    build_segmentation_metadata,
+    load_coco_annotations,
+)
+
+dataset = load_coco_annotations(
+    Path(\"data/coco_dataset/normal/train/_annotations.coco.json\")
+)
+segments = build_segmentation_metadata(dataset)
+```
+
+Use the `segments` output as input to any COCO→YOLO conversion or training
+preprocessing step before running YOLO training scripts.
+
 ## Running the Pipeline
 
 ```bash
