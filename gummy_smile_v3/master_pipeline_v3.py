@@ -216,7 +216,7 @@ def run_pipeline(
     else:
         v1_gum_visibility_px = None
         v1_gum_visibility_mm = None
-        v1_model_note = "XGBoost prediction used for mm estimate."
+        v1_model_note = "v1 model skipped due to missing masks."
 
     if px_per_mm is None:
         v1_etiology = _etiology_without_calibration("px_per_mm not set; E/T classification skipped.")
@@ -227,9 +227,7 @@ def run_pipeline(
             ambiguous_policy,
             value_unit="mm" if v1_gum_visibility_mm is not None else "px",
         )
-    v1_notes = "; ".join(
-        note for note in [v1_etiology.notes, "XGBoost prediction used for mm estimate."] if note
-    )
+    v1_notes = "; ".join(note for note in [v1_etiology.notes, v1_model_note] if note)
 
     v1_row = _build_output_row(
         image_path=image_path,
