@@ -2,7 +2,7 @@ weights_path: ""
 px_per_mm: null
 output_dir: results
 metadata_source: filename
-metadata_path: data/labels_severity.csv
+metadata_path: data/labels_smileline.csv
 ambiguous_policy:
   default: E2
   use_metadata: true
@@ -10,8 +10,8 @@ ambiguous_policy:
     high: E3
     normal: E2
     low: E2
-manual_measurements_path: data/manual_measurements/manual_measurements.csv
-v1_model_path: models/xgboost_regressor_guncel8.json
+manual_measurements_path: data/manual_measurements/calibration-last.xlsx
+v1_model_path: ../gummy_smile_guncel/saved_models_guncel/xgboost_regressor_guncel8.json
 yolo:
   imgsz: 1024
   conf: 0.25
