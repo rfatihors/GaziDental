@@ -93,6 +93,7 @@ def _build_output_row(
     notes: str,
 ) -> Dict[str, object]:
     return {
+        "patient_id": image_path.stem,
         "image_path": str(image_path),
         "method": method,
         "gum_visibility_px": gum_visibility_px,
