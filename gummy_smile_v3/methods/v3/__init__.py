@@ -1,4 +1,3 @@
-from gummy_smile_v3.methods.v3.diagnosis import DIAGNOSIS_RULES, generate_diagnosis
-from gummy_smile_v3.methods.v3.yolo_inference import load_v3_measurements
+from gummy_smile_v3.methods.v3.rule_engine import EtiologyResult, assign_etiology
 
-__all__ = ["DIAGNOSIS_RULES", "generate_diagnosis", "load_v3_measurements"]
+__all__ = ["EtiologyResult", "assign_etiology"]

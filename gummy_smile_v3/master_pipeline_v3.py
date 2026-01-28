@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
 import yaml
 
-from gummy_smile_v3.evaluation import (
-    compare_methods,
-    compute_severity_metrics,
-    derive_severity_labels,
-    run_intra_observer,
-)
-from gummy_smile_v3.methods.v3 import generate_diagnosis
-from gummy_smile_v3.yolo import predict_and_measure
+from gummy_smile_v3.evaluation import evaluate_if_available
+from gummy_smile_v3.measurement import measure_gum_visibility
+from gummy_smile_v3.methods.v1 import run_xgboost
+from gummy_smile_v3.methods.v3 import assign_etiology
+from gummy_smile_v3.yolo import run_yolo_segmentation
 
 
 def _load_config(config_path: Path) -> Dict[str, Any]:
@@ -22,115 +21,256 @@ def _load_config(config_path: Path) -> Dict[str, Any]:
         return yaml.safe_load(file)
 
 
-def _resolve_path(root: Path, value: str) -> Path:
+def _resolve_optional_path(root: Path, value: Optional[str]) -> Optional[Path]:
+    if not value:
+        return None
     return (root / value).resolve()
 
 
-def run_pipeline(config_path: Path) -> None:
-    repo_root = config_path.parent.parent
+def _parse_px_per_mm(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _load_metadata_lookup(config: Dict[str, Any], repo_root: Path) -> Dict[str, str]:
+    source = str(config.get("metadata_source", "filename")).lower()
+    if source not in {"csv", "yaml"}:
+        return {}
+    metadata_path = _resolve_optional_path(repo_root, config.get("metadata_path"))
+    if metadata_path is None or not metadata_path.exists():
+        return {}
+    if source == "csv":
+        df = pd.read_csv(metadata_path)
+        if "case_id" in df.columns and "patient_id" not in df.columns:
+            df = df.rename(columns={"case_id": "patient_id"})
+        label_col = None
+        for candidate in ("severity", "severity_label", "label", "class"):
+            if candidate in df.columns:
+                label_col = candidate
+                break
+        if label_col is None:
+            return {}
+        return dict(zip(df["patient_id"].astype(str), df[label_col].astype(str)))
+    data = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
+    return {str(key): str(value) for key, value in (data or {}).items()}
+
+
+def _metadata_from_filename(image_path: Path) -> Optional[str]:
+    parts = [image_path.stem.lower()] + [part.lower() for part in image_path.parts]
+    for candidate in ("low", "normal", "high"):
+        if any(candidate in part for part in parts):
+            return candidate
+    return None
+
+
+def _get_metadata(
+    image_path: Path,
+    config: Dict[str, Any],
+    metadata_lookup: Dict[str, str],
+) -> Optional[str]:
+    source = str(config.get("metadata_source", "filename")).lower()
+    if source == "filename":
+        return _metadata_from_filename(image_path)
+    if source in {"csv", "yaml"}:
+        return metadata_lookup.get(image_path.stem)
+    return None
+
+
+def _build_output_row(
+    image_path: Path,
+    method: str,
+    gum_visibility_px: Optional[float],
+    gum_visibility_mm: Optional[float],
+    etiology: Any,
+    notes: str,
+) -> Dict[str, object]:
+    return {
+        "image_path": str(image_path),
+        "method": method,
+        "gum_visibility_px": gum_visibility_px,
+        "gum_visibility_mm": gum_visibility_mm,
+        "etiology_class": etiology.etiology_class,
+        "treatment_class": etiology.treatment_class,
+        "etiology_candidates": json.dumps(etiology.etiology_candidates, ensure_ascii=False),
+        "treatment_recommendations": json.dumps(etiology.treatment_recommendations, ensure_ascii=False),
+        "ambiguous": etiology.ambiguous,
+        "notes": notes,
+    }
+
+
+def run_pipeline(
+    image_path: Path,
+    config_path: Path,
+    weights_override: Optional[Path] = None,
+    px_per_mm_override: Optional[float] = None,
+    output_dir_override: Optional[Path] = None,
+    use_stub: bool = False,
+) -> Path:
+    repo_root = config_path.parent.parent.resolve()
     config = _load_config(config_path)
 
-    paths = config["paths"]
+    weights_path = weights_override or _resolve_optional_path(repo_root, config.get("weights_path"))
+    if not use_stub:
+        if weights_path is None or not weights_path.exists():
+            raise FileNotFoundError("Weights path not found. Please provide --weights path/to/best.pt.")
+
+    px_per_mm = px_per_mm_override if px_per_mm_override is not None else _parse_px_per_mm(config.get("px_per_mm"))
+    output_root = output_dir_override or _resolve_optional_path(repo_root, config.get("output_dir")) or repo_root / "results"
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = output_root / f"run_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
     yolo_cfg = config.get("yolo", {})
-    measurement_cfg = config.get("measurement", {})
+    overlay_cfg = config.get("overlay", {})
 
-    weights_path = _resolve_path(repo_root, paths["weights"])
-    images_dir = _resolve_path(repo_root, paths["images_dir"])
-    output_dir = _resolve_path(repo_root, paths["inference_output_dir"])
-    measurement_output = _resolve_path(repo_root, paths["measurement_output"])
-
-    print("[Pipeline] Running YOLOv11x-seg inference + measurements...")
-    predict_and_measure(
+    yolo_result = run_yolo_segmentation(
+        image_path=image_path,
         weights_path=weights_path,
-        images_dir=images_dir,
-        output_dir=output_dir,
-        measurement_output=measurement_output,
-        mm_per_pixel=measurement_cfg.get("mm_per_pixel", 1.0),
-        regions=measurement_cfg.get("regions", 6),
-        conf=yolo_cfg.get("conf", 0.25),
-        iou=yolo_cfg.get("iou", 0.5),
-        imgsz=yolo_cfg.get("imgsz", 1024),
-        max_det=yolo_cfg.get("max_det", 5),
+        output_dir=run_dir,
+        conf=float(yolo_cfg.get("conf", 0.25)),
+        iou=float(yolo_cfg.get("iou", 0.5)),
+        imgsz=int(yolo_cfg.get("imgsz", 1024)),
+        max_det=int(yolo_cfg.get("max_det", 5)),
+        mask_color=tuple(overlay_cfg.get("mask_color", [0, 255, 0])),
+        alpha=float(overlay_cfg.get("alpha", 0.4)),
+        use_stub=use_stub,
     )
 
-    diagnosis_output = _resolve_path(repo_root, paths["diagnosis_output"])
-    severity_output = _resolve_path(repo_root, paths["severity_metrics"])
-    manual_path = _resolve_path(repo_root, paths["manual_measurements"])
-    v1_path = _resolve_path(repo_root, paths["v1_predictions"])
-    v3_path = measurement_output
-    summary_output = _resolve_path(repo_root, paths["comparison_summary"])
-    by_smileline_output = _resolve_path(repo_root, paths["comparison_by_smileline"])
-    smileline_labels = _resolve_path(repo_root, paths["smileline_labels"])
-    severity_coco_glob = paths.get("severity_annotations_glob")
-    severity_labels_csv = paths.get("severity_labels_csv")
-    severity_labels_path = (
-        _resolve_path(repo_root, severity_labels_csv) if severity_labels_csv else None
-    )
-    severity_glob_path = (
-        str(repo_root / severity_coco_glob) if severity_coco_glob else None
-    )
-
-    print("[Pipeline] Comparing V1 (XGBoost) vs V3 (YOLOv11x-seg) vs manual...")
-    compare_methods(
-        manual_path=manual_path,
-        v1_path=v1_path,
-        v3_path=v3_path,
-        summary_output=summary_output,
-        by_smileline_output=by_smileline_output,
-        smileline_labels=smileline_labels,
-    )
-
-    print("[Pipeline] Generating etiology + treatment recommendations...")
-    generate_diagnosis(
-        measurement_output,
-        diagnosis_output,
-        coco_glob=severity_glob_path,
-        labels_csv=severity_labels_path,
-    )
-
-    if manual_path.exists() and diagnosis_output.exists():
-        manual_df = pd.read_csv(manual_path)
-        if "case_id" in manual_df.columns and "patient_id" not in manual_df.columns:
-            manual_df = manual_df.rename(columns={"case_id": "patient_id"})
-        if "patient_id" in manual_df.columns and "mean_mm" in manual_df.columns:
-            diagnosis_df = pd.read_csv(diagnosis_output)
-            if "patient_id" in diagnosis_df.columns and "etiology_code" in diagnosis_df.columns:
-                manual_df["severity_label"] = derive_severity_labels(manual_df["mean_mm"])
-                merged = manual_df.merge(
-                    diagnosis_df[["patient_id", "etiology_code"]],
-                    on="patient_id",
-                    how="inner",
-                )
-                compute_severity_metrics(
-                    merged["severity_label"].tolist(),
-                    merged["etiology_code"].tolist(),
-                    severity_output,
-                )
-            else:
-                print("[Pipeline] Skipping severity metrics (missing diagnosis columns).")
-        else:
-            print("[Pipeline] Skipping severity metrics (missing manual measurement columns).")
+    if yolo_result["status"] == "ok" and yolo_result["mask_path"]:
+        measurement = measure_gum_visibility(
+            image_path=image_path,
+            mask_path=Path(yolo_result["mask_path"]),
+            regions=6,
+            px_per_mm=px_per_mm,
+        )
+        gum_visibility_px = measurement.gum_visibility_px
+        gum_visibility_mm = measurement.gum_visibility_mm
     else:
-        print("[Pipeline] Skipping severity metrics (files not found).")
+        gum_visibility_px = None
+        gum_visibility_mm = None
 
-    intra_first = _resolve_path(repo_root, paths["intra_observer_first"])
-    intra_last = _resolve_path(repo_root, paths["intra_observer_last"])
-    intra_report = _resolve_path(repo_root, paths["intra_observer_report"])
+    metadata_lookup = _load_metadata_lookup(config, repo_root)
+    metadata = _get_metadata(image_path, config, metadata_lookup)
+    ambiguous_policy = config.get("ambiguous_policy", {})
 
-    if intra_first.exists() and intra_last.exists():
-        print("[Pipeline] Running intra-observer evaluation...")
-        run_intra_observer(intra_first, intra_last, intra_report)
+    value_unit = "mm" if gum_visibility_mm is not None else "px"
+    value_for_rule = gum_visibility_mm if gum_visibility_mm is not None else gum_visibility_px
+    v3_etiology = assign_etiology(value_for_rule, metadata, ambiguous_policy, value_unit=value_unit)
+    v3_notes = v3_etiology.notes
+    if metadata:
+        v3_notes = "; ".join([note for note in [v3_notes, f"metadata={metadata}"] if note])
+
+    v3_row = _build_output_row(
+        image_path=image_path,
+        method="v3_yolo",
+        gum_visibility_px=gum_visibility_px,
+        gum_visibility_mm=gum_visibility_mm,
+        etiology=v3_etiology,
+        notes=v3_notes,
+    )
+    v3_df = pd.DataFrame([v3_row])
+    v3_csv = run_dir / "v3_yolo_predictions.csv"
+    v3_df.to_csv(v3_csv, index=False)
+
+    v1_model_path = _resolve_optional_path(repo_root, config.get("v1_model_path"))
+    if v1_model_path is None or not v1_model_path.exists():
+        raise FileNotFoundError("V1 XGBoost model not found. Please configure v1_model_path.")
+
+    if yolo_result["status"] == "ok" and yolo_result["mask_path"]:
+        v1_prediction = run_xgboost(
+            mask_path=Path(yolo_result["mask_path"]),
+            model_path=v1_model_path,
+            px_per_mm=px_per_mm,
+        )
+        v1_gum_visibility_px = v1_prediction.gum_visibility_px
+        v1_gum_visibility_mm = v1_prediction.predicted_mean_mm
     else:
-        print("[Pipeline] Skipping intra-observer evaluation (files not found).")
+        v1_gum_visibility_px = None
+        v1_gum_visibility_mm = None
+
+    v1_etiology = assign_etiology(
+        v1_gum_visibility_mm,
+        metadata,
+        ambiguous_policy,
+        value_unit="mm" if v1_gum_visibility_mm is not None else "px",
+    )
+    v1_notes = "; ".join(
+        note for note in [v1_etiology.notes, "XGBoost prediction used for mm estimate."] if note
+    )
+
+    v1_row = _build_output_row(
+        image_path=image_path,
+        method="v1_xgboost",
+        gum_visibility_px=v1_gum_visibility_px,
+        gum_visibility_mm=v1_gum_visibility_mm,
+        etiology=v1_etiology,
+        notes=v1_notes,
+    )
+    v1_df = pd.DataFrame([v1_row])
+    v1_csv = run_dir / "v1_xgboost_predictions.csv"
+    v1_df.to_csv(v1_csv, index=False)
+
+    evaluation_output = run_dir / "evaluation.json"
+    manual_path = _resolve_optional_path(repo_root, config.get("manual_measurements_path"))
+    evaluation = {"status": "SKIP", "reason": "manual_measurements_path not set."}
+    if manual_path:
+        evaluation = evaluate_if_available(manual_path, v1_df, v3_df, image_path.stem, evaluation_output)
+        if evaluation.get("status") == "SKIP":
+            evaluation_output.write_text(json.dumps(evaluation, ensure_ascii=False, indent=2), encoding="utf-8")
+    else:
+        evaluation_output.write_text(json.dumps(evaluation, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report = {
+        "image_path": str(image_path),
+        "weights_path": str(weights_path) if weights_path else None,
+        "px_per_mm": px_per_mm,
+        "output_dir": str(run_dir),
+        "yolo": yolo_result,
+        "v3_result": v3_row,
+        "v1_result": v1_row,
+        "evaluation": evaluation,
+    }
+    report_path = run_dir / "report.json"
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    return run_dir
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run GummySmile v3 master pipeline")
+    parser = argparse.ArgumentParser(description="Run GummySmile v3 single-image pipeline")
+    parser.add_argument("--image", type=Path, required=True, help="Path to the image to analyze.")
+    parser.add_argument(
+        "--weights",
+        type=Path,
+        default=None,
+        help="Path to YOLOv11x-seg weights (best.pt).",
+    )
     parser.add_argument(
         "--config",
         type=Path,
         default=Path(__file__).resolve().parent / "configs" / "config.yaml",
         help="Path to config.yaml",
     )
+    parser.add_argument("--px-per-mm", type=float, default=None, help="Override px_per_mm calibration.")
+    parser.add_argument("--output-dir", type=Path, default=None, help="Override output directory.")
+    parser.add_argument(
+        "--stub-model",
+        action="store_true",
+        help="Use a stub mask generator instead of YOLO weights (for smoke tests).",
+    )
     args = parser.parse_args()
-    run_pipeline(args.config)
+
+    run_pipeline(
+        image_path=args.image,
+        config_path=args.config,
+        weights_override=args.weights,
+        px_per_mm_override=args.px_per_mm,
+        output_dir_override=args.output_dir,
+        use_stub=args.stub_model,
+    )
