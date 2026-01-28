@@ -2,7 +2,7 @@ weights_path: ""
 px_per_mm: null
 output_dir: results
 metadata_source: filename
-metadata_path: data/labels_severity.csv
+metadata_path: data/labels_smileline.csv
 ambiguous_policy:
   default: E2
   use_metadata: true
