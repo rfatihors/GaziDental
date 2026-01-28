@@ -94,9 +94,10 @@ DIAGNOSIS_RULES = [
 def _match_rule(mean_mm: float) -> Optional[DiagnosisResult]:
     """Return the diagnosis for a mean gingival display in millimeters.
 
-    Overlapping ranges are resolved by priority: E4 > E3 > E2 > E1. This keeps
-    a consistent single-label assignment for values that fall into multiple
-    ranges (e.g., 3-4 mm or 4-6 mm).
+    Overlapping ranges are resolved by preferring the narrower interval. When
+    two ranges have the same width, the lower etiology code (e.g., E2 before
+    E3) is selected. This avoids always promoting overlap into the highest
+    priority rule.
     """
 
     matched_rules = []
@@ -126,7 +127,20 @@ def _match_rule(mean_mm: float) -> Optional[DiagnosisResult]:
     if not matched_rules:
         return None
 
-    selected_rule = max(matched_rules, key=lambda item: item["priority"])
+    def interval_width(rule: dict) -> float:
+        min_mm = rule["min_mm"]
+        max_mm = rule["max_mm"]
+        if min_mm is None or max_mm is None:
+            return float("inf")
+        return max_mm - min_mm
+
+    selected_rule = min(
+        matched_rules,
+        key=lambda item: (
+            interval_width(item),
+            item["label"],
+        ),
+    )
     return DiagnosisResult(
         etiology_code=selected_rule["label"],
         etiology=selected_rule["etiology"],
