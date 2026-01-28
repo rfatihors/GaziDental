@@ -45,7 +45,7 @@ DIAGNOSIS_RULES = [
         "max_mm": 6.0,
         "min_inclusive": True,
         "max_inclusive": True,
-        "priority": 2,
+        "priority": 3,
         "etiology": [
             "Hiperaktif (Hipermobil) üst dudak",
             "Kısa üst dudak (<20 mm)",
@@ -62,7 +62,7 @@ DIAGNOSIS_RULES = [
         "max_mm": 8.0,
         "min_inclusive": True,
         "max_inclusive": True,
-        "priority": 3,
+        "priority": 2,
         "etiology": [
             "Dentoalveolar ekstrüzyon",
             "Derin kapanış",
@@ -94,10 +94,10 @@ DIAGNOSIS_RULES = [
 def _match_rule(mean_mm: float) -> Optional[DiagnosisResult]:
     """Return the diagnosis for a mean gingival display in millimeters.
 
-    Overlapping ranges are resolved by preferring the narrower interval. When
-    two ranges have the same width, the lower etiology code (e.g., E2 before
-    E3) is selected. This avoids always promoting overlap into the highest
-    priority rule.
+    Overlapping ranges are resolved by clinical priority. When priorities are
+    the same, we prefer the narrower interval and then the lower etiology code
+    (e.g., E2 before E3). This ensures the 4–6 mm overlap is assigned using the
+    rule ordering rather than accidental interval width.
     """
 
     matched_rules = []
@@ -137,6 +137,7 @@ def _match_rule(mean_mm: float) -> Optional[DiagnosisResult]:
     selected_rule = min(
         matched_rules,
         key=lambda item: (
+            item["priority"],
             interval_width(item),
             item["label"],
         ),
