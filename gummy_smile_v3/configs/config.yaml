@@ -11,7 +11,7 @@ ambiguous_policy:
     normal: E2
     low: E2
 manual_measurements_path: data/manual_measurements/manual_measurements.csv
-v1_model_path: ../gummy_smile_guncel/saved_models_guncel/xgboost_regressor_guncel8.json
+v1_model_path: models/xgboost_regressor_guncel8.json
 yolo:
   imgsz: 1024
   conf: 0.25
