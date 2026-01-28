@@ -54,6 +54,14 @@ def run_pipeline(config_path: Path) -> None:
     summary_output = _resolve_path(repo_root, paths["comparison_summary"])
     by_smileline_output = _resolve_path(repo_root, paths["comparison_by_smileline"])
     smileline_labels = _resolve_path(repo_root, paths["smileline_labels"])
+    severity_coco_glob = paths.get("severity_annotations_glob")
+    severity_labels_csv = paths.get("severity_labels_csv")
+    severity_labels_path = (
+        _resolve_path(repo_root, severity_labels_csv) if severity_labels_csv else None
+    )
+    severity_glob_path = (
+        str(repo_root / severity_coco_glob) if severity_coco_glob else None
+    )
 
     print("[Pipeline] Comparing V1 (XGBoost) vs V3 (YOLOv11x-seg) vs manual...")
     compare_methods(
@@ -66,7 +74,12 @@ def run_pipeline(config_path: Path) -> None:
     )
 
     print("[Pipeline] Generating etiology + treatment recommendations...")
-    generate_diagnosis(measurement_output, diagnosis_output)
+    generate_diagnosis(
+        measurement_output,
+        diagnosis_output,
+        coco_glob=severity_glob_path,
+        labels_csv=severity_labels_path,
+    )
 
     intra_first = _resolve_path(repo_root, paths["intra_observer_first"])
     intra_last = _resolve_path(repo_root, paths["intra_observer_last"])

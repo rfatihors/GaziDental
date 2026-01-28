@@ -39,6 +39,12 @@ no retraining is required beyond supplying the `best.pt` weight file.
    - Save labels in `data/labels_smileline.csv` with `patient_id` and
      `smileline_type` (or `smileline`) columns.
 
+6. **Severity labels (optional)**
+   - The pipeline can ingest severity metadata from COCO annotations (defaults
+     to `data/coco_dataset/**/_annotations.coco.json`) or a CSV such as
+     `data/labels_severity.csv`.
+   - CSV columns: `patient_id` + one of `severity`, `severity_label`, or `label`.
+
 ## Running the Pipeline
 
 ```bash
@@ -64,6 +70,8 @@ The pipeline performs:
      based on mean gingival display and writes `results/diagnosis_recommendations.csv`.
    - Rule precedence (derived from the clinical table):  
      `<4 mm → E1`, `4–6 mm → E2`, `6–8 mm → E3`, `>8 mm → E4`.
+   - The diagnosis output also includes `severity_ground_truth` (if metadata is
+     available) and `severity_predicted` (rule-based from `mean_mm`).
 
 4. **Intra-observer analysis**
    - `evaluation/intra_observer.py` generates `results/intra_observer_report.csv`
