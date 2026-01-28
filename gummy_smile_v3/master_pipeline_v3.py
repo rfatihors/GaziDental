@@ -84,7 +84,7 @@ def _get_metadata(
     return None
 
 
-def _build_output_row(
+def _build_report_row(
     image_path: Path,
     method: str,
     gum_visibility_px: Optional[float],
@@ -99,11 +99,18 @@ def _build_output_row(
         "gum_visibility_mm": gum_visibility_mm,
         "etiology_class": etiology.etiology_class,
         "treatment_class": etiology.treatment_class,
-        "etiology_candidates": json.dumps(etiology.etiology_candidates, ensure_ascii=False),
-        "treatment_recommendations": json.dumps(etiology.treatment_recommendations, ensure_ascii=False),
+        "etiology_candidates": etiology.etiology_candidates,
+        "treatment_recommendations": etiology.treatment_recommendations,
         "ambiguous": etiology.ambiguous,
         "notes": notes,
     }
+
+
+def _build_csv_row(report_row: Dict[str, object]) -> Dict[str, object]:
+    csv_row = dict(report_row)
+    for field in ("etiology_candidates", "treatment_recommendations"):
+        csv_row[field] = json.dumps(csv_row.get(field, []), ensure_ascii=False)
+    return csv_row
 
 
 def _etiology_without_calibration(note: str) -> EtiologyResult:
@@ -183,7 +190,7 @@ def run_pipeline(
     if metadata:
         v3_notes = "; ".join([note for note in [v3_notes, f"metadata={metadata}"] if note])
 
-    v3_row = _build_output_row(
+    v3_report_row = _build_report_row(
         image_path=image_path,
         method="v3_yolo",
         gum_visibility_px=gum_visibility_px,
@@ -191,7 +198,7 @@ def run_pipeline(
         etiology=v3_etiology,
         notes=v3_notes,
     )
-    v3_df = pd.DataFrame([v3_row])
+    v3_df = pd.DataFrame([_build_csv_row(v3_report_row)])
     v3_csv = run_dir / "v3_yolo_predictions.csv"
     v3_df.to_csv(v3_csv, index=False)
 
@@ -231,7 +238,7 @@ def run_pipeline(
         note for note in [v1_etiology.notes, "XGBoost prediction used for mm estimate."] if note
     )
 
-    v1_row = _build_output_row(
+    v1_report_row = _build_report_row(
         image_path=image_path,
         method="v1_xgboost",
         gum_visibility_px=v1_gum_visibility_px,
@@ -239,7 +246,7 @@ def run_pipeline(
         etiology=v1_etiology,
         notes=v1_notes,
     )
-    v1_df = pd.DataFrame([v1_row])
+    v1_df = pd.DataFrame([_build_csv_row(v1_report_row)])
     v1_csv = run_dir / "v1_xgboost_predictions.csv"
     v1_df.to_csv(v1_csv, index=False)
 
@@ -260,8 +267,8 @@ def run_pipeline(
         "measurement_unit": "mm" if px_per_mm is not None else "px",
         "output_dir": str(run_dir),
         "yolo": yolo_result,
-        "v3_result": v3_row,
-        "v1_result": v1_row,
+        "v3_result": v3_report_row,
+        "v1_result": v1_report_row,
         "evaluation": evaluation,
         "metadata_warning": metadata_warning,
     }
