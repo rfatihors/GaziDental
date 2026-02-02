@@ -129,6 +129,7 @@ def run_pipeline(
     image_path: Path,
     config_path: Path,
     weights_override: Optional[Path] = None,
+    v1_model_override: Optional[Path] = None,
     px_per_mm_override: Optional[float] = None,
     output_dir_override: Optional[Path] = None,
     use_stub: bool = False,
@@ -203,10 +204,8 @@ def run_pipeline(
     v3_csv = run_dir / "v3_yolo_predictions.csv"
     v3_df.to_csv(v3_csv, index=False)
 
-    v1_model_path = _resolve_optional_path(repo_root, config.get("v1_model_path"))
+    v1_model_path = v1_model_override or _resolve_optional_path(repo_root, config.get("v1_model_path"))
     v1_model_missing = v1_model_path is None or not v1_model_path.exists()
-    if v1_model_missing and not use_stub:
-        raise FileNotFoundError("V1 XGBoost model not found. Please configure v1_model_path.")
 
     if v1_model_missing:
         v1_gum_visibility_px = None
@@ -295,6 +294,12 @@ if __name__ == "__main__":
     parser.add_argument("--px-per-mm", type=float, default=None, help="Override px_per_mm calibration.")
     parser.add_argument("--output-dir", type=Path, default=None, help="Override output directory.")
     parser.add_argument(
+        "--v1-model-path",
+        type=Path,
+        default=None,
+        help="Optional override path to the v1 XGBoost model.",
+    )
+    parser.add_argument(
         "--stub-model",
         action="store_true",
         help="Use a stub mask generator instead of YOLO weights (for smoke tests).",
@@ -305,6 +310,7 @@ if __name__ == "__main__":
         image_path=args.image,
         config_path=args.config,
         weights_override=args.weights,
+        v1_model_override=args.v1_model_path,
         px_per_mm_override=args.px_per_mm,
         output_dir_override=args.output_dir,
         use_stub=args.stub_model,

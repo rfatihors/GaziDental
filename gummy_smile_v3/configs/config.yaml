@@ -1,4 +1,4 @@
-weights_path: ""
+weights_path: yolo/weights/best.pt
 px_per_mm: null
 output_dir: results
 metadata_source: filename
@@ -11,7 +11,7 @@ ambiguous_policy:
     normal: E2
     low: E2
 manual_measurements_path: data/manual_measurements/calibration-last.xlsx
-v1_model_path: ../gummy_smile_guncel/saved_models_guncel/xgboost_regressor_guncel8.json
+v1_model_path: models/xgboost_regressor_guncel8.json
 yolo:
   imgsz: 1024
   conf: 0.25
