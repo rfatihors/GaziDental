@@ -81,8 +81,8 @@ thresholds:
   boundaries_mm: [3.0, 4.0, 6.0, 8.0]
 
 measurement:
-  px_per_mm: null            # set after oracle validation (global scale) or per image
-  method: null               # filled by Stage 3: e.g. {regioning: A, estimator: p25, anchored: false}
+  px_per_mm: 16.8397          # global scale, fitted on the oracle dev subset (Stage 3)
+  method: {regioning: C, estimator: p25, anchored: false}  # selected in Stage 3 on dev MAE
   regions: 6
   median_filter_frac: 0.01        # of the measurement-window width, forced odd
   zenith_window_frac: 0.01        # method C: half-window around each zenith (of image width)

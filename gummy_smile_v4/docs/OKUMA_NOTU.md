@@ -47,6 +47,14 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 - Çapraz-grup çiftler: `low/IMG_1207` ↔ `normal/IMG_1178` (ikisinde de yaş/cinsiyet yok → `image_a` = low tutuldu), `low/IMG_9696` ↔ `normal/52-IMG_9695` (önekten yaş → normal tutuldu). Sonuç low 300 / normal 785 (beklenti ≈299/≈786; fark bu iki karardan).
 - 2698×1799 ±2 px çerçevesinde 830 görüntü, dışında 485 (oracle duyarlılık analizinde ayrı tutulacak).
 
+## Aşama 3'te öğrenilenler
+
+- Seçilen yöntem `C_p25` (dev MAE 0.557; C_p10 0.578 → 0.02 mm toleransın hemen dışında), global ölçek 16.84 px/mm (yalnız dev). Holdout MAE 0.52 mm, ICC(2,1) 0.858. C yöntemi 28/145 görüntüde zenith bulamayıp A'ya düşer; raporda açık.
+- Gözlemci içi (calibration.xlsx): ICC(2,1) 0.995 diş / 0.998 görüntü, SD 0.17 mm — audit ile birebir.
+- Boşluk medyanı 8 px (IQR 5–12); beklenti 9 px ile uyumlu. Dudak-ankrajlı tahminciler dev'de daha kötü.
+- Çerçeve dışı 22/145 görüntü: MAE 0.78 vs 0.46 mm; ölçek göstergeleri zıt yönde → ikili ölçek önerilmedi, duyarlılık satırı olarak raporlandı.
+- `label_inconsistent` iki satır (IMG_9152, IMG_9206) COCO'da yok; dışlama etkisiz.
+
 ## Ortam durumu
 
 - COCO: high 158/28/30 = 216, low 214/45/44 = 303, normal 558/119/119 = 796 — envanterle birebir; her bölüntüde `_annotations.coco.json` var.
