@@ -139,6 +139,8 @@ def main() -> int:
         per[f"selected_region_{i}_mm"] = df[f"{combo}_region_{i}_px"] / k
     per["gap_median_px"] = df["gap_median_px"]
     per["n_gingiva_instances"] = df["n_gingiva_instances"]
+    per["n_zeniths_found"] = df["n_zeniths_found"]
+    per["alignment_uncertain"] = df["qc_flags"].fillna("").str.contains(QCFlag.ZENITH_DETECTION_FAILED.value)
     per["qc_flags"] = df["qc_flags"].fillna("")
     per.to_csv(out_dir / "per_image_results.csv", index=False)
 
@@ -186,10 +188,24 @@ def main() -> int:
         k_alt = float(results.set_index("combo").loc[alt, "px_per_mm_dev"])
         mae_sel = float(np.abs(ok_dev[f"{combo}_px"] / k - ok_dev["ref_mm"]).mean())
         mae_alt = float(np.abs(ok_dev[f"{alt}_px"] / k_alt - ok_dev["ref_mm"]).mean())
-        fb_text = (f"Regioning {chosen['regioning']} could not be established on {n_fb} of {len(df)} images (`{fb_flag}`); "
+        fb = df[fb_mask]
+        okc = df[~fb_mask]
+        cand_dist = (fb["n_zenith_candidates_left"].astype(int).astype(str) + "+" + fb["n_zenith_candidates_right"].astype(int).astype(str)).value_counts().sort_index()
+        fb_detail = (f"\n\nFallback distribution ({n_fb} images): zenith candidates found left+right of the midline (3+3 needed): "
+                     + ", ".join(f"{k}: {v}" for k, v in cand_dist.items())
+                     + f". Total minima on fallback images: median {int((fb['n_zenith_candidates_left'] + fb['n_zenith_candidates_right']).median())} vs {int((okc['n_zenith_candidates_left'] + okc['n_zenith_candidates_right']).median())} on successful ones. "
+                     + f"Gingiva band width (fraction of image width, a proxy for premolar visibility): fallback {fb['window_width_frac'].mean():.3f} vs success {okc['window_width_frac'].mean():.3f}; "
+                     + f"reference mm: fallback {fb['ref_mm'].mean():.2f} vs success {okc['ref_mm'].mean():.2f}. "
+                     + ("Fallback images are not wider, so premolar visibility is not the main cause; " if fb['window_width_frac'].mean() <= okc['window_width_frac'].mean() * 1.05 else "Fallback images show a wider band, consistent with premolars entering the window (more minima than expected); ")
+                     + "the typical failure is one side of the midline having fewer than three detectable minima (a shallow festoon on that side).")
+        alt_row = results.set_index("combo").loc[alt]
+        fb_detail += (f"\n\n**Sensitivity analysis — `{alt}` (no fallback, equal-split regions) side by side:** holdout MAE {alt_row['mae_holdout']:.3f} vs {sel_row['mae_holdout']:.3f} mm, RMSE {alt_row['rmse_holdout']:.3f} vs {sel_row['rmse_holdout']:.3f}, r {alt_row['r_holdout']:.3f} vs {sel_row['r_holdout']:.3f}, "
+                      f"ICC(2,1) {alt_row['icc2_1_holdout']:.3f} vs {sel_row['icc2_1_holdout']:.3f}, bias {alt_row['ba_bias_holdout']:+.3f} vs {sel_row['ba_bias_holdout']:+.3f} mm, scale {alt_row['px_per_mm_dev']:.2f} vs {k:.2f} px/mm.")
+        fb_detail += (f"\n\n**Stage 6 note:** on predicted masks the fallback rate of `{combo}` will be re-measured; if it exceeds 30 % the selection is re-evaluated against `{alt}`.")
+        fb_text = (f"Regioning {chosen['regioning']} could not be established on {n_fb} of {len(df)} images ({100 * n_fb / len(df):.0f} %, `{fb_flag}`); "
                    f"there the measurement silently uses the equal-split regions (A) and the value is identical to `{alt}`. "
                    f"On the dev images where {chosen['regioning']} succeeded (n = {len(ok_dev)}), dev MAE is {mae_sel:.3f} mm for `{combo}` vs {mae_alt:.3f} mm for `{alt}` — "
-                   f"the advantage of {chosen['regioning']} comes from these images, not from the fallback ones.")
+                   f"the advantage of {chosen['regioning']} comes from these images, not from the fallback ones." + fb_detail)
 
     # ---- figures (holdout, selected method)
     hold = per[per["split"] == "holdout"]

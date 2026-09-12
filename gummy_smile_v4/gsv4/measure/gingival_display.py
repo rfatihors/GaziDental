@@ -73,6 +73,7 @@ class MeasurementResult:
     n_components: int
     regions: Dict[str, List[Region]]
     zeniths_c: List[int]
+    zenith_candidates: Tuple[int, int]
     region_values: Dict[MethodKey, List[float]]
     image_values: Dict[MethodKey, float]
     image_medians: Dict[MethodKey, float]
@@ -91,6 +92,9 @@ class MeasurementResult:
         row: Dict[str, Any] = {
             "height": self.height, "width": self.width, "x0": self.x0, "x1": self.x1,
             "midline_x": self.midline_x, "n_components": self.n_components,
+            "window_width_frac": (self.x1 - self.x0) / self.width if self.x1 > self.x0 else math.nan,
+            "n_zenith_candidates_left": self.zenith_candidates[0], "n_zenith_candidates_right": self.zenith_candidates[1],
+            "n_zeniths_found": len(self.zeniths_c),
             "method": f"{self.method['regioning']}_{self.method['estimator']}" + ("_lipanchored" if self.method.get("anchored") else ""),
             "gingival_display_px": self.gingival_display_px, "gingival_display_mm": self.gingival_display_mm,
             "px_per_mm": self.px_per_mm, "unit": self.unit,
@@ -116,7 +120,7 @@ def _empty_result(h: int, w: int, px_per_mm: Optional[float], cfg: Dict[str, Any
     keys = [(r, e, a) for r in REGIONINGS for e in ESTIMATORS for a in (False, True)]
     return MeasurementResult(
         height=h, width=w, x0=-1, x1=-1, midline_x=w // 2, n_components=0,
-        regions={"A": [], "B": [], "C": []}, zeniths_c=[],
+        regions={"A": [], "B": [], "C": []}, zeniths_c=[], zenith_candidates=(0, 0),
         region_values={k: list(nanlist) for k in keys}, image_values={k: math.nan for k in keys},
         image_medians={k: math.nan for k in keys}, method=dict(cfg["default_method"]),
         gingival_display_px=math.nan, gingival_display_mm=None if px_per_mm is None else math.nan,
@@ -204,7 +208,7 @@ def measure_gingival_display(
         b = regions["A"]
     regions["B"] = b
     min_dist_c = max(1, int(round(w * float(cfg["zenith_min_distance_frac"]))))
-    z = zeniths_midline(t_s, x0, x1, midline, n // 2, min_dist_c)
+    z, n_zl, n_zr = zeniths_midline(t_s, x0, x1, midline, n // 2, min_dist_c)
     half = max(1, int(round(w * float(cfg["zenith_window_frac"]))))
     if z is None:
         flags.append(QCFlag.ZENITH_DETECTION_FAILED)
@@ -254,7 +258,7 @@ def measure_gingival_display(
         unit = "px"
     return MeasurementResult(
         height=h, width=w, x0=x0, x1=x1, midline_x=midline, n_components=n_comp, regions=regions,
-        zeniths_c=zeniths, region_values=region_values, image_values=image_values, image_medians=image_medians,
+        zeniths_c=zeniths, zenith_candidates=(n_zl, n_zr), region_values=region_values, image_values=image_values, image_medians=image_medians,
         method={"regioning": prim_key[0], "estimator": prim_key[1], "anchored": prim_key[2]},
         gingival_display_px=value_px, gingival_display_mm=value_mm, px_per_mm=px_per_mm, unit=unit,
         gap_median=gap_median, gap_iqr=gap_iqr, flags=flags,

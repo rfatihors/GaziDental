@@ -1,0 +1,4 @@
+expert,n_rows,n_rows_empty,n_class_missing,n_scale_missing,n_mm_complete,n_confidence_missing,flags
+1,165,0,0,6,161,3,scale_missing: 6; confidence_missing: 3; mm_12_missing: 1; mm_22_missing: 1; mm_11_missing: 1; mm_21_missing: 1
+2,165,3,3,6,158,9,confidence_missing: 9; scale_missing: 6; mm_13_missing: 5; mm_12_missing: 4; mm_23_missing: 4; mm_11_missing: 3; mm_21_missing: 3; mm_22_missing: 3; missing_class: 3; row_empty: 3
+3,165,0,0,2,163,5,confidence_missing: 5; scale_missing: 2; mm_22_missing: 1; mm_13_missing: 1

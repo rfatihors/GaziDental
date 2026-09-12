@@ -1,0 +1,13 @@
+image,class_e1,second_e1,conf_e1,class_e2,second_e2,conf_e2,class_e3,second_e3,conf_e3,reference_class,reference_kind,n_votes
+IMG_8607_jpg,E3,,3.0,E1,E2,4.0,E2,,5.0,,consensus_pending,3
+IMG_2761-_jpg,E2,E1,4.0,E3,,5.0,E1,,3.0,,consensus_pending,3
+IMG_8568_jpg,E3,,3.0,E1,,2.0,E2,,3.0,,consensus_pending,3
+IMG_7307_jpg,E1,,5.0,E3,E4,5.0,E2,,3.0,,consensus_pending,3
+IMG_3110_jpg,E1,,2.0,E3,,3.0,E2,E3,2.0,,consensus_pending,3
+IMG_6488-_jpg,E2,,2.0,E1,,4.0,E3,E2,2.0,,consensus_pending,3
+IMG_2550_jpeg,E3,E2,3.0,E4,,,E2,,4.0,,consensus_pending,3
+IMG_6933_jpg,E1,E2,3.0,E3,,3.0,E2,E2,5.0,,consensus_pending,3
+IMG_8630_jpg,E2,,4.0,E3,,4.0,E1,E2,4.0,,consensus_pending,3
+IMG_6942_jpg,E1,,3.0,E3,E2,3.0,E2,,2.0,,consensus_pending,3
+IMG_7276_jpg,E2,,3.0,E3,E2,3.0,E1,,3.0,,consensus_pending,3
+IMG_2862_jpg,E2,,4.0,E3,,2.0,E1,,,,consensus_pending,3

@@ -55,7 +55,7 @@ pytest
 # Stage entry points (added stage by stage):
 python scripts/build_manifest.py          # Stage 1 -> data/manifest/, outputs/01_data/
 python scripts/run_oracle.py --write-config   # Stage 3 -> outputs/03_oracle/, writes measurement.method/px_per_mm
-# python scripts/run_expert_analysis.py   # Stage 4
+python scripts/run_expert_analysis.py --synthetic   # Stage 4 dry run; drop real forms into data/expert/ and omit the flag
 ```
 
 Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
@@ -69,7 +69,7 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | 1 | Data layer | done — `scripts/build_manifest.py` |
 | 2 | Measurement + rule engine | done — `scripts/run_measurement_demo.py` |
 | 3 | Oracle validation | done — `scripts/run_oracle.py` (C_p25, 16.84 px/mm) |
-| 4 | Expert-agreement analysis (synthetic first) | — |
+| 4 | Expert-agreement analysis | done on synthetic forms — `scripts/run_expert_analysis.py [--synthetic]` |
 | 5 | Training pipeline (run on the workstation) | — |
 | 6 | Accuracy on predicted masks | — |
 | 7 | Reporting | — |

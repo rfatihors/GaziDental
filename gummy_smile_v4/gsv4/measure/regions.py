@@ -46,23 +46,25 @@ def regions_festoon(t_smooth: np.ndarray, x0: int, x1: int, n: int, min_distance
 
 def zeniths_midline(
     t_smooth: np.ndarray, x0: int, x1: int, midline: int, n_per_side: int, min_distance: int
-) -> Optional[List[int]]:
+) -> Tuple[Optional[List[int]], int, int]:
     """Zenith candidates = local minima of the profile; the ``n_per_side`` nearest to the
     midline on each side are taken. Zero-thickness plateaus (normal smile line) count as
-    minima. Returns sorted x positions or None when a side has too few candidates."""
+    minima. Returns ``(sorted x positions or None, n_candidates_left, n_candidates_right)``;
+    None when a side has fewer than ``n_per_side`` candidates."""
     seg = t_smooth[x0:x1].astype(float)
     if seg.size == 0:
-        return None
+        return None, 0, 0
     inv = seg.max() - seg
     mins, props = find_peaks(inv, distance=max(1, min_distance), plateau_size=(1, None))
     # use plateau centres
     centres = np.asarray([(l + r) // 2 for l, r in zip(props["left_edges"], props["right_edges"])], dtype=int) if len(mins) else np.array([], dtype=int)
     xs = centres + x0
+    n_left, n_right = int((xs < midline).sum()), int((xs >= midline).sum())
     left = np.sort(xs[xs < midline])[::-1][:n_per_side]
     right = np.sort(xs[xs >= midline])[:n_per_side]
     if len(left) < n_per_side or len(right) < n_per_side:
-        return None
-    return sorted(int(v) for v in np.concatenate([left, right]))
+        return None, n_left, n_right
+    return sorted(int(v) for v in np.concatenate([left, right])), n_left, n_right
 
 
 def windows_around(centres: List[int], half_width: int, x0: int, x1: int) -> List[Region]:

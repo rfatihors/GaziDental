@@ -55,6 +55,13 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 - Çerçeve dışı 22/145 görüntü: MAE 0.78 vs 0.46 mm; ölçek göstergeleri zıt yönde → ikili ölçek önerilmedi, duyarlılık satırı olarak raporlandı.
 - `label_inconsistent` iki satır (IMG_9152, IMG_9206) COCO'da yok; dışlama etkisiz.
 
+## Aşama 4'te öğrenilenler
+
+- Uzman analizi sentetik formlarla uçtan uca çalışıyor; gerçek formlar `data/expert/Uzman_{1,2,3}_form.xlsx` olarak gelince aynı komut bayraksız çalıştırılır; `consensus.csv` (image,class) konursa `consensus_pending` vakalar çözülür.
+- Model sınıfı = `per_image_results.csv` seçilen yöntem mm + kural motoru; global ölçek birincil, uzman ölçeği ikincil. Puanlama: katı / esnek / lenient2.
+- Diş bazlı karma modelde hasta varyansı sınıra (≈ 0) düşerse MixedLM GA'ları tanımsız olur; kod küme-dayanıklı OLS'ye düşer ve bunu raporlar (sentetik veride bu oldu; gerçek veride hasta etkisi beklenir).
+- Kappa yaygınlığa duyarlı: 145 görüntünün ~%78'i E1 → Fleiss/Cohen düşük çıkabilir; gözlenen uyum ve PABAK yanında raporlanıyor.
+
 ## Ortam durumu
 
 - COCO: high 158/28/30 = 216, low 214/45/44 = 303, normal 558/119/119 = 796 — envanterle birebir; her bölüntüde `_annotations.coco.json` var.

@@ -140,3 +140,58 @@ def pearson(a: Sequence[float], b: Sequence[float]) -> Dict[str, float]:
     ok = np.isfinite(a) & np.isfinite(b)
     r, p = stats.pearsonr(a[ok], b[ok])
     return {"r": float(r), "r_p": float(p)}
+
+
+def mixed_model_diff(df: pd.DataFrame, formula_rhs: str = "1", group: str = "patient", diff: str = "diff") -> Dict[str, object]:
+    """Linear mixed model ``diff ~ <rhs> + (1 | group)`` via statsmodels MixedLM (REML).
+
+    Returns fixed effects with 95 % CIs and p-values, variance components (between-
+    patient, residual) and the derived tooth-level ICC = var_patient / (var_patient +
+    var_resid). Tooth-level analyses must use this instead of a naive ICC because the
+    six teeth of one patient are not independent.
+    """
+    import warnings
+
+    import statsmodels.formula.api as smf
+
+    d = df.dropna(subset=[diff]).copy()
+    d[group] = d[group].astype(str)
+    note = ""
+    fit = None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            fit = smf.mixedlm(f"{diff} ~ {formula_rhs}", d, groups=d[group]).fit(reml=True, method=["lbfgs", "powell"])
+        except Exception as exc:  # noqa: BLE001 - singular at the boundary; handled below
+            note = f"mixed model failed ({exc}); "
+            fit = None
+    boundary = fit is None or not np.isfinite(np.asarray(fit.bse[fit.model.exog_names], dtype=float)).all() \
+        or float(fit.cov_re.iloc[0, 0]) < 1e-8 or (np.asarray(fit.bse[fit.model.exog_names], dtype=float) > 1e3).any()
+    if fit is not None and not boundary:
+        fe = fit.params[fit.model.exog_names]
+        ci = fit.conf_int().loc[fit.model.exog_names]
+        var_patient = float(fit.cov_re.iloc[0, 0])
+        var_resid = float(fit.scale)
+        return {
+            "formula": f"{diff} ~ {formula_rhs} + (1 | {group})", "estimator": "MixedLM (REML)", "note": "",
+            "n_obs": int(fit.nobs), "n_groups": int(d[group].nunique()),
+            "fixed_effects": pd.DataFrame({"estimate": fe, "ci_low": ci[0], "ci_high": ci[1], "p": fit.pvalues[fit.model.exog_names]}),
+            "var_patient": var_patient, "var_resid": var_resid,
+            "icc_patient": var_patient / (var_patient + var_resid) if (var_patient + var_resid) > 0 else float("nan"),
+            "converged": bool(fit.converged), "aic": float(fit.aic) if fit.aic is not None else float("nan"),
+        }
+    # boundary / singular case: between-patient variance is (numerically) zero. Report OLS
+    # with cluster-robust standard errors (clusters = patients) so CIs remain valid.
+    ols = smf.ols(f"{diff} ~ {formula_rhs}", d).fit(cov_type="cluster", cov_kwds={"groups": pd.factorize(d[group])[0]})
+    ci = ols.conf_int()
+    var_patient = float(fit.cov_re.iloc[0, 0]) if fit is not None else 0.0
+    var_resid = float(fit.scale) if fit is not None else float(ols.mse_resid)
+    return {
+        "formula": f"{diff} ~ {formula_rhs} + (1 | {group})", "estimator": "OLS, cluster-robust SE (patient)",
+        "note": note + "random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead",
+        "n_obs": int(ols.nobs), "n_groups": int(d[group].nunique()),
+        "fixed_effects": pd.DataFrame({"estimate": ols.params, "ci_low": ci[0], "ci_high": ci[1], "p": ols.pvalues}),
+        "var_patient": var_patient, "var_resid": var_resid,
+        "icc_patient": var_patient / (var_patient + var_resid) if (var_patient + var_resid) > 0 else float("nan"),
+        "converged": bool(fit.converged) if fit is not None else False, "aic": float(ols.aic),
+    }

@@ -11,7 +11,13 @@ Scale of every combination fitted on dev only and applied unchanged to holdout; 
 Holdout (n = 58): MAE 0.518 mm, RMSE 0.718 mm, r 0.861, ICC(2,1) 0.858 [0.773, 0.914], bias +0.116 mm [-0.071, +0.304], LoA -1.28 to 1.52 mm, proportional bias slope +0.054 (p = 0.465); threshold-label agreement 79.3 % (linear-weighted κ 0.733) — a *measurement* check against Table 1, not a clinical validation.
 Dev (n = 87): MAE 0.557 mm, r 0.881, ICC(2,1) 0.873.
 
-**Fallback transparency.** Regioning C could not be established on 28 of 145 images (`zenith_detection_failed`); there the measurement silently uses the equal-split regions (A) and the value is identical to `A_p25`. On the dev images where C succeeded (n = 72), dev MAE is 0.512 mm for `C_p25` vs 0.597 mm for `A_p25` — the advantage of C comes from these images, not from the fallback ones.
+**Fallback transparency.** Regioning C could not be established on 28 of 145 images (19 %, `zenith_detection_failed`); there the measurement silently uses the equal-split regions (A) and the value is identical to `A_p25`. On the dev images where C succeeded (n = 72), dev MAE is 0.512 mm for `C_p25` vs 0.597 mm for `A_p25` — the advantage of C comes from these images, not from the fallback ones.
+
+Fallback distribution (28 images): zenith candidates found left+right of the midline (3+3 needed): 0+1: 1, 2+0: 1, 2+2: 5, 2+3: 9, 2+4: 2, 3+2: 9, 4+2: 1. Total minima on fallback images: median 5 vs 6 on successful ones. Gingiva band width (fraction of image width, a proxy for premolar visibility): fallback 0.318 vs success 0.352; reference mm: fallback 2.66 vs success 2.89. Fallback images are not wider, so premolar visibility is not the main cause; the typical failure is one side of the midline having fewer than three detectable minima (a shallow festoon on that side).
+
+**Sensitivity analysis — `A_p25` (no fallback, equal-split regions) side by side:** holdout MAE 0.537 vs 0.518 mm, RMSE 0.744 vs 0.718, r 0.849 vs 0.861, ICC(2,1) 0.843 vs 0.858, bias +0.187 vs +0.116 mm, scale 17.04 vs 16.84 px/mm.
+
+**Stage 6 note:** on predicted masks the fallback rate of `C_p25` will be re-measured; if it exceeds 30 % the selection is re-evaluated against `A_p25`.
 
 **Against the reference's own repeatability:** intra-observer SD is 0.17 mm per tooth and 0.09 mm per image mean (`intra_observer.md`); pure observer noise would produce an expected absolute difference of ≈ 0.07 mm at image level. The holdout MAE of 0.52 mm therefore leaves ≈ 0.45 mm above the observer-noise floor, attributable to the estimator, the single global scale (per-image calibration was not recorded) and region alignment.
 

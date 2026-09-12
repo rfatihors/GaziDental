@@ -1,0 +1,3 @@
+stratum,n,observed_agreement,kappa_linear,n_disagreements
+>= 0.5 mm from thresholds,72,0.8194444444444444,0.6129032258064516,13
+within 0.5 mm of a threshold,61,0.7704918032786885,0.47079236552920767,14
