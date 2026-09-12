@@ -52,10 +52,11 @@ cd gummy_smile_v4
 python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pytest
-# Stage entry points (added stage by stage):
+# Stage entry points:
 python scripts/build_manifest.py          # Stage 1 -> data/manifest/, outputs/01_data/
 python scripts/run_oracle.py --write-config   # Stage 3 -> outputs/03_oracle/, writes measurement.method/px_per_mm
 python scripts/run_expert_analysis.py --synthetic   # Stage 4 dry run; drop real forms into data/expert/ and omit the flag
+python -m gsv4.train.prepare_yolo_dataset            # Stage 5 dataset (symlinks) + label-check figure; training: scripts/README_TRAINING.md
 ```
 
 Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
@@ -70,6 +71,6 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | 2 | Measurement + rule engine | done — `scripts/run_measurement_demo.py` |
 | 3 | Oracle validation | done — `scripts/run_oracle.py` (C_p25, 16.84 px/mm) |
 | 4 | Expert-agreement analysis | done on synthetic forms — `scripts/run_expert_analysis.py [--synthetic]` |
-| 5 | Training pipeline (run on the workstation) | — |
+| 5 | Training pipeline | written + dry-run; run `scripts/train_all.sh` on the workstation (`scripts/README_TRAINING.md`) |
 | 6 | Accuracy on predicted masks | — |
 | 7 | Reporting | — |

@@ -10,6 +10,9 @@ paths:
   manifest_dir: data/manifest
   expert_dir: data/expert
   outputs: outputs
+  yolo_dataset: data/yolo_dataset      # generated symlinks + labels (not versioned)
+  runs: runs                           # Ultralytics run directories (not versioned)
+  predictions: outputs/05_predictions  # small artefacts that come back from the workstation (versioned)
 
 inputs:
   measurements_xlsx: Hasta_ID-_Ölçümler.xlsx
@@ -116,6 +119,9 @@ yolo:
     patience: 20
     imgsz: 640
     cache: true
+    workers: 8
+    seed: 42
+    deterministic: true
   learning_curve_fractions: [0.25, 0.50, 0.75, 1.00]
 
 expert:

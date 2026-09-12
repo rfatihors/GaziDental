@@ -131,7 +131,11 @@ def main() -> int:
     all_images = [i for i in key.loc[key["tekrar"] == 0, "orijinal"].astype(str) if i in set(per["image"])]
     test_images = [u.split("/", 1)[1] for u in splits["by_split"].get("test", []) if u.startswith("high/")]
     test_images = [i for i in test_images if i in all_images]
-    subsets = {"test subset (primary)": test_images, f"all {len(all_images)} images (secondary)": all_images}
+    # Pre-specified (12 Sep 2026, before real forms): primary = all measured images (Stage 6:
+    # 5-fold out-of-fold predicted masks), secondary = the fixed test subset.
+    subsets = {f"all {len(all_images)} images, OOF (primary)": all_images, "fixed test subset (secondary)": test_images}
+    prespec_note = f"""## Pre-specification note
+The protocol originally named the fixed test subset (n = {len(test_images)}) as the primary set for the class-agreement analysis and all {len(all_images)} images as secondary. This was reversed **before any real expert form was available**, on the basis of the synthetic dry run: with n = {len(test_images)} the bootstrap 95 % CI of the linear-weighted κ spanned roughly −0.15 to 0.84, i.e. the primary estimate would have been uninformative. The 5-fold out-of-fold predictions are equally unbiased (every image is predicted by a model that never saw it or its same-patient twin), so the primary set is now all {len(all_images)} reference images with OOF predicted masks; the fixed test subset (final model) is reported as secondary. The same rule applies in Stage 6. In this run the model table is: {'GT masks / synthetic dry run' if args.synthetic else str(model_path)}."""
 
     # ---- expert side
     consensus_path = forms_dir / "consensus.csv"
@@ -215,16 +219,16 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
 
     numbers = ["# Numbers for the manuscript (value, 95 % CI, n)", "", "| metric | value | 95 % CI | n |", "|---|---|---|---|"]
     if prim is not None:
-        numbers += [num("Model vs expert majority, linear-weighted κ (test subset, strict)", prim["kappa_linear"], prim["kappa_linear_ci_low"], prim["kappa_linear_ci_high"], int(prim["n"])),
+        numbers += [num("Model vs expert majority, linear-weighted κ (primary: all images, OOF, strict)", prim["kappa_linear"], prim["kappa_linear_ci_low"], prim["kappa_linear_ci_high"], int(prim["n"])),
                     num("… unweighted κ", prim["kappa_unweighted"], prim["kappa_unweighted_ci_low"], prim["kappa_unweighted_ci_high"], int(prim["n"])),
                     num("… observed agreement", prim["observed_agreement"], prim["observed_agreement_ci_low"], prim["observed_agreement_ci_high"], int(prim["n"])),
                     num("… PABAK", prim["pabak"], prim["pabak_ci_low"], prim["pabak_ci_high"], int(prim["n"]))]
     if sec is not None:
-        numbers += [num("Model vs expert majority, linear-weighted κ (all images, strict)", sec["kappa_linear"], sec["kappa_linear_ci_low"], sec["kappa_linear_ci_high"], int(sec["n"]))]
+        numbers += [num("Model vs expert majority, linear-weighted κ (secondary: fixed test subset, strict)", sec["kappa_linear"], sec["kappa_linear_ci_low"], sec["kappa_linear_ci_high"], int(sec["n"]))]
     len_row = cls[(cls["scale"] == "global") & (cls["subset"].str.contains("primary")) & (cls["scoring"] == "lenient")]
     if len(len_row):
         r = len_row.iloc[0]
-        numbers += [num("… lenient scoring, linear-weighted κ (test subset)", r["kappa_linear"], r["kappa_linear_ci_low"], r["kappa_linear_ci_high"], int(r["n"]))]
+        numbers += [num("… lenient scoring, linear-weighted κ (primary set)", r["kappa_linear"], r["kappa_linear_ci_low"], r["kappa_linear_ci_high"], int(r["n"]))]
     numbers += [num("Inter-expert Fleiss κ (class)", inter.get("fleiss_kappa"), inter.get("fleiss_kappa_ci_low"), inter.get("fleiss_kappa_ci_high"), inter.get("n_class", 0))]
     if "mm_icc2_1" in inter:
         numbers += [num("Inter-expert ICC(2,1), image-mean mm (3 experts)", inter["mm_icc2_1"], inter["mm_icc2_1_ci_low"], inter["mm_icc2_1_ci_high"], inter["mm_n"]),
@@ -245,13 +249,15 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
         if "error" not in r and r["formula"].startswith("diff ~ 1 "):
             fe = r["fixed_effects"].loc["Intercept"]
             numbers += [num("Tooth-level bias (mixed model intercept), mm", fe["estimate"], fe["ci_low"], fe["ci_high"], r["n_obs"], "{:+.3f}")]
-    numbers_md = "\n".join(numbers) + "\n\nE4 has no reference case in this dataset (per_class.csv shows n = 0); the E4/T4 branch is not validated.\n"
+    numbers_md = "\n".join(numbers) + "\n\nE4 has no reference case in this dataset (per_class.csv shows n = 0); the E4/T4 branch is not validated.\n\n" + prespec_note + "\n"
     (out_dir / "manuscript_numbers.md").write_text(numbers_md, encoding="utf-8")
 
     pc_prim = per_class[(per_class["scale"] == "global") & (per_class["subset"].str.contains("primary"))][["class", "n_reference", "n_predicted", "sensitivity", "sensitivity_ci_low", "sensitivity_ci_high", "specificity", "specificity_ci_low", "specificity_ci_high"]]
     summary = f"""# Expert-agreement analysis — summary
 
 Data: {data_note}
+
+{prespec_note}
 
 ## Forms and quality control
 {md_table(form_qc)}
@@ -265,7 +271,7 @@ Scoring: strict = model's first candidate; lenient = agreement if the expert cla
 
 {md_table(cls[["scale", "subset", "scoring", "n", "n_consensus_pending_excluded", "n_model_unclassified", "kappa_linear", "kappa_linear_ci_low", "kappa_linear_ci_high", "kappa_unweighted", "observed_agreement", "pabak"]])}
 
-### Per class (test subset, strict, global scale; counts and Wilson 95 % CIs)
+### Per class (primary set, strict, global scale; counts and Wilson 95 % CIs)
 {md_table(pc_prim)}
 
 ### Disagreements by distance of the model value to the nearest clinical threshold (3, 4, 6, 8 mm)
@@ -290,7 +296,7 @@ Tooth-level analysis: `mixed_models.md` (random intercept per patient; tooth pos
 - Veri: {data_note}
 - Formlar: satır düşürülmedi; uzman başına boş satır {form_qc['n_rows_empty'].tolist()}, eksik sınıf {form_qc['n_class_missing'].tolist()}, eksik ölçek {form_qc['n_scale_missing'].tolist()}.
 - Referans: çoğunluk; konsensüs bekleyen {len(pending)}.
-- Birincil (test alt kümesi, katı, global ölçek): doğrusal ağırlıklı κ {ci(prim['kappa_linear'], prim['kappa_linear_ci_low'], prim['kappa_linear_ci_high']) if prim is not None else 'n/a'}, n = {int(prim['n']) if prim is not None else 0}. Tüm görüntüler: κ {ci(sec['kappa_linear'], sec['kappa_linear_ci_low'], sec['kappa_linear_ci_high']) if sec is not None else 'n/a'}.
+- Birincil (145 görüntü, OOF, katı, global ölçek): doğrusal ağırlıklı κ {ci(prim['kappa_linear'], prim['kappa_linear_ci_low'], prim['kappa_linear_ci_high']) if prim is not None else 'n/a'}, n = {int(prim['n']) if prim is not None else 0}. İkincil (sabit test): κ {ci(sec['kappa_linear'], sec['kappa_linear_ci_low'], sec['kappa_linear_ci_high']) if sec is not None else 'n/a'}.
 - Uzmanlar arası Fleiss κ {ci(inter.get('fleiss_kappa'), inter.get('fleiss_kappa_ci_low'), inter.get('fleiss_kappa_ci_high'))}; mm ICC(2,1) {inter.get('mm_icc2_1', float('nan')):.3f}; ölçek ICC(2,1) {inter.get('scale_icc2_1', float('nan')):.3f}, görüntü içi CV medyan {inter.get('scale_cv_within_image_median', float('nan')):.3f}.
 - Model–uzman ortalaması mm: ICC(2,1) {mm_glob.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob.index else float('nan'):.3f}, sapma {mm_glob.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob.index else float('nan'):+.2f} mm.
 - Karma modeller: {len([r for r in mixed if 'error' not in r])}/3 kuruldu; {len([r for r in mixed if r.get('estimator', '').startswith('MixedLM')])} tanesi MixedLM, gerisi sınır durumu (hasta varyansı ≈ 0) → küme-dayanıklı OLS.

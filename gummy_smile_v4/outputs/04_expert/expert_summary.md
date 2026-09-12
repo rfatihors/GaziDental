@@ -2,6 +2,9 @@
 
 Data: SYNTHETIC forms (p_agree ≈ 0.8, expert 2 biased upward, messy cells) written to /Users/fors/Projeler/GaziDental_calisma/GaziDental/gummy_smile_v4/outputs/04_expert/synthetic_forms; real model table /Users/fors/Projeler/GaziDental_calisma/GaziDental/gummy_smile_v4/outputs/03_oracle/per_image_results.csv.
 
+## Pre-specification note
+The protocol originally named the fixed test subset (n = 29) as the primary set for the class-agreement analysis and all 145 images as secondary. This was reversed **before any real expert form was available**, on the basis of the synthetic dry run: with n = 29 the bootstrap 95 % CI of the linear-weighted κ spanned roughly −0.15 to 0.84, i.e. the primary estimate would have been uninformative. The 5-fold out-of-fold predictions are equally unbiased (every image is predicted by a model that never saw it or its same-patient twin), so the primary set is now all 145 reference images with OOF predicted masks; the fixed test subset (final model) is reported as secondary. The same rule applies in Stage 6. In this run the model table is: GT masks / synthetic dry run.
+
 ## Forms and quality control
 | expert | n_rows | n_rows_empty | n_class_missing | n_scale_missing | n_mm_complete | n_confidence_missing | flags |
 |---|---|---|---|---|---|---|---|
@@ -18,26 +21,26 @@ Scoring: strict = model's first candidate; lenient = agreement if the expert cla
 
 | scale | subset | scoring | n | n_consensus_pending_excluded | n_model_unclassified | kappa_linear | kappa_linear_ci_low | kappa_linear_ci_high | kappa_unweighted | observed_agreement | pabak |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| global | test subset (primary) | strict | 27 | 2 | 0 | 0.471 | -0.145 | 0.836 | 0.357 | 0.815 | 0.753 |
-| global | test subset (primary) | lenient | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
-| global | test subset (primary) | lenient2 | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
-| global | all 145 images (secondary) | strict | 133 | 12 | 0 | 0.549 | 0.388 | 0.688 | 0.499 | 0.797 | 0.729 |
-| global | all 145 images (secondary) | lenient | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
-| global | all 145 images (secondary) | lenient2 | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
-| expert | test subset (primary) | strict | 27 | 2 | 0 | 0.360 | -0.110 | 0.685 | 0.282 | 0.815 | 0.753 |
-| expert | test subset (primary) | lenient | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
-| expert | test subset (primary) | lenient2 | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
-| expert | all 145 images (secondary) | strict | 133 | 12 | 0 | 0.475 | 0.322 | 0.607 | 0.412 | 0.767 | 0.689 |
-| expert | all 145 images (secondary) | lenient | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
-| expert | all 145 images (secondary) | lenient2 | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
+| global | all 145 images, OOF (primary) | strict | 133 | 12 | 0 | 0.549 | 0.388 | 0.688 | 0.499 | 0.797 | 0.729 |
+| global | all 145 images, OOF (primary) | lenient | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
+| global | all 145 images, OOF (primary) | lenient2 | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
+| global | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.471 | -0.145 | 0.836 | 0.357 | 0.815 | 0.753 |
+| global | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
+| global | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
+| expert | all 145 images, OOF (primary) | strict | 133 | 12 | 0 | 0.475 | 0.322 | 0.607 | 0.412 | 0.767 | 0.689 |
+| expert | all 145 images, OOF (primary) | lenient | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
+| expert | all 145 images, OOF (primary) | lenient2 | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
+| expert | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.360 | -0.110 | 0.685 | 0.282 | 0.815 | 0.753 |
+| expert | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
+| expert | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
 
-### Per class (test subset, strict, global scale; counts and Wilson 95 % CIs)
+### Per class (primary set, strict, global scale; counts and Wilson 95 % CIs)
 | class | n_reference | n_predicted | sensitivity | sensitivity_ci_low | sensitivity_ci_high | specificity | specificity_ci_low | specificity_ci_high |
 |---|---|---|---|---|---|---|---|---|
-| E1 | 23 | 22 | 0.870 | 0.679 | 0.955 | 0.500 | 0.150 | 0.850 |
-| E2 | 3 | 4 | 0.333 | 0.061 | 0.792 | 0.875 | 0.690 | 0.957 |
-| E3 | 1 | 1 | 1.000 | 0.207 | 1.000 | 1.000 | 0.871 | 1.000 |
-| E4 | 0 | 0 |  |  |  | 1.000 | 0.875 | 1.000 |
+| E1 | 93 | 104 | 0.935 | 0.866 | 0.970 | 0.575 | 0.422 | 0.715 |
+| E2 | 33 | 25 | 0.485 | 0.325 | 0.648 | 0.910 | 0.838 | 0.952 |
+| E3 | 7 | 4 | 0.429 | 0.158 | 0.750 | 0.992 | 0.956 | 0.999 |
+| E4 | 0 | 0 |  |  |  | 1.000 | 0.972 | 1.000 |
 
 ### Disagreements by distance of the model value to the nearest clinical threshold (3, 4, 6, 8 mm)
 | stratum | n | observed_agreement | kappa_linear | n_disagreements |

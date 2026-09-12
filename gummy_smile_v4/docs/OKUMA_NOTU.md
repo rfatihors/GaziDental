@@ -62,6 +62,13 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 - Diş bazlı karma modelde hasta varyansı sınıra (≈ 0) düşerse MixedLM GA'ları tanımsız olur; kod küme-dayanıklı OLS'ye düşer ve bunu raporlar (sentetik veride bu oldu; gerçek veride hasta etkisi beklenir).
 - Kappa yaygınlığa duyarlı: 145 görüntünün ~%78'i E1 → Fleiss/Cohen düşük çıkabilir; gözlenen uyum ve PABAK yanında raporlanıyor.
 
+## Aşama 5'te öğrenilenler
+
+- Ön-belirleme değişikliği (12 Eylül, gerçek form gelmeden): uzman analizinde birincil küme = 145 görüntü OOF tahminleri, ikincil = sabit test alt kümesi (n = 29 için κ GA'sı kullanılamayacak kadar geniş). Aşama 6'da da aynı.
+- YOLO veri seti symlink'lerle `data/yolo_dataset/` altında; dosya adları `grup__kök` ve boşluk/parantez `_` yapılır (`yolo_index.csv` geri eşler). Listeler satır bazlı okunur.
+- Fold eğitiminde valid = ana valid − held-out fold (best.pt seçimi held-out'a sızmaz); fold modeli yalnızca kendi fold'unu tahmin eder; test tahmini yalnız final modelden.
+- `train_all.sh` `runs/<ad>/DONE` işaretleriyle yeniden başlatılabilir; 9 eğitim + toplama + değerlendirme.
+
 ## Ortam durumu
 
 - COCO: high 158/28/30 = 216, low 214/45/44 = 303, normal 558/119/119 = 796 — envanterle birebir; her bölüntüde `_annotations.coco.json` var.
