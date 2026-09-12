@@ -67,7 +67,7 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 |---|---|---|
 | 0 | Reading, v3 review, skeleton | done |
 | 1 | Data layer | done — `scripts/build_manifest.py` |
-| 2 | Measurement + rule engine | — |
+| 2 | Measurement + rule engine | done — `scripts/run_measurement_demo.py` |
 | 3 | Oracle validation | — |
 | 4 | Expert-agreement analysis (synthetic first) | — |
 | 5 | Training pipeline (run on the workstation) | — |

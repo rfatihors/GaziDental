@@ -84,10 +84,14 @@ measurement:
   px_per_mm: null            # set after oracle validation (global scale) or per image
   method: null               # filled by Stage 3: e.g. {regioning: A, estimator: p25, anchored: false}
   regions: 6
-  median_filter_frac: 0.01   # of the measurement-window width, forced odd
-  zenith_window_frac: 0.01   # method C half-window
-  boundary_gap_max_frac: 0.02
+  median_filter_frac: 0.01        # of the measurement-window width, forced odd
+  zenith_window_frac: 0.01        # method C: half-window around each zenith (of image width)
+  zenith_min_distance_frac: 0.03  # method C: minimum spacing between zenith candidates (of image width)
+  festoon_min_distance_frac: 0.03 # method B: minimum spacing between papilla maxima (of window width)
+  boundary_gap_max_frac: 0.02     # lip-bottom to gingiva-top gap above this (of image height) -> flag
   implausible_mm: 20.0
+  # Combination that fills gingival_display_px until Stage 3 selects `method`
+  default_method: {regioning: A, estimator: p25, anchored: false}
 
 rules:
   ambiguous_policy:
