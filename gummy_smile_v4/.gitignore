@@ -7,18 +7,21 @@
 *.tar
 *.tar.gz
 runs/
-outputs/
 GORUNTULER/
-data/expert/*.pt
-data/expert/*.xlsx
-data/inputs/*.xlsx
-data/inputs/*.csv
 notebooks/**/outputs/
-# Generated masks
-**/masks/
-**/oof/
-**/*_gingiva.png
-**/*_lip.png
+# outputs/: only small reports (md/csv/json), figures (png < 2 MB) and the prediction
+# artefacts that come back from the training workstation are versioned.
+outputs/**
+!outputs/**/
+!outputs/**/*.md
+!outputs/**/*.csv
+!outputs/**/*.json
+!outputs/**/*.png
+!outputs/**/*.yaml
+outputs/**/runs/
+outputs/**/*.pt
+# Generated YOLO dataset (symlinks + labels) is rebuilt from the manifest
+data/yolo_dataset/
 # Python
 __pycache__/
 *.py[cod]

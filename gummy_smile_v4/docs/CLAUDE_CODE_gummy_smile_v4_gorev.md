@@ -27,7 +27,7 @@ Sonra `../gummy_smile_v3/` altındaki kodu **salt okunur** olarak incele: `measu
 - Görüntüleri kopyalama. v4, v3'ün verisine göreli yolla erişir: `../gummy_smile_v3/data/coco_dataset/`. Yol `configs/config.yaml` içinde tek yerde tanımlı.
 - Git'e büyük dosya koyma: `*.pt`, `runs/`, `outputs/`, `GORUNTULER/`, `*.zip`, üretilmiş maskeler `.gitignore`'da. Yalnızca kod, küçük CSV/JSON sonuçlar, figürler (PNG < 2 MB) ve raporlar commit edilir.
 - Her aşama sonunda: testler geçer → `git add -A && git commit` (mesaj: aşama adı + ne yapıldığı) → `git push origin master`. Push başarısız olursa dur ve söyle.
-- Python 3.11, `venv`, `requirements.txt` sabit sürümlerle. Ölçüm ve analiz kodu **GPU gerektirmez**; Mac'te çalışır. Eğitim kodu yazılır ama burada çalıştırılmaz (Bölüm 3, Aşama 5).
+- Python 3.11, `venv`. İki ayrı bağımlılık dosyası: `requirements.txt` (ölçüm/analiz — GPU gerektirmez, Mac'te çalışır) ve `requirements-train.txt` (eğitim — Linux iş istasyonu, **RTX 5090**). Eğitim kodu burada (Mac) yazılır ve `--dry-run` ile doğrulanır; gerçek eğitim kullanıcı tarafından iş istasyonunda `git pull` sonrası çalıştırılır (Aşama 5).
 - Kod ve docstring'ler İngilizce; üretilen raporlar İngilizce (makaleye girecek) + her rapor için kısa Türkçe `OZET.md`.
 - `pytest` ile testler; her modülün testi var. Testler klinik veri gerektirmez (sentetik maskeler / sentetik formlar).
 - Rastgelelik olan her yerde `seed=42`, `configs/config.yaml`'da tanımlı.
@@ -58,7 +58,7 @@ gummy_smile_v4/
 │   ├── train/     prepare_yolo_dataset.py, train.py, learning_curve.py, cv_predict.py, evaluate_test.py
 │   └── report/    figures.py, tables.py
 ├── scripts/                      CLI giriş noktaları (her aşama için bir tane)
-├── notebooks/train_colab.ipynb   Colab'da çalıştırılacak eğitim defteri
+├── scripts/train_all.sh          iş istasyonunda tüm eğitimleri sırayla çalıştırır
 ├── tests/
 └── outputs/                      (gitignore) raporlar, figürler, CSV'ler
 ```
@@ -76,7 +76,7 @@ Kullanıcı bunları koyacak; başlamadan varlıklarını kontrol et, eksikse du
 | `uzman_seti_145_goruntu.csv` | var | Uzman setine giren 145 görüntü + referans mm + tablo sınıfı |
 | `ANAHTAR_arastirmaci.csv` | var | G001–G165 anonim ID ↔ görüntü; `tekrar` sütunu |
 | `data/expert/Uzman_{1,2,3}_form.xlsx` | **sonra gelecek** | Doldurulmuş formlar (ölçüm + sınıf) |
-| `data/expert/best.pt` | **sonra gelecek** | Colab eğitiminden dönen ağırlık |
+| `outputs/05_predictions/` | **sonra gelecek** | İş istasyonundaki eğitimden dönen tahmin maskeleri ve `results.csv` dosyaları (Bölüm 3, Aşama 5) |
 
 ---
 
@@ -140,20 +140,23 @@ Analizler (`docs/Istatistik_analiz_plani.md` §2–3 ile birebir):
 
 **Kabul:** sentetik verilerle uçtan uca rapor üretiliyor; bilinen kappa/ICC değerli sentetik senaryolarda doğru sonuç veriyor (test).
 
-### Aşama 5 — Eğitim hattı (yazılır, Colab'da çalıştırılır)
+### Aşama 5 — Eğitim hattı (yazılır ve dry-run edilir; iş istasyonunda çalıştırılır)
 
-`gsv4/train/*`, `notebooks/train_colab.ipynb`, `scripts/README_TRAINING.md`.
+`gsv4/train/*`, `scripts/train_all.sh`, `scripts/README_TRAINING.md`, `requirements-train.txt`.
 
-- `prepare_yolo_dataset.py`: manifest + splits → Ultralytics segment formatı (`data.yaml`); COCO poligonlarından YOLO-seg etiketleri; augmentasyon yalnızca train; test setine hiçbir augmentasyon.
-- `train.py`: YOLOv11x-seg, v3'teki nihai konfigürasyon (100 epoch, batch 16, lr0 0.0005, lrf 0.02, AdamW, cosine, close_mosaic 10, patience 20, imgsz 640) — `configs/config.yaml`'dan okunur.
+Donanım: Linux iş istasyonu, **NVIDIA RTX 5090 (32 GB, Blackwell)**. Blackwell için PyTorch'un CUDA 12.8 derlemesi gerekir (`torch>=2.7`, `--index-url https://download.pytorch.org/whl/cu128`); `requirements-train.txt` buna göre. `README_TRAINING.md` içine doğrulama adımı koy: `python -c "import torch;print(torch.cuda.get_device_name(0),torch.cuda.get_device_capability(0))"` → capability `(12, 0)` görünmeli. Ultralytics güncel sürüm.
+
+- `prepare_yolo_dataset.py`: manifest + splits → Ultralytics segment formatı (`data.yaml`); COCO poligonlarından YOLO-seg etiketleri; görüntüler kopyalanmaz, **symlink** ile bağlanır; augmentasyon yalnızca train (Ultralytics'in kendi augmentasyonu; Roboflow çoğaltması yok); test setine hiçbir augmentasyon.
+- `train.py`: YOLOv11x-seg, v3'teki nihai konfigürasyon (100 epoch, batch 16, lr0 0.0005, lrf 0.02, AdamW, cosine, close_mosaic 10, patience 20, imgsz 640) — `configs/config.yaml`'dan okunur. 32 GB VRAM ile batch 16 rahat sığar; `cache=True` kullanılabilir.
 - `learning_curve.py`: train bölüntüsünün tabakalı iç içe %25/50/75/100 alt kümeleri, aynı doğrulama seti, sınıf bazında mask mAP → CSV + figür.
-- `cv_predict.py`: 145 ölçümlü high görüntüsü için 5 katlı out-of-fold tahmin (fold'lar `splits.json`'dan; low/normal görüntüler her fold'da eğitimde). Her görüntü için tahmin maskesi (dişeti/dudak ayrı PNG) `outputs/05_predictions/oof/` altına.
-- `evaluate_test.py`: sabit test setinde sınıf bazında box/mask mAP@50, mAP@50–95, precision, recall, F1; confusion matrix; boundary IoU ve kenar mesafesi hatası (dişeti üst ve alt kenarı ayrı — Reviewer 2 #10).
-- Colab defteri: depoyu klonlar, `gummy_smile_v4` kurar, Drive'a çıktı yazar; adımlar hücre hücre. Kullanıcı çalıştırır, `best.pt` ve `outputs/05_predictions/` klasörünü geri getirir.
+- `cv_predict.py`: 145 ölçümlü high görüntüsü için 5 katlı out-of-fold tahmin (fold'lar `splits.json`'dan; low/normal görüntüler her fold'da eğitimde). Her görüntü için tahmin maskesi (dişeti/dudak ayrı, ikili PNG) `outputs/05_predictions/oof/` altına.
+- `evaluate_test.py`: sabit test setinde sınıf bazında box/mask mAP@50, mAP@50–95, precision, recall, F1; confusion matrix; boundary IoU ve kenar mesafesi hatası (dişeti üst ve alt kenarı ayrı — Reviewer 2 #10). Test seti tahmin maskeleri `outputs/05_predictions/test/`.
+- `scripts/train_all.sh`: sırayla (1) final model, (2) öğrenme eğrisi 3 ek eğitim, (3) 5 fold, (4) test değerlendirmesi, (5) tahmin maskelerini yazma. Her adım kendi log dosyasına; bir adım başarısız olursa dur. Toplam 9 eğitim; 5090'da YOLOv11x için tahminen 1–1.5 saat/eğitim, gece çalıştırılacak şekilde tasarla (`nohup`/`tmux` notu README'de).
+- Git'e ne döner: `outputs/05_predictions/**/*.png` (ikili maskeler, küçük) ve her eğitimin `results.csv`, `args.yaml` dosyaları **commit edilir** (`.gitignore`'da istisna); `*.pt` ve `runs/` tam çıktısı edilmez. Böylece Mac'teki Aşama 6 yalnızca `git pull` ile devam eder.
 
-**Kabul:** hazırlama betiği yerelde çalışıp `data.yaml` üretir (COCO → YOLO dönüşümü 5 görüntüde görsel olarak doğrulanır); eğitim betikleri `--dry-run` ile parametre doğrulaması yapar.
+**Kabul:** hazırlama betiği yerelde çalışıp `data.yaml` üretir (COCO → YOLO dönüşümü 5 görüntüde görsel olarak doğrulanır); tüm eğitim betikleri `--dry-run` ile parametre ve yol doğrulaması yapar; `README_TRAINING.md` iş istasyonunda sıfırdan kurulumu adım adım anlatır.
 
-### Aşama 6 — Tahmin maskeleri üzerinde doğruluk (Colab çıktısı geldikten sonra)
+### Aşama 6 — Tahmin maskeleri üzerinde doğruluk (iş istasyonu çıktıları `git pull` ile geldikten sonra)
 
 `scripts/run_prediction_eval.py`: Aşama 3'teki harness'ı `--masks outputs/05_predictions/oof` ile çalıştır; MAE/RMSE/ICC/Bland–Altman; karma model; eşik bazlı sınıf uyumu; sınır hatası ayrıştırması. Test alt kümesi ve out-of-fold tamamı ayrı raporlanır.
 
@@ -189,7 +192,7 @@ Analizler (`docs/Istatistik_analiz_plani.md` §2–3 ile birebir):
 2. Her aşamada önce testleri yaz, sonra kodu.
 3. Sayısal beklentiden sapma varsa (ör. 145 yerine 140 çıkıyor) **durma ama raporla**: `outputs/<asama>/SAPMALAR.md`. Sapma büyükse (> %5 veya mantıksal) dur ve sor.
 4. Belgelerde çelişki bulursan (v2 prompt ile analiz planı arasında vb.) **analiz planı ve audit Bölüm A/B** daha yenidir, onları esas al; çelişkiyi `docs/OKUMA_NOTU.md`'ye yaz.
-5. Aşama 5'in eğitimini burada başlatma; Colab defteri ve betikler hazır olunca kullanıcıya "Colab'da çalıştırılmaya hazır" de ve Aşama 4 ile 7'nin yerel kısımlarına devam et.
+5. Aşama 5'in eğitimini burada (Mac) başlatma; betikler ve `README_TRAINING.md` hazır olunca kullanıcıya "iş istasyonunda çalıştırılmaya hazır" de ve Aşama 4 ile 7'nin yerel kısımlarına devam et.
 6. Her commit push edilir. Depo dalı: `master`.
 
 Başla: Aşama 0.

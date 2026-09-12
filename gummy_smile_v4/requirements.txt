@@ -1,0 +1,13 @@
+# gummy_smile_v4 — measurement / analysis (CPU only, macOS + Linux), Python 3.11
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.13.1
+openpyxl==3.1.5
+PyYAML==6.0.2
+opencv-python-headless==4.10.0.84
+Pillow==10.4.0
+scikit-learn==1.5.1
+statsmodels==0.14.2
+pingouin==0.5.5
+matplotlib==3.9.2
+pytest==8.3.2

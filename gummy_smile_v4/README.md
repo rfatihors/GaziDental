@@ -19,9 +19,9 @@ v4 fixes the measurement geometry, class handling, units and rule engine documen
   `NaN -> UNCLASSIFIED`; no metadata-based disambiguation; output field `treatment_alternatives`.
 - **Evaluation** (`gsv4/eval`): oracle validation on ground-truth masks, intra/inter-observer
   agreement (ICC, Bland-Altman, mixed models), kappa statistics with bootstrap CIs, boundary error.
-- **Training** (`gsv4/train`, `notebooks/`): YOLOv11x-seg dataset preparation, training,
-  learning curve, out-of-fold prediction, test-set evaluation. Written here, executed elsewhere
-  (GPU).
+- **Training** (`gsv4/train`, `scripts/train_all.sh`): YOLOv11x-seg dataset preparation, training,
+  learning curve, out-of-fold prediction, test-set evaluation. Written and dry-run here, executed on
+  the RTX 5090 workstation (`scripts/README_TRAINING.md`, `requirements-train.txt`).
 - **Reporting** (`gsv4/report`): figures and tables for the manuscript and the revision summary.
 
 ## Why
@@ -36,9 +36,9 @@ and split the data at image level although the same patient appears twice. See
 ```
 configs/config.yaml   all paths, class names, thresholds, seed, YOLO settings
 docs/                 specification documents (input) + OKUMA_NOTU.md
-data/inputs/          clinical Excel/CSV inputs (not versioned)
+data/inputs/          clinical Excel/CSV inputs (versioned; no personal identifiers)
 data/manifest/        generated manifest, splits
-data/expert/          expert forms and trained weights (arrive later, not versioned)
+data/expert/          expert forms (arrive later; versioned)
 gsv4/                 Python package
 scripts/              one CLI entry point per stage
 tests/                pytest, synthetic data only
@@ -53,7 +53,7 @@ python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pytest
 # Stage entry points (added stage by stage):
-# python scripts/build_manifest.py        # Stage 1
+python scripts/build_manifest.py          # Stage 1 -> data/manifest/, outputs/01_data/
 # python scripts/run_oracle.py            # Stage 3
 # python scripts/run_expert_analysis.py   # Stage 4
 ```
@@ -66,10 +66,10 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | Stage | Content | State |
 |---|---|---|
 | 0 | Reading, v3 review, skeleton | done |
-| 1 | Data layer | pending inputs in `data/inputs/` |
+| 1 | Data layer | done — `scripts/build_manifest.py` |
 | 2 | Measurement + rule engine | — |
 | 3 | Oracle validation | — |
 | 4 | Expert-agreement analysis (synthetic first) | — |
-| 5 | Training pipeline (run on GPU) | — |
+| 5 | Training pipeline (run on the workstation) | — |
 | 6 | Accuracy on predicted masks | — |
 | 7 | Reporting | — |

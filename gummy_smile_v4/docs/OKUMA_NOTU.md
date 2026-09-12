@@ -30,9 +30,26 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 8. **Prob kalibrasyon aracı** (PROMPT §4.4, OpenCV tıklama aracı): görev belgesi Aşama 3'te yok. Kapsam dışı sayılıyor; Aşama 3 planında kullanıcıya sorulacak.
 9. **Kurulum §4**: Aşama 6 için "maskeler + results.csv commit edilir" diyor; görev belgesi üretilmiş maskeleri `.gitignore`'a koyuyor. OOF maskeleri için karar Aşama 5'te (öneri: maskeler PNG olarak `outputs/` altında, git dışı; sadece `results.csv` commit).
 
+## Kararlar (kullanıcı, 12 Eylül 2026 — çelişkileri kapatır)
+
+1. 66 ölçümsüz high **çıkar**; `dataset.keep_unmeasured_high_in_train` bayrağı (varsayılan `false`); `true` ise yalnızca train, hiçbir analize girmez.
+2. Eğitim yalnızca RTX 5090 iş istasyonunda; Colab defteri yok; `requirements-train.txt`, `scripts/train_all.sh`, `README_TRAINING.md`; tahmin PNG'leri + `results.csv`/`args.yaml` commit edilir.
+3. `IMG_8645` ve `27-IMG_8645` farklı anahtarlar; belirsizlik yok; yalnızca `IMG_7366` belirsiz (Aşama 1'de doğrulandı: tek `row_ambiguous`).
+4. Tekil eşleşme hedefi 149 (Aşama 1: 119 exact + 30 dash_base_fallback = 149).
+5. Prob kalibrasyon aracı kapsam dışı; uzmanlar px/mm'i formda verir.
+6. `data/inputs/` ve `data/expert/` versiyonlanır.
+
+## Aşama 1'de öğrenilenler
+
+- iPhone kökleri gruplar arasında tekrarlar (8 kök: `IMG_3068`, `IMG_3110`, `IMG_3129`, `IMG_3647`, `IMG_3660`, `IMG_3677`, `IMG_7350`, `IMG_8648`) ve `normal` içinde 4 ad yalnızca uzantıyla ayrılır (`IMG_1556_JPEG`/`IMG_1556_jpg` …; piksel düzeyinde farklı fotoğraflar). Kimlik = `uid = grup/kök`; `patient_id` = tutulan görüntünün `uid`'si.
+- Excel yaş sütununda 4 hücre not/legend metnidir (`Not 1`, `Not 2`, `K: Kadın`, `E: Erkek`); yaş 630 satırda dolu (spec'teki 634 bu metinleri sayıyordu).
+- 8 ad tiresiz yaş önekli (`60IMG_4347`); önek kuralı bunu da kapsar.
+- Çapraz-grup çiftler: `low/IMG_1207` ↔ `normal/IMG_1178` (ikisinde de yaş/cinsiyet yok → `image_a` = low tutuldu), `low/IMG_9696` ↔ `normal/52-IMG_9695` (önekten yaş → normal tutuldu). Sonuç low 300 / normal 785 (beklenti ≈299/≈786; fark bu iki karardan).
+- 2698×1799 ±2 px çerçevesinde 830 görüntü, dışında 485 (oracle duyarlılık analizinde ayrı tutulacak).
+
 ## Ortam durumu
 
 - COCO: high 158/28/30 = 216, low 214/45/44 = 303, normal 558/119/119 = 796 — envanterle birebir; her bölüntüde `_annotations.coco.json` var.
-- **`data/inputs/` boş** — 6 girdi dosyasının hiçbiri yok (Aşama 1 bloklu). v3'te yalnızca eski `ölçümler ai guncel.xlsx` ve 15 görüntülük `calibration-first/last.xlsx` var; bunlar kullanılmayacak.
+- `data/inputs/` altında 6 girdi dosyası mevcut (12 Eylül). v3'teki eski `ölçümler ai guncel.xlsx` ve 15 görüntülük `calibration-first/last.xlsx` kullanılmaz.
 - v3: `splits.json`, `labels_smileline.csv`, `results/*.csv` boş (0 bayt); `best.pt` yok; `requirements.txt` sürümsüz.
 - Python 3.11.5 (anaconda) mevcut; git `origin/master` ile senkron.

@@ -1,0 +1,9 @@
+uid,image,group,coco_key,match_kind,excel_key,excel_rows,excel_row,reference_mean_mm,reference_label,age,sex,age_source,complete,has_dash_zero,has_ambiguous_100_999,label_inconsistent_count
+normal/IMG_1556_JPEG,IMG_1556_JPEG,normal,img1556,coco_key_collision,,,,,,,,,,,,
+normal/IMG_1556_jpg,IMG_1556_jpg,normal,img1556,coco_key_collision,,,,,,,,,,,,
+normal/IMG_1713_JPEG,IMG_1713_JPEG,normal,img1713,coco_key_collision,,,,,,,,,,,,
+normal/IMG_1713_jpg,IMG_1713_jpg,normal,img1713,coco_key_collision,,,,,,,,,,,,
+normal/IMG_3915_JPEG,IMG_3915_JPEG,normal,img3915,coco_key_collision,,,,,,,,,,,,
+normal/IMG_3915_jpg,IMG_3915_jpg,normal,img3915,coco_key_collision,,,,,,,,,,,,
+normal/IMG_8885_JPEG,IMG_8885_JPEG,normal,img8885,coco_key_collision,,,,,,,,,,,,
+normal/IMG_8885_jpg,IMG_8885_jpg,normal,img8885,coco_key_collision,,,,,,,,,,,,
