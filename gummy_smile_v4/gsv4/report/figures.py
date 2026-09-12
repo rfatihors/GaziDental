@@ -17,6 +17,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyBboxPatch  # noqa: E402
 
+PLOT_DPI = 300    # manuscript figures (plots)
+PANEL_DPI = 150   # photo panels (kept under 2 MB)
+
 MERMAID = """```mermaid
 flowchart LR
     A[Smile photograph] --> B[YOLOv11x-seg<br/>imgsz 640, retina_masks]
@@ -63,7 +66,7 @@ def block_diagram(out_md: Path, out_png: Path) -> Dict[str, Any]:
     ax.annotate("lip mask: x-window, midline, boundary check, lip-anchored estimator", xy=(6.15, 0.75), xytext=(5.0, 0.2),
                 fontsize=7, color="0.35", arrowprops=dict(arrowstyle="-|>", color="0.5", ls="--"))
     ax.set_title("Gingival display measurement and decision-support pipeline (v4)", fontsize=10)
-    fig.tight_layout(); fig.savefig(out_png, dpi=130); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out_png, dpi=PLOT_DPI); plt.close(fig)
     return {"name": "pipeline_block_diagram", "path": str(out_png), "status": "done", "source": "gsv4 code"}
 
 
@@ -80,17 +83,17 @@ def scatter_and_bland_altman(per_image: pd.DataFrame, out_png: Path, title: str,
     bias, sd = diff.mean(), diff.std(ddof=1)
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.6))
     ax = axes[0]
-    ax.scatter(x, y, s=16, alpha=0.8); lim = [0, max(x.max(), y.max()) * 1.05]; ax.plot(lim, lim, "k--", lw=1)
-    ax.set_xlabel("Clinical reference (ImageJ), mm"); ax.set_ylabel("Pipeline, mm")
+    ax.scatter(x, y, s=16, alpha=0.8); lim = [0, max(x.max(), y.max()) * 1.05]; ax.plot(lim, lim, "k--", lw=1, label="identity (y = x)"); ax.legend(fontsize=8, loc="upper left")
+    ax.set_xlabel("Clinical reference measurement (ImageJ), mm"); ax.set_ylabel("Pipeline measurement, mm")
     r = np.corrcoef(x, y)[0, 1]
     ax.set_title(f"n = {len(d)}{label}: MAE {np.abs(diff).mean():.2f} mm, r = {r:.3f}", fontsize=9)
     ax = axes[1]
     ax.scatter(mean, diff, s=16, alpha=0.8)
-    for v, ls, lab in ((bias, "-", f"bias {bias:+.2f}"), (bias - 1.96 * sd, "--", f"LoA {bias - 1.96 * sd:.2f}"), (bias + 1.96 * sd, "--", f"LoA {bias + 1.96 * sd:.2f}")):
+    for v, ls, lab in ((bias, "-", f"bias {bias:+.2f} mm"), (bias - 1.96 * sd, "--", f"95 % LoA {bias - 1.96 * sd:.2f} mm"), (bias + 1.96 * sd, "--", f"95 % LoA {bias + 1.96 * sd:.2f} mm")):
         ax.axhline(v, color="k", ls=ls, lw=1); ax.text(mean.max(), v, lab, fontsize=8, va="bottom", ha="right")
-    ax.set_xlabel("Mean of methods, mm"); ax.set_ylabel("Pipeline − reference, mm"); ax.set_title("Bland–Altman", fontsize=9)
+    ax.set_xlabel("Mean of the two methods, mm"); ax.set_ylabel("Difference (pipeline − reference), mm"); ax.set_title("Bland–Altman plot", fontsize=9)
     fig.suptitle(title, fontsize=10); fig.tight_layout()
-    out_png.parent.mkdir(parents=True, exist_ok=True); fig.savefig(out_png, dpi=120); plt.close(fig)
+    out_png.parent.mkdir(parents=True, exist_ok=True); fig.savefig(out_png, dpi=PLOT_DPI); plt.close(fig)
     return {"name": out_png.stem, "path": str(out_png), "status": "done", "n": int(len(d))}
 
 
@@ -138,7 +141,7 @@ def segmentation_examples(cfg, manifest: pd.DataFrame, mask_dirs: List[Path], ou
             ax.imshow(over[y0:y1].astype(np.uint8)); ax.set_xticks([]); ax.set_yticks([])
             ax.set_title(f"{r['group']} | {r['image']} | {name}", fontsize=8)
     fig.suptitle("Ground truth (left) vs predicted (right): gingiva red, lip blue", fontsize=10)
-    fig.tight_layout(); out_png.parent.mkdir(parents=True, exist_ok=True); fig.savefig(out_png, dpi=100); plt.close(fig)
+    fig.tight_layout(); out_png.parent.mkdir(parents=True, exist_ok=True); fig.savefig(out_png, dpi=PANEL_DPI); plt.close(fig)
     return {"name": "segmentation_examples", "path": str(out_png), "status": "done", "source": str(pred_dir)}
 
 
@@ -165,5 +168,5 @@ def boundary_error_figure(csv: Path, out_png: Path) -> Dict[str, Any]:
             ax.hist(part[col].dropna(), bins=20, alpha=0.6, label=f"{g} (n={len(part)})")
         ax.set_title(title, fontsize=9); ax.legend(fontsize=8)
     fig.suptitle("Test set: gingiva boundary quality of the final model vs ground truth", fontsize=10)
-    fig.tight_layout(); fig.savefig(out_png, dpi=120); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out_png, dpi=PLOT_DPI); plt.close(fig)
     return {"name": "boundary_error", "path": str(out_png), "status": "done", "source": str(csv)}
