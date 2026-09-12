@@ -20,6 +20,9 @@ outputs/**
 !outputs/**/*.yaml
 outputs/**/runs/
 outputs/**/*.pt
+# smoke-test artefacts never enter git
+outputs/05_predictions/smoke/
+logs/
 # Generated YOLO dataset (symlinks + labels) is rebuilt from the manifest
 data/yolo_dataset/
 # Python

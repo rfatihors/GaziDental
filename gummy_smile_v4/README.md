@@ -57,6 +57,7 @@ python scripts/build_manifest.py          # Stage 1 -> data/manifest/, outputs/0
 python scripts/run_oracle.py --write-config   # Stage 3 -> outputs/03_oracle/, writes measurement.method/px_per_mm
 python scripts/run_expert_analysis.py --synthetic   # Stage 4 dry run; drop real forms into data/expert/ and omit the flag
 python -m gsv4.train.prepare_yolo_dataset            # Stage 5 dataset (symlinks) + label-check figure; training: scripts/README_TRAINING.md
+python scripts/build_report.py                        # Stage 7 -> outputs/07_report (figures, tables, REVIZYON_OZETI.md)
 ```
 
 Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
@@ -72,5 +73,5 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | 3 | Oracle validation | done — `scripts/run_oracle.py` (C_p25, 16.84 px/mm) |
 | 4 | Expert-agreement analysis | done on synthetic forms — `scripts/run_expert_analysis.py [--synthetic]` |
 | 5 | Training pipeline | written + dry-run; run `scripts/train_all.sh` on the workstation (`scripts/README_TRAINING.md`) |
-| 6 | Accuracy on predicted masks | — |
-| 7 | Reporting | — |
+| 6 | Accuracy on predicted masks | waiting for workstation outputs — `scripts/run_oracle.py --masks outputs/05_predictions/oof --out 06_prediction` |
+| 7 | Reporting | local part done — `scripts/build_report.py` (pending items fill in on re-run) |

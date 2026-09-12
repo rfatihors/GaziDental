@@ -151,11 +151,19 @@ def train_model(cfg: Dict[str, Any], data_yaml: Path, name: str, dry_run: bool =
     write_run_header(cfg, name, args)
     from ultralytics import YOLO  # lazy: requirements-train.txt
 
-    model = YOLO(cfg["yolo"]["model"])  # yolo11x-seg.pt is downloaded by Ultralytics on first use (internet needed once)
-    model.train(**args)
+    last = run_dir(cfg, name) / "weights" / "last.pt"
+    if last.exists():
+        # interrupted training: continue from the last checkpoint with the saved arguments
+        print(f"[{name}] resuming from {last}")
+        YOLO(str(last)).train(resume=True)
+    else:
+        model = YOLO(cfg["yolo"]["model"])  # yolo11x-seg.pt is downloaded by Ultralytics on first use (internet needed once)
+        model.train(**args)
     copy_artefacts(cfg, name)
     best = run_dir(cfg, name) / "weights" / "best.pt"
-    mark_done(cfg, name, {"best": str(best)})
+    if not best.exists():
+        raise SystemExit(f"[{name}] training ended without weights/best.pt — DONE not written")
+    mark_done(cfg, name, {"best": str(best)})  # written by Python only, after a successful training
     return best
 
 

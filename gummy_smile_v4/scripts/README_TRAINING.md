@@ -36,6 +36,7 @@ first training call (about 120 MB). Afterwards the file is cached in the working
 ```bash
 python -m gsv4.train.prepare_yolo_dataset          # builds data/yolo_dataset, prints counts, writes the label-check figure
 python -m gsv4.train.train --name final --dry-run
+python -m gsv4.train.train --name smoke --epochs 1 --fraction 0.1 --dry-run
 python -m gsv4.train.learning_curve --fraction 0.25 --dry-run
 python -m gsv4.train.cv_predict --fold 0 --dry-run
 python -m gsv4.train.evaluate_test --dry-run
@@ -44,7 +45,27 @@ python -m gsv4.train.evaluate_test --dry-run
 Every dry run prints the resolved training arguments (from `configs/config.yaml`,
 `yolo.train`) and checks that the yaml, the list files, the symlinks and the labels exist.
 
-## 3. Run everything (overnight)
+## 3. Smoke test (about 5 minutes, before the overnight run)
+
+```bash
+python -m gsv4.train.train --name smoke --epochs 1 --fraction 0.1 --predict-check 5
+```
+
+This trains one epoch on a random 10 % of the training list (validation on 10 % of the
+validation list), then predicts five validation images with `retina_masks=True` through
+the same code path that `cv_predict` uses. It proves on the real GPU that the cu128 torch
+build, Ultralytics, the pretrained-weight download and the class-aware mask extraction
+work. Check:
+
+* the header printed at the start shows the RTX 5090 with capability `(12, 0)`;
+* the last line reads `predict-check: 5 images, mask_source = {'yolo:masks.data': 5} -> OK`;
+* `outputs/05_predictions/smoke/smoke_predictions.csv` has `mask_source = yolo:masks.data` in every row
+  and `smoke/<image>_gingiva.png` / `_lip.png` exist at the original image size.
+
+Smoke artefacts (`runs/smoke/`, `outputs/05_predictions/smoke/`, `data/yolo_dataset/data_smoke.yaml`)
+are git-ignored. Delete `runs/smoke` if you want to repeat the test.
+
+## 4. Run everything (overnight)
 
 ```bash
 mkdir -p logs
@@ -55,8 +76,12 @@ scripts/train_all.sh
 
 * 9 trainings (`final`, `lc25`, `lc50`, `lc75`, `fold0`…`fold4`), 100 epochs each, batch 16,
   imgsz 640, AdamW, cosine LR, patience 20 — roughly 1–1.5 h each on a 5090.
-* **Restartable:** each step writes `runs/<name>/DONE` when it finishes; on re-run finished
-  steps are skipped. After an interruption just run `scripts/train_all.sh` again.
+* **Restartable:** the `DONE` marker in `runs/<name>/` is written **by the Python step itself,
+  only after it finished successfully** (training: after `best.pt` exists and the artefacts
+  were copied; prediction: after all masks were written). The shell wrapper never writes it,
+  and `set -o pipefail` makes a failing Python step fail the `tee` pipeline. On re-run,
+  steps with a marker are skipped; a training interrupted mid-way resumes from
+  `runs/<name>/weights/last.pt` with its saved arguments.
 * Logs: `logs/<step>.log`. Every training starts by logging the GPU name, torch/ultralytics
   versions, git commit hash and a copy of the config; the same goes to
   `outputs/05_predictions/<name>/{environment.json, commit_hash.txt, config_used.yaml}`.
@@ -74,7 +99,7 @@ What the steps produce:
 Fold models predict **only their own held-out fold**; the test set is predicted by the final
 model only.
 
-## 4. After training — what to commit
+## 5. After training — what to commit
 
 Only the small artefacts listed above go into git (`.gitignore` already allows PNG masks,
 `results.csv`, `args.yaml`, json/csv/md under `outputs/`); `runs/` and `*.pt` never do.

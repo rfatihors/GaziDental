@@ -1,0 +1,15 @@
+# Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4)
+
+| group | images_roboflow_export | no_reference_measurement | same_patient_duplicate | ambiguous_name | kept | with_clinical_reference | train | valid | test |
+|---|---|---|---|---|---|---|---|---|---|
+| high | 216 | 66 | 4 | 1 | 145 | 145 | 87 | 29 | 29 |
+| low | 303 | 0 | 3 | 0 | 300 | 0 | 210 | 45 | 45 |
+| normal | 796 | 0 | 11 | 0 | 785 | 0 | 549 | 118 | 118 |
+| total | 1315 | 66 | 18 | 1 | 1230 | 145 | 846 | 192 | 192 |
+
+- source: data/manifest
+- same_patient_pairs_detected: 55
+- pairs_cross_split_in_original_export: 22
+- pairs_involving_original_test: 15
+- seed: 42
+- cv_folds: 5
