@@ -110,7 +110,7 @@ REMOVE the whole sample-size paragraph and Appendix A, and replace with: "No for
 
 **Why:** The χ² calculation describes a comparison of correct and incorrect detections that the study never performs, and it cannot determine the data requirement of a segmentation model.
 
-**Reviewer item:** (no numbered reviewer item — see the unmatched section of RESPONSE_TO_REVIEWERS.md)
+**Reviewer item:** R2-sample-size, R4-external-validity
 
 <!-- source: outputs/07_report/tables/learning_curve.csv -->
 
@@ -126,7 +126,7 @@ DELETE this sentence. Add to the Limitations: "All images were acquired at a sin
 
 **Why:** Sample size does not establish external validity, and the cohort is single-centre and single-device.
 
-**Reviewer item:** R4-1 (overall recommendation), R3-Discussion-5
+**Reviewer item:** R4-external-validity, R3-Discussion-5
 
 ### manuscript · 2.6 Image dataset and preprocessing
 

@@ -172,11 +172,11 @@ def main() -> int:
          f"and gingiva mask mAP@50 rose from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])}, reaching a plateau (Supplementary Figure S1). "
          f"For the millimetre-level agreement analysis the sample size is justified by precision rather than power: {ms.get('precision_note', '')}\"",
          "The χ² calculation describes a comparison of correct and incorrect detections that the study never performs, and it cannot determine the data requirement of a segmentation model.",
-         "(no numbered reviewer item — see the unmatched section of RESPONSE_TO_REVIEWERS.md)", [S["lc"]], span=4, action="replace whole paragraph")
+         "R2-sample-size, R4-external-validity", [S["lc"]], span=4, action="replace whole paragraph")
     edit("manuscript", "2.1 Study design (external validity)", "the sample size of the present study supports the reliability and external validity of the model",
          "DELETE this sentence. Add to the Limitations: \"All images were acquired at a single centre with a single smartphone model under a standardised protocol; the reported performance is therefore an internal estimate, and external validation on images from other centres, devices and populations is required before clinical use.\"",
          "Sample size does not establish external validity, and the cohort is single-centre and single-device.",
-         "R4-1 (overall recommendation), R3-Discussion-5", [])
+         "R4-external-validity, R3-Discussion-5", [])
     edit("manuscript", "2.6 Image dataset and preprocessing", "This study utilized a dataset consisting of 1,315 frontal smiling photographs",
          f"This study used {int(dc.loc['total', 'images_roboflow_export'])} frontal smile photographs categorised by smile line as high (n = {int(dc.loc['high', 'images_roboflow_export'])}), average (n = {int(dc.loc['normal', 'images_roboflow_export'])}) and low (n = {int(dc.loc['low', 'images_roboflow_export'])}). "
          f"A content-based search identified photographs of the same participant acquired in the same session; one photograph per participant was retained. Together with {int(dc.loc['high', 'no_reference_measurement'])} high-smile-line images that had no clinical reference measurement and one image with an ambiguous record, "

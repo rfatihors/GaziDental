@@ -47,6 +47,10 @@ reviewers:
           The precision (0.85466) and recall (0.81039) reported in the Abstract are "Box metrics",
           whereas mAP@50 and mAP@50-95 are "Mask metrics". These metric types should be clearly
           identified to avoid misleading interpretation of segmentation performance.
+      - id: R2-3
+        topic: Not in the document — text to be requested from the corresponding author
+        missing: true
+        owner: clinical
       - id: R2-4
         topic: '"YOLOv8 and YOLOv11" inconsistent with the rest of the manuscript'
         answer: yolov8
@@ -75,6 +79,10 @@ reviewers:
           could occur. In addition, the 92/4/4 split provides a relatively small test set,
           particularly for the high smile line subgroup, which may reduce the reliability of
           performance estimates.
+      - id: R2-7
+        topic: Not in the document — text to be requested from the corresponding author
+        missing: true
+        owner: clinical
       - id: R2-8
         topic: Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation
         answer: gingiva_map_low
@@ -101,6 +109,18 @@ reviewers:
           The marked difference between lip mAP (97-99%) and gingiva mAP (58.7%) should be
           quantitatively investigated. Metrics such as boundary IoU or edge-distance error could help
           explain the poorer gingival segmentation performance.
+      - id: R2-sample-size
+        topic: Whether a G*Power chi-square calculation is appropriate for a deep-learning segmentation model
+        answer: power
+        owner: technical
+        source_note: >-
+          Conveyed to the authors separately; it is not in docs/Hakem_revizyonları.docx, which is
+          why the document's Reviewer 2 numbering has no entry for it.
+        quote: |
+          The sample size calculation (G*Power, chi-square test, w=0.30, df=9, n=263) is based on
+          conventional hypothesis-testing methods. It is unclear whether this approach is appropriate
+          for determining the sample size required for training a deep-learning segmentation model.
+          The methodological rationale should be clarified.
 
   - name: Reviewer 3
     items:
@@ -270,6 +290,21 @@ reviewers:
           dataset contains, and ensure that all images from the same participant remain in a single
           partition. CLAIM 2024 specifically recommends specifying the partitioning level—patient,
           study, or image—to prevent leakage.
+      - id: R4-external-validity
+        topic: Sample size does not establish external validity; no external testing
+        answer: external_validity
+        owner: technical
+        source_note: >-
+          Conveyed to the authors separately; not in docs/Hakem_revizyonları.docx.
+        quote: |
+          Finally, the sample size calculation in G*Power based on a χ² of correct/incorrect
+          detections does not show that the dataset is sufficient to train a segmentation model, much
+          less that it provides "external validity." The manuscript even claims that 1,315 images
+          support external validity. This is conceptually incorrect: external validity is assessed by
+          demonstrating performance on external data—ideally from another center, device, population,
+          or clinical setting—not simply by increasing the size of a single-center cohort. The
+          specific guidelines for dental AI highlight the problems that arise from a lack of external
+          testing and evaluation based exclusively on internal data.
       - id: R4-8
         topic: Architecture comparison is not fair (different dataset versions)
         answer: architecture_comparison

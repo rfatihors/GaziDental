@@ -87,6 +87,12 @@ Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`
 
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
 
+### R2-3 — Not in the document — text to be requested from the corresponding author
+
+> **MISSING** — item 3 of this review is not in the document we received (the numbering skips it). The text has to be requested from the corresponding author before this item can be answered.
+
+**Status:** MISSING (text awaited)
+
 ### R2-4 — "YOLOv8 and YOLOv11" inconsistent with the rest of the manuscript
 
 > The statement referring to "YOLOv8 and YOLOv11" appears inconsistent with the rest of the
@@ -148,6 +154,12 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`, `outputs/01_data/manifest
 
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 <!-- source: outputs/01_data/manifest_summary.md -->
+
+### R2-7 — Not in the document — text to be requested from the corresponding author
+
+> **MISSING** — item 7 of this review is not in the document we received (the numbering skips it). The text has to be requested from the corresponding author before this item can be answered.
+
+**Status:** MISSING (text awaited)
 
 ### R2-8 — Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation
 
@@ -213,6 +225,31 @@ Outputs: `outputs/06_prediction/boundary_by_set.md`, `outputs/06_prediction/erro
 <!-- source: outputs/06_prediction/boundary_by_set.csv -->
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
 
+### R2-sample-size — Whether a G*Power chi-square calculation is appropriate for a deep-learning segmentation model
+
+> The sample size calculation (G*Power, chi-square test, w=0.30, df=9, n=263) is based on
+conventional hypothesis-testing methods. It is unclear whether this approach is appropriate
+for determining the sample size required for training a deep-learning segmentation model.
+The methodological rationale should be clarified.
+
+
+*(Conveyed to the authors separately; it is not in docs/Hakem_revizyonları.docx, which is why the document's Reviewer 2 numbering has no entry for it.)*
+
+**Response:**
+
+The reviewer is right to question it, and the answer is that the approach is not appropriate; we have removed the calculation rather than defend it. A χ² test on counts of correct and incorrect detections is not an analysis performed in this study, and conventional hypothesis-testing sample-size methods do not determine how much data a deep-learning segmentation model needs. The revised manuscript replaces it with two separate, explicit justifications. (i) For model development, data adequacy is assessed empirically with a learning curve: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images), gingiva mask mAP@50 rising from 0.40 to 0.44 and reaching a plateau (Gingiva mask mAP@50 gain 25). (ii) For the millimetre-level agreement analysis, the sample size is justified by estimation precision rather than power: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.043 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.71 mm (Bland & Altman 1999). (iii) For the agreement between the model's class assignment and the clinicians' assignment, a sample-size calculation appropriate to that analysis was performed by the study statistician with the `kappaSize` package in R: for a four-category classification with a minimum acceptable kappa of 0.40, an expected kappa of 0.60, a two-sided alpha of 0.05 and 80 % power, and a conservative 2 % prevalence for the rarest class, the minimum required sample is 110 images, rising to 123 after allowing for about 10 % data loss. The high-smile-line images with a clinical reference measurement number 145 after cleaning, above that requirement. We note that the statistician's paragraph was written for 150 images; the analysed set is 145 because same-participant duplicates and images without a reference measurement were removed.
+
+**Changes in the manuscript:** Methods 2.1 — G*Power paragraph and Appendix A removed, replaced by 'Sample size and data adequacy' (learning curve + precision + kappaSize); [Supplementary Figure S1]
+
+**Status:** READY
+
+Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `docs/Istatistik_analiz_plani.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.csv -->
+<!-- source: outputs/05_predictions/learning_curve.md -->
+<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+
 ## Reviewer 3
 
 ### R3-General-3 — Narrow the manuscript to a validated segmentation/measurement study, or compare with clinical assessment
@@ -263,7 +300,7 @@ gender distribution.
 
 **Response:**
 
-The three smile-line groups are not a designed factor: the photographs are a consecutive clinical series and the group sizes reflect the natural distribution of the smile line in that series (216 high, 796 average and 303 low before cleaning; 145, 785 and 300 after). Equal group sizes are not required by any of the analyses reported here and enforcing them would mean discarding a large part of the sample and distorting the prevalence of the smile-line categories: the smile-line groups are not compared with each other. The gingival display measurement and its validation are performed only within the high-smile-line group; the low and average images serve the segmentation training (see Methods item 7). We now report the demographic coverage per group rather than claiming balance: age is recorded for 495 of 1230 participants (mean 35.2 ± 12.7 years) and sex for 382 (67 % female of those recorded; high group 79 %, low 53 %, average 68 %). The sex distribution is unbalanced and differs between groups; because sex is not used by the model and is not an analysis factor, we report it as a characteristic of the sample and as a limitation rather than adjusting the sample.
+The three smile-line groups are not a designed factor: the photographs are a consecutive clinical series and the group sizes reflect the natural distribution of the smile line in that series (216 high, 796 average and 303 low before cleaning; 145, 785 and 300 after). We should say plainly that this request cannot be met retrospectively. The photographs were collected as a consecutive clinical series, not as three matched arms; the smile line is a characteristic of the participant, not an allocation, so the group sizes are the distribution of the smile line in the source population and there is no way to rebalance them after the fact except by discarding images, which would shrink the sample and distort that distribution. Equal group sizes are in any case not required by the analyses reported here, because the smile-line groups are never compared with each other: no statistic in the manuscript contrasts the low, average and high groups. The gingival display measurement and its validation are performed only within the high-smile-line group; the low and average images serve the segmentation training (see Methods item 7). We now report the demographic coverage per group rather than claiming balance: age is recorded for 495 of 1230 participants (mean 35.2 ± 12.7 years) and sex for 382 (67 % female of those recorded; high group 79 %, low 53 %, average 68 %). The sex distribution is unbalanced and differs between groups; because sex is not used by the model and is not an analysis factor, we report it as a characteristic of the sample and as a limitation rather than adjusting the sample. The Limitations now state explicitly that the groups were neither size-matched nor sex-matched, that this could not be corrected retrospectively, and that a prospective study with balanced recruitment would be required to test whether smile-line group or sex affects segmentation performance.
 
 **Changes in the manuscript:** Methods 2.6 (study population / dataset) — sentence on group composition; [Table — demographic coverage per group, new] `tables/demographics.md`; Limitations
 
@@ -283,7 +320,7 @@ model?
 
 **Response:**
 
-The reviewer's reading is correct: the low and average smile-line images were used only for the development of the segmentation model, never for gingival display measurement. They are needed because the model has to learn where gingiva is *not* exposed as well as where it is: a model trained on high-smile-line images alone would have no negative or borderline examples of the gingival margin and would over-predict gingiva in ordinary smiles. Quantitatively, in the test set the annotated gingiva of low smile lines spans a median of 16 image columns and that of average smile lines 310, against 935 in the high group; in 25 test images neither the annotation nor the prediction contains gingiva (correct absence) and in 6 the model predicts gingiva where the annotation has none. The measurement module is specified for the high smile line only and returns NO_VISIBLE_GINGIVA when no gingiva is present; the millimetre validation therefore uses exclusively the 145 high-smile-line images with a clinical reference measurement. The revised Methods state this division of roles explicitly.
+The reviewer's reading is exactly right, and this is a deliberate feature of the design: the low and average smile-line images were used only to train the segmentation model and never for gingival display measurement or for any of the millimetre or class analyses. They are needed because the model has to learn where gingiva is *not* exposed as well as where it is: a model trained on high-smile-line images alone would have no negative or borderline examples of the gingival margin and would over-predict gingiva in ordinary smiles. Quantitatively, in the test set the annotated gingiva of low smile lines spans a median of 16 image columns and that of average smile lines 310, against 935 in the high group; in 25 test images neither the annotation nor the prediction contains gingiva (correct absence) and in 6 the model predicts gingiva where the annotation has none. The measurement module is specified for the high smile line only and returns NO_VISIBLE_GINGIVA when no gingiva is present; the millimetre validation therefore uses exclusively the 145 high-smile-line images with a clinical reference measurement. The revised Methods state this division of roles explicitly.
 
 **Changes in the manuscript:** Methods 2.6 (image dataset) — new sentence on the role of each group; Methods 2.7 (measurement) — applicability restricted to the high smile line
 
@@ -344,7 +381,7 @@ the AI model?
 
 **Response:**
 
-We apologise for the ambiguity. 'Performance' in that sentence meant mask mAP@50, a ranking metric for instance segmentation; it is neither sensitivity nor specificity, and the sentence has been rewritten to name the metric explicitly. False positives and false negatives were computed but not reported, which we have corrected. On the fixed test set (192 images) the model produced 419 correct gingiva instances, 181 false positives and 165 false negatives for the gingiva class, and 190 correct lip instances with 0 false negatives; per class this is precision 0.53 / recall 0.54 (mask) for gingiva and 0.98 / 0.99 for lip. Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation without a fixed set of candidate regions (there is no denominator of true negatives), which is why we report precision, recall, F1 and the confusion matrix instead, at the stated confidence threshold, and the per-pixel boundary agreement separately (Reviewer 2, item 10).
+We apologise for the ambiguity; 'performance' in that sentence meant mask mAP@50 and the sentence has been rewritten to name the metric. It is neither sensitivity nor specificity. Mean average precision at an intersection-over-union threshold of 0.50 is computed by ranking every predicted mask by its confidence, walking down that ranking to trace precision against recall, taking the area under that curve for each class and averaging over classes; it therefore summarises how well the model both finds the structures and ranks its own confidence, at one overlap criterion. False positives and false negatives were computed but not reported, which we have corrected. On the fixed test set (192 images) the model produced 419 correct gingiva instances, 181 false positives and 165 false negatives for the gingiva class, and 190 correct lip instances with 0 false negatives; per class this is precision 0.53 / recall 0.54 (mask) for gingiva and 0.98 / 0.99 for lip. Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation without a fixed set of candidate regions (there is no denominator of true negatives), which is why we report precision, recall, F1 and the confusion matrix instead, at the stated confidence threshold, and the per-pixel boundary agreement separately (Reviewer 2, item 10).
 
 **Changes in the manuscript:** Results 3.1 — sentence rewritten to name the metric; [Table — per-class precision, recall, F1, mAP on the test set]; confusion-matrix figure with FP/FN counts
 
@@ -363,7 +400,7 @@ model and evaluating its ability to calculate gingival display in millimetres.
 
 **Response:**
 
-We agree, and the revised manuscript separates them completely. Segmentation performance is reported on the fixed test set (n = 192; gingiva mask mAP@50 0.41, lip 0.98, all classes 0.70) and answers the question whether the structures are found. The ability to calculate gingival display in millimetres is evaluated in its own section against the clinical reference measurements, and in two steps so that the two error sources can be told apart: on the annotated masks (geometry only: MAE 0.54 mm, RMSE 0.76 mm, r = 0.872, ICC(2,1) 0.868 [0.819, 0.904], bias +0.15 mm [+0.03, +0.27], 95 % LoA -1.31 to 1.61 mm; Table 1 class agreement 79 %, linear-weighted κ 0.74 [0.66, 0.82]) and on the model's own masks (full pipeline, out-of-fold: MAE 0.84 mm, RMSE 1.00 mm, r = 0.875, ICC(2,1) 0.784 [0.288, 0.909], bias +0.68 mm [+0.56, +0.80], 95 % LoA -0.75 to 2.12 mm; Table 1 class agreement 62 %, linear-weighted κ 0.59 [0.50, 0.68]). The difference between the two is what the segmentation contributes to the measurement error (bias +0.53 mm from the segmentation against +0.15 mm from the measurement geometry). A model can segment well and measure poorly, and the manuscript now shows both numbers rather than letting mAP stand for measurement accuracy.
+We agree, and this is precisely how the revised manuscript is organised: the two questions now have two separate Results sections, 3.1 'Segmentation performance (fixed test set)' and 3.2 'Millimetre measurement accuracy', with their own tables and figures. Segmentation performance is reported on the fixed test set (n = 192; gingiva mask mAP@50 0.41, lip 0.98, all classes 0.70) and answers the question whether the structures are found. The ability to calculate gingival display in millimetres is evaluated in its own section against the clinical reference measurements, and in two steps so that the two error sources can be told apart: on the annotated masks (geometry only: MAE 0.54 mm, RMSE 0.76 mm, r = 0.872, ICC(2,1) 0.868 [0.819, 0.904], bias +0.15 mm [+0.03, +0.27], 95 % LoA -1.31 to 1.61 mm; Table 1 class agreement 79 %, linear-weighted κ 0.74 [0.66, 0.82]) and on the model's own masks (full pipeline, out-of-fold: MAE 0.84 mm, RMSE 1.00 mm, r = 0.875, ICC(2,1) 0.784 [0.288, 0.909], bias +0.68 mm [+0.56, +0.80], 95 % LoA -0.75 to 2.12 mm; Table 1 class agreement 62 %, linear-weighted κ 0.59 [0.50, 0.68]). The difference between the two is what the segmentation contributes to the measurement error (bias +0.53 mm from the segmentation against +0.15 mm from the measurement geometry). A model can segment well and measure poorly, and the manuscript now shows both numbers rather than letting mAP stand for measurement accuracy.
 
 **Changes in the manuscript:** Results split into 3.1 'Segmentation performance (test set)' and 3.2 'Millimetre measurement accuracy'; Abstract reports both
 
@@ -383,7 +420,7 @@ aspect was not evaluated in the study.
 
 **Response:**
 
-We agree and have removed every statement that implies clinical validation of the decision layer. The manuscript now separates three claims: (i) the segmentation model performs as reported on an independent test set; (ii) the measurement agrees with the clinical reference to MAE 0.84 mm on out-of-fold predictions; (iii) the etiology-treatment layer is a transparent application of published thresholds whose agreement with clinical judgement is assessed in an agreement study, not a validation of diagnostic accuracy. The Conclusion states explicitly that the framework has not been validated as a clinical decision tool, that the E4 branch has no case in this cohort (maximum mean gingival display 7.53 mm) and that prospective, multi-centre clinical validation is required before use. [CLINICAL — final wording from the clinical team.]
+We accept this without reservation and have removed every statement that implies clinical validation of the decision layer, in the Conclusions, the Abstract and the Clinical Significance. The manuscript now separates three claims: (i) the segmentation model performs as reported on an independent test set; (ii) the measurement agrees with the clinical reference to MAE 0.84 mm on out-of-fold predictions; (iii) the etiology-treatment layer is a transparent application of published thresholds whose agreement with clinical judgement is assessed in an agreement study, not a validation of diagnostic accuracy. The Conclusion states explicitly that the framework has not been validated as a clinical decision tool, that the E4 branch has no case in this cohort (maximum mean gingival display 7.53 mm) and that prospective, multi-centre clinical validation is required before use. [CLINICAL — final wording from the clinical team.]
 
 **Changes in the manuscript:** [Conclusions — rewritten]; [Abstract, Conclusions and Clinical Significance — rewritten]; Discussion limitation paragraph
 
@@ -577,6 +614,34 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`, `outputs/01_data/manifest
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 <!-- source: outputs/01_data/manifest_summary.md -->
 
+### R4-external-validity — Sample size does not establish external validity; no external testing
+
+> Finally, the sample size calculation in G*Power based on a χ² of correct/incorrect
+detections does not show that the dataset is sufficient to train a segmentation model, much
+less that it provides "external validity." The manuscript even claims that 1,315 images
+support external validity. This is conceptually incorrect: external validity is assessed by
+demonstrating performance on external data—ideally from another center, device, population,
+or clinical setting—not simply by increasing the size of a single-center cohort. The
+specific guidelines for dental AI highlight the problems that arise from a lack of external
+testing and evaluation based exclusively on internal data.
+
+
+*(Conveyed to the authors separately; not in docs/Hakem_revizyonları.docx.)*
+
+**Response:**
+
+We agree with the reviewer on both points and have removed the claim. External validity cannot be established by the size of a single-centre cohort, and the χ² calculation addressed a comparison of correct and incorrect detections that this study never performs; it therefore says nothing about the data requirement of a segmentation model either. The calculation, the appendix containing it and the sentence claiming that the cohort size supports external validity have all been removed. Data adequacy is now shown empirically instead: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant, and gingiva mask mAP@50 rose from 0.40 to 0.44 with the gain between the last two points a small fraction of the gain between the first two (Gingiva mask mAP@50 gain 25), i.e. the dataset is at the plateau of its learning curve. We also accept the reviewer's point about external testing and we do not attempt to disguise it: no external data were available, so the study reports an internal estimate only. The Limitations state: "All images were acquired at a single centre with a single smartphone model under a standardised protocol; the reported performance therefore represents an internal estimate, and external validation on images from other centres, devices and populations is required before clinical deployment." We have not performed external validation and we do not claim it; it is named as the necessary next step rather than as a limitation in passing.
+
+**Changes in the manuscript:** Methods 2.1 — sample-size paragraph and Appendix A removed; 'supports the reliability and external validity' sentence deleted; [Supplementary Figure S1 — learning curve]; Limitations — single centre / single device / internal estimate
+
+**Status:** READY
+
+Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.csv -->
+<!-- source: outputs/05_predictions/learning_curve.md -->
+<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
+
 ### R4-8 — Architecture comparison is not fair (different dataset versions)
 
 > The fifth issue is that the architecture comparison is not entirely fair: RF-DETR-Seg is
@@ -589,7 +654,7 @@ of the difference may be attributable to the dataset or the pipeline.
 
 **Response:**
 
-We accept the criticism and have withdrawn the claim rather than defending it. The three architectures were run on the annotation platform with its default training settings and on separate copies of the dataset version, so the comparison does not isolate the architecture and cannot support a statement that one architecture is superior. In the revision that stage is described for what it was, a screening step used to choose one architecture to take forward, and the sentence claiming superior performance has been removed; no conclusion in the paper rests on it. The architecture that was taken forward is then evaluated properly: a single participant-level partition, one fixed test set, evaluated once (gingiva mask mAP@50 0.41, lip 0.98, all 0.70), with the learning curve as evidence on data adequacy. A controlled benchmark of the three architectures under identical data and preprocessing would be a separate study; we do not report one and we do not claim its conclusion.
+We accept the criticism and withdraw the claim; we did not repeat the comparison under controlled conditions, and we say so rather than presenting it as if we had. The three architectures were run on the annotation platform with its default training settings and on separate copies of the dataset version, so the comparison does not isolate the architecture and cannot support a statement that one architecture is superior. In the revision that stage is described for what it was, a screening step used to choose one architecture to take forward, and the sentence claiming superior performance has been removed; no conclusion in the paper rests on it. The architecture that was taken forward is then evaluated properly: a single participant-level partition, one fixed test set, evaluated once (gingiva mask mAP@50 0.41, lip 0.98, all 0.70), with the learning curve as evidence on data adequacy. A controlled benchmark of the three architectures under identical data, preprocessing and training settings would be a separate study; we have not performed one, we do not report one, and no statement in the revised manuscript depends on which architecture is better.
 
 **Changes in the manuscript:** Methods 2.8.1 — relabelled as preliminary screening; Results 3.1 — superiority claim removed; Appendix F — caption and text corrected
 
@@ -598,34 +663,3 @@ We accept the criticism and have withdrawn the claim rather than defending it. T
 Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
 
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
-
-## Prepared responses that match no item in the reviewer document
-
-These two answers were drafted from the team's earlier notes (docs/Guc_analizi_hakem_cevabi_ve_metin.md) for a G*Power / sample-size objection. No such item appears in the reviewer document we received: Reviewer 4 does not raise sample size, and Reviewer 2's numbering skips items 3 and 7, so the objection may be one of those two, or it may come from the editor's letter. The material is kept here so that it is not lost; it should be attached to the correct item, or dropped, once that is established. Note that the G*Power paragraph is removed from the manuscript in any case (MANUSCRIPT_EDITS.md), because the calculation describes a test the study does not perform.
-
-### (unmatched) external_validity
-
-We agree with the reviewer. The a priori χ² calculation addressed a frequency comparison that is not performed in this study and does not inform the data requirement of a segmentation network; it has been removed together with the statement that the cohort size supports external validity. Data adequacy is now shown empirically with a learning curve (see our response on the power calculation) and the agreement analysis is justified by precision rather than power. The Discussion states explicitly: "All images were acquired at a single centre with a single smartphone model under a standardised protocol; the reported performance therefore represents an internal estimate, and external validation on images from other centres, devices and populations is required before clinical deployment."
-
-**Changes in the manuscript:** Methods 2.1 (sample size) rewritten; Discussion / Limitations (single centre, single device, internal estimate)
-
-**Status:** READY
-
-Outputs: `outputs/07_report/figures/learning_curve.png`
-
-<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
-<!-- source: outputs/07_report/tables/learning_curve.csv -->
-
-### (unmatched) power
-
-We thank the reviewer and agree that a χ²-based a priori calculation is not an appropriate basis for the training-set size of a deep-learning segmentation model; the calculation and the associated external-validity statement have been removed. Data adequacy is now addressed empirically: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the same validation set; gingiva mask mAP@50 rose from 0.40 to 0.44 and the curve reached a plateau (Gingiva mask mAP@50 gain 25). For the millimetre-level agreement analysis a precision-based justification replaces the power calculation: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.043 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.71 mm (Bland & Altman 1999).
-
-**Changes in the manuscript:** Methods 2.1 'Sample size and data adequacy' rewritten; Appendix A removed; [Supplementary Figure S1 — learning curve] `figures/learning_curve.png`, `tables/learning_curve.md`
-
-**Status:** READY
-
-Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`
-
-<!-- source: outputs/07_report/tables/learning_curve.csv -->
-<!-- source: outputs/05_predictions/learning_curve.md -->
-<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
