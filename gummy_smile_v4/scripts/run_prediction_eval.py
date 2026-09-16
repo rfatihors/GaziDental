@@ -48,7 +48,7 @@ from gsv4.train.evaluate_test import boundary_table  # noqa: E402
 
 # Okabe–Ito (colour-blind safe), fixed order: (a) OOF, (b) test high final, low, normal
 SET_COLOURS = {"a": "#0072B2", "b": "#D55E00", "low": "#009E73", "normal": "#CC79A7"}
-MEAS_COLS = ["set", "masks", "n", "n_unmeasured", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
+MEAS_COLS = ["set", "masks", "n", "n_segmentation_failure", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
              "ba_bias", "ba_bias_ci_low", "ba_bias_ci_high", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p",
              "threshold_agreement", "threshold_kappa_linear", "threshold_kappa_linear_ci_low", "threshold_kappa_linear_ci_high", "within_0_5_mm", "within_1_mm"]
 
@@ -203,7 +203,7 @@ def main() -> int:
     if not chk["ok"]:
         raise SystemExit("OOF prediction table is inconsistent — see oof_check.md")
     for img in chk["empty_gingiva_prediction"]:
-        deviations.append(f"`{img}`: the fold model predicted no gingiva instance (empty mask) → measurement 0 mm / NO_VISIBLE_GINGIVA, kept in the primary set (counted as an error, listed as `empty_prediction`).")
+        deviations.append(f"`{img}`: **segmentation failure** — the fold model predicted no gingiva instance above conf {cfg['yolo']['conf']} (empty mask). Reported as its own category (`n_segmentation_failure`, 1 of 145 = 0.7 %), not as a 0 mm measurement: the image has no mm value and is excluded from the mm and label metrics (n = 144), flagged `empty_prediction` in per_image_results.csv.")
 
     # ---- 2. measurement with the fixed method and scale: (a) OOF masks, (b) test high with the final model
     rows_cols = ["uid", "image", "patient_id", "group", "split", "cv_fold", "width", "height", "frame_ok", "orig_split", "file_name"]
@@ -406,7 +406,7 @@ Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/confi
 
 ## Primary result — (a) all {int(prim['n'])} reference images, out-of-fold masks
 {fmt_row(prim)}.
-Unmeasured (empty prediction): {int(prim['n_unmeasured'])} image(s) — {', '.join(chk['empty_gingiva_prediction']) or 'none'} — measured as 0 mm and kept.
+**Segmentation failure: n = {int(prim['n_segmentation_failure'])} of {len(per)} ({100 * prim['n_segmentation_failure'] / len(per):.1f} %)** — {', '.join(chk['empty_gingiva_prediction']) or 'none'}: no gingiva instance predicted, so no measurement exists; excluded from the mm and label metrics above and reported as a separate failure category (a deployed system must flag such images for manual review rather than output a value).
 Stage-3 holdout images only (the scale was never fitted on them): {fmt_row(hold)}.
 Same method and scale on the ground-truth masks (Stage 3): MAE {gt_all['mae']:.3f} mm, r {gt_all['r']:.3f}, ICC {gt_all['icc2_1']:.3f}, bias {gt_all['ba_bias']:+.3f} mm → the segmentation adds {prim['mae'] - gt_all['mae']:+.3f} mm MAE and {prim['ba_bias'] - gt_all['ba_bias']:+.3f} mm bias (see `error_decomposition.md`).
 
@@ -443,9 +443,9 @@ See `SAPMALAR.md`.
     (out_dir / "prediction_summary.md").write_text(summary, encoding="utf-8")
     ozet = f"""# Aşama 6 — Türkçe özet (tahmin maskeleri üzerinde doğruluk)
 
-- OOF kontrolü: {chk['n_rows']}/{chk['n_reference']} görüntü, hepsi `{list(chk['mask_source'])[0]}`, fold başına {list(chk['folds'].values())}; boş tahmin: {', '.join(chk['empty_gingiva_prediction']) or 'yok'}.
+- OOF kontrolü: {chk['n_rows']}/{chk['n_reference']} görüntü, hepsi `{list(chk['mask_source'])[0]}`, fold başına {list(chk['folds'].values())}; **segmentasyon başarısızlığı n = {len(chk['empty_gingiva_prediction'])}** ({', '.join(chk['empty_gingiva_prediction']) or 'yok'}: dişeti örneği yok → mm değeri yok; ayrı kategori olarak raporlanır, mm/sınıf metriklerine girmez).
 - Yöntem ve ölçek sabit (Aşama 3, GT maske): **{combo}**, **{k:.2f} px/mm**; tahmin maskelerinde yeniden seçim/yeniden uydurma yapılmadı.
-- **Birincil (a) — 145 ölçümlü high, OOF maske:** MAE {prim['mae']:.2f} mm, RMSE {prim['rmse']:.2f}, r {prim['r']:.3f}, ICC(2,1) {prim['icc2_1']:.3f} [{prim['icc2_1_ci_low']:.3f}, {prim['icc2_1_ci_high']:.3f}]; sapma {prim['ba_bias']:+.2f} mm, LoA {prim['ba_loa_low']:.2f}…{prim['ba_loa_high']:.2f}; sınıf uyumu {100 * prim['threshold_agreement']:.0f} %, doğrusal ağırlıklı κ {prim['threshold_kappa_linear']:.2f} [{prim['threshold_kappa_linear_ci_low']:.2f}, {prim['threshold_kappa_linear_ci_high']:.2f}].
+- **Birincil (a) — 145 ölçümlü high, OOF maske (ölçülen n = {int(prim['n'])}):** MAE {prim['mae']:.2f} mm, RMSE {prim['rmse']:.2f}, r {prim['r']:.3f}, ICC(2,1) {prim['icc2_1']:.3f} [{prim['icc2_1_ci_low']:.3f}, {prim['icc2_1_ci_high']:.3f}]; sapma {prim['ba_bias']:+.2f} mm, LoA {prim['ba_loa_low']:.2f}…{prim['ba_loa_high']:.2f}; sınıf uyumu {100 * prim['threshold_agreement']:.0f} %, doğrusal ağırlıklı κ {prim['threshold_kappa_linear']:.2f} [{prim['threshold_kappa_linear_ci_low']:.2f}, {prim['threshold_kappa_linear_ci_high']:.2f}].
   - Aynı yöntem GT maskede (Aşama 3): MAE {gt_all['mae']:.2f}, sapma {gt_all['ba_bias']:+.2f} → segmentasyonun eklediği: MAE {prim['mae'] - gt_all['mae']:+.2f} mm, sapma {ds['e_seg_bias']:+.2f} mm (alt dişeti kenarı GT'den {ba['gingiva_bottom_edge_bias_mm_mean']:.2f} mm aşağıda çiziliyor; üst kenar {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm).
   - Aşama 3 holdout'u (ölçek hiç görmedi, n = {int(hold['n'])}): MAE {hold['mae']:.2f}, ICC {hold['icc2_1']:.3f}.
 - **İkincil (b) — test high {int(sec['n'])} görüntü, final model:** MAE {sec['mae']:.2f} mm, r {sec['r']:.3f}, ICC {sec['icc2_1']:.3f}, sapma {sec['ba_bias']:+.2f}; κ {sec['threshold_kappa_linear']:.2f} [{sec['threshold_kappa_linear_ci_low']:.2f}, {sec['threshold_kappa_linear_ci_high']:.2f}] (n küçük, GA geniş).

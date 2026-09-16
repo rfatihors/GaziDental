@@ -4,7 +4,7 @@ Method **C_p25**, global scale **16.84 px/mm**, both fixed in `configs/config.ya
 
 ## Primary result — (a) all 144 reference images, out-of-fold masks
 n = 144: MAE 0.839 mm, RMSE 0.999 mm, r 0.875, ICC(2,1) 0.784 [0.288, 0.909], bias +0.684 mm [+0.564, +0.805], LoA -0.75 to 2.12 mm, proportional-bias slope -0.085 (p = 0.052); within 0.5 mm 26 %, within 1 mm 67 %; label agreement 62.5 %, linear-weighted κ 0.594 [0.503, 0.677].
-Unmeasured (empty prediction): 1 image(s) — IMG_7289_jpg — measured as 0 mm and kept.
+**Segmentation failure: n = 1 of 145 (0.7 %)** — IMG_7289_jpg: no gingiva instance predicted, so no measurement exists; excluded from the mm and label metrics above and reported as a separate failure category (a deployed system must flag such images for manual review rather than output a value).
 Stage-3 holdout images only (the scale was never fitted on them): n = 57: MAE 0.757 mm, RMSE 0.917 mm, r 0.894, ICC(2,1) 0.797 [0.191, 0.926], bias +0.670 mm [+0.502, +0.838], LoA -0.57 to 1.91 mm, proportional-bias slope +0.071 (p = 0.269); within 0.5 mm 30 %, within 1 mm 74 %; label agreement 64.9 %, linear-weighted κ 0.611 [0.466, 0.741].
 Same method and scale on the ground-truth masks (Stage 3): MAE 0.542 mm, r 0.872, ICC 0.868, bias +0.150 mm → the segmentation adds +0.298 mm MAE and +0.534 mm bias (see `error_decomposition.md`).
 

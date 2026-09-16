@@ -44,11 +44,11 @@ def test_agreement_metrics_recovers_bias_and_labels():
     pred = ref + 0.2 + rng.normal(0, 0.1, 80)
     pred[3] = np.nan
     m = agreement_metrics(pred, ref, n_boot=200)
-    assert m["n"] == 79 and m["n_unmeasured"] == 1
+    assert m["n"] == 79 and m["n_segmentation_failure"] == 1
     assert m["ba_bias"] == pytest.approx(0.2, abs=0.05) and m["mae"] < 0.3 and m["icc2_1"] > 0.95
     assert 0 <= m["threshold_agreement"] <= 1 and m["threshold_kappa_linear_ci_low"] <= m["threshold_kappa_linear"] <= m["threshold_kappa_linear_ci_high"]
     assert m["within_1_mm"] == 1.0
-    assert agreement_metrics([1.0, np.nan], [1.0, 2.0]) == {"n": 1, "n_unmeasured": 1}
+    assert agreement_metrics([1.0, np.nan], [1.0, 2.0]) == {"n": 1, "n_segmentation_failure": 1}
 
 
 def test_weighted_kappa_and_confusion_use_the_combined_label_order():

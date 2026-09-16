@@ -83,7 +83,7 @@ def agreement_metrics(pred_mm: Sequence[float], ref_mm: Sequence[float], n_boot:
     r = np.asarray(ref_mm, dtype=float)
     ok = np.isfinite(p) & np.isfinite(r)
     p, r = p[ok], r[ok]
-    out: Dict[str, float] = {"n": int(ok.sum()), "n_unmeasured": int((~ok).sum())}
+    out: Dict[str, float] = {"n": int(ok.sum()), "n_segmentation_failure": int((~ok).sum())}  # no gingiva instance -> no mm value
     if len(p) < 3:
         return out
     d = p - r
