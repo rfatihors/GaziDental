@@ -88,17 +88,22 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
         if s["subset"].startswith("dev + holdout") or "only 2698" in s["subset"] or "without dash" in s["subset"]:
             rows.append(row(f"GT masks, {s['subset']}", s, s["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"]}))
     status = {"status": "done", "source": str(oracle_dir), "selected_method": sel}
-    if prediction_dir is not None and (prediction_dir / "estimator_comparison.csv").exists():
-        pe = pd.read_csv(prediction_dir / "estimator_comparison.csv").set_index("combo")
-        ps = pd.read_csv(prediction_dir / "sensitivity.csv") if (prediction_dir / "sensitivity.csv").exists() else pd.DataFrame()
-        if sel in pe.index:
-            rows.append(row(f"Predicted masks (OOF), holdout, {sel}", pe.loc[sel], pe.loc[sel, "n_holdout"]))
-            for _, s in ps.iterrows():
-                if s["subset"].startswith("dev + holdout"):
-                    rows.append(row(f"Predicted masks (OOF), all images, {sel}", s, s["n"], {"px_per_mm": pe.loc[sel, "px_per_mm_dev"]}))
+    acc6 = prediction_dir / "measurement_accuracy.csv" if prediction_dir is not None else None
+    if acc6 is not None and acc6.exists():
+        # Stage 6 (scripts/run_prediction_eval.py): method and scale fixed from Stage 3, nothing re-fitted
+        pa = pd.read_csv(acc6)
+        wanted = [("(a) OOF masks, all reference images", f"Predicted masks (OOF, fold models), all reference images, {sel} (PRIMARY)"),
+                  ("(a) OOF, Stage-3 holdout", f"Predicted masks (OOF), Stage-3 holdout images, {sel}"),
+                  ("(b) final model masks", f"Predicted masks (final model), test-set high images, {sel} (secondary)")]
+        for prefix, label in wanted:
+            hit = pa[pa["set"].str.startswith(prefix)]
+            if len(hit) and pd.notna(hit.iloc[0].get("mae", np.nan)):
+                r6 = hit.iloc[0]
+                rows.append(row(label, r6, r6["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"], "kappa_linear": r6.get("threshold_kappa_linear", np.nan)}))
         status["prediction_rows"] = "done"
+        status["prediction_source"] = str(acc6)
     else:
-        rows.append({"analysis": "Predicted masks (OOF, 145 images) — PENDING: Stage 6 (workstation masks)", "n": 0})
+        rows.append({"analysis": "Predicted masks (OOF, 145 images) — PENDING: Stage 6 (scripts/run_prediction_eval.py)", "n": 0})
         status["prediction_rows"] = "pending"
     df = pd.DataFrame(rows)
     # precision-based sample-size justification with the observed numbers (Bonett 2002; Bland & Altman 1999)
@@ -116,6 +121,10 @@ def segmentation_metrics(pred_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[s
     if not p.exists():
         return None, {"status": "pending", "needs": f"{p} (evaluate_test on the workstation)"}
     m = json.loads(p.read_text())
+    if "per_class" not in m:
+        # the workstation ran the boundary stage only (--metrics-only); validation metrics are still missing
+        return None, {"status": "pending", "needs": f"{p} without a per_class block — re-run gsv4.train.evaluate_test on the workstation (validation pass)",
+                      "boundary_by_group": m.get("boundary_by_group")}
     rows = []
     for cname, vals in m["per_class"].items():
         rows.append({"class": cname, **vals})

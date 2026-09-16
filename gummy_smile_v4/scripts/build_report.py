@@ -53,7 +53,7 @@ def main() -> int:
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)",
                        **F.scatter_and_bland_altman(pd.read_csv(per6), fig_dir / "measurement_predicted_masks.png", "Full pipeline (predicted masks, out-of-fold) vs clinical reference", subset_col=None)})
     else:
-        F.placeholder(fig_dir / "measurement_predicted_masks.png", "Measurement on predicted masks (OOF)", "Stage 6: run_oracle.py --masks outputs/05_predictions/oof --out 06_prediction")
+        F.placeholder(fig_dir / "measurement_predicted_masks.png", "Measurement on predicted masks (OOF)", "Stage 6: scripts/run_prediction_eval.py")
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)", "status": "pending", "needs": "Stage 6 outputs", "path": str(fig_dir / "measurement_predicted_masks.png")})
     status.append({"item": "Figure: learning curve (Reviewers 2 & 4, Supplementary S1)",
                    **F.copy_or_placeholder(pred_dir / "learning_curve.png", fig_dir / "learning_curve.png", "Learning curve", "outputs/05_predictions/learning_curve.png (workstation)")})

@@ -72,7 +72,7 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 ## Aşama 7 (yerel kısım)
 
 - `scripts/build_report.py` her çalıştırmada mevcut verilerle figür/tabloları üretir; iş istasyonu (Aşama 5/6) ve gerçek uzman formları (Aşama 4) gelmeden bekleyen ögeler "pending" yer tutucu olarak yazılır, `report_status.md` neyin gerektiğini listeler. `REVIZYON_OZETI.md` hakem maddesi ↔ çıktı eşlemesi.
-- Sıra: iş istasyonunda `train_all.sh` → `git pull` → Aşama 6 (`run_oracle.py --masks outputs/05_predictions/oof --out 06_prediction`; fallback oranı > %30 ise A_p25'e karşı yeniden değerlendirme) → gerçek formlar gelince `run_expert_analysis.py --model-table outputs/06_prediction/per_image_results.csv` → `build_report.py`.
+- Sıra: iş istasyonunda `train_all.sh` → `git pull` → Aşama 6 (`scripts/run_prediction_eval.py`: yöntem ve ölçek config'ten sabit, yeniden uydurma yok; fallback oranı > %30 ise A_p25'e karşı yeniden değerlendirme — satır her durumda tabloda) → gerçek formlar gelince `run_expert_analysis.py --model-table outputs/06_prediction/per_image_results.csv` → `build_report.py`.
 
 ## Ortam durumu
 

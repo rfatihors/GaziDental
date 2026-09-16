@@ -150,7 +150,8 @@ git push origin master
 ```
 
 Then on the Mac: `git pull origin master` and continue with Stage 6
-(`python scripts/run_oracle.py --masks outputs/05_predictions/oof --out 06_prediction`).
+(`python scripts/run_prediction_eval.py`: fixed method and scale from Stage 3 on the OOF and
+test masks; outputs in `outputs/06_prediction/`).
 
 Keep `runs/final/weights/best.pt` on the workstation (and a copy on Drive); it is the model
 of record for the manuscript together with `outputs/05_predictions/final/commit_hash.txt`.
