@@ -155,3 +155,64 @@ test masks; outputs in `outputs/06_prediction/`).
 
 Keep `runs/final/weights/best.pt` on the workstation (and a copy on Drive); it is the model
 of record for the manuscript together with `outputs/05_predictions/final/commit_hash.txt`.
+
+
+## 6. Architecture comparison (Reviewer 4) — after the main run
+
+Pre-registration: `outputs/08_architecture/PROTOCOL.md`. Read it first; it fixes the protocol, the
+outcomes and the decision rule, and it was committed before any of these commands were run.
+
+### 6.1 Re-evaluate the final model at the standard settings
+
+The mAP reported in the manuscript must come from the standard evaluation convention, not from the
+pipeline's operating point. Delete the marker and re-run; predictions already on disk are reused, so
+only the two validation passes are recomputed.
+
+```bash
+rm runs/eval/DONE
+python -m gsv4.train.evaluate_test          # writes per_class_standard and per_class_operating_point
+```
+
+### 6.2 YOLO families, published defaults, three seeds
+
+```bash
+python scripts/run_architecture_comparison.py --dry-run     # check paths and the 6 runs
+nohup python scripts/run_architecture_comparison.py > logs/arch.out 2>&1 &
+```
+
+Six runs (yolo11x-seg and yolo26x-seg × seeds 42, 43, 44). Each is skipped once its per-image table
+exists, so the script can be re-run after an interruption. Expect roughly 15 to 25 minutes per run
+on the RTX 5090 (the final model of the main study took 16.4 minutes for 91 epochs).
+
+### 6.3 RF-DETR-Seg, in its own virtualenv
+
+A separate environment is mandatory: `rfdetr` pulls transformers 5.x, pytorch_lightning and a pinned
+`torch-hungarian` release candidate, and must not be allowed to change torch under the model of
+record.
+
+```bash
+python scripts/build_rfdetr_dataset.py --dry-run     # counts must match the manifest
+python scripts/build_rfdetr_dataset.py               # symlinks + _annotations.coco.json per split
+bash scripts/rfdetr_setup.sh                         # .venv-rfdetr, install, compatibility report
+.venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --probe    # 2 epochs, cost projection
+```
+
+Check `outputs/08_architecture/rfdetr_environment.json` and `rfdetr_probe.json` before committing to
+the full run. If the install or the probe fails, that is a result: record it as an amendment in
+`PROTOCOL.md` and report the architecture as not evaluable under controlled conditions. If it
+succeeds and the projected cost is acceptable:
+
+```bash
+for s in 42 43 44; do .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed $s; done
+python scripts/run_architecture_comparison.py --measure-only   # measures the RF-DETR masks
+```
+
+### 6.4 Aggregate and report
+
+```bash
+python scripts/run_architecture_comparison.py --aggregate-only
+```
+
+Writes `by_seed.csv`, `by_model.csv`, `edges_by_seed.csv`, `paired_comparisons.csv`,
+`segmentation_metrics_all.csv` and `RESULTS.md`, including the pre-registered decision. Commit the
+tables and the results; the masks are git-ignored and are rebuilt by re-running the comparison.

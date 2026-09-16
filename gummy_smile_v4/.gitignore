@@ -22,6 +22,10 @@ outputs/**/runs/
 outputs/**/*.pt
 # smoke-test artefacts never enter git
 outputs/05_predictions/smoke/
+# architecture-comparison masks are intermediate (about 500 files); the tables and the
+# protocol are versioned, the masks are rebuilt by re-running the comparison
+outputs/08_architecture/masks/
+data/rfdetr_dataset/
 logs/
 # Generated YOLO dataset (symlinks + labels) is rebuilt from the manifest
 data/yolo_dataset/
