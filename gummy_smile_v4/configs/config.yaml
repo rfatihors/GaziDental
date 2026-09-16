@@ -108,6 +108,10 @@ yolo:
   iou: 0.5
   max_det: 20
   retina_masks: true
+  # Images per prediction chunk (cv_predict / evaluate_test). retina_masks keeps one full-
+  # resolution float mask per instance, so the whole test set in one call exceeds GPU
+  # memory; lower this (down to 1) on a CUDA out-of-memory error. CLI: --batch.
+  predict_batch: 8
   train:
     epochs: 100
     batch: 16

@@ -99,6 +99,17 @@ What the steps produce:
 Fold models predict **only their own held-out fold**; the test set is predicted by the final
 model only.
 
+**Prediction memory.** `retina_masks=True` keeps one full-resolution float mask per instance,
+so a whole list in one `predict` call runs out of CUDA memory (the 192-image test set did,
+with 7–15 GB allocations). Both `cv_predict` and `evaluate_test` therefore predict in chunks
+of `yolo.predict_batch` images (`configs/config.yaml`, default 8; `--batch N` overrides),
+stream the results, write every mask to disk as it arrives and empty the CUDA cache after
+each chunk; `evaluate_test` also releases the validation model before loading a separate
+prediction model. `scripts/train_all.sh` exports `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`.
+On a `CUDA out of memory` the step stops with the message *predict_batch değerini düşürün* —
+lower `yolo.predict_batch` (1 is always safe) or re-run the step with `--batch 2`; masks
+already written are kept and `DONE` is only written after the whole list.
+
 ## 5. After training — what to commit
 
 Only the small artefacts listed above go into git (`.gitignore` already allows PNG masks,

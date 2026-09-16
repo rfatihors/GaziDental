@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """Evaluate the final model on the fixed test set (reported once).
 
-    python -m gsv4.train.evaluate_test [--dry-run]
+    python -m gsv4.train.evaluate_test [--batch 8] [--dry-run]
+
+Validation and prediction use two separate model instances: the validation model is
+released (del + gc + torch.cuda.empty_cache) before the test-set masks are predicted in
+chunks of ``yolo.predict_batch`` images (``--batch`` overrides) — see cv_predict.py.
 
 Outputs (outputs/05_predictions/): test_metrics.json (per-class box/mask P, R, F1, mAP@50,
 mAP@50–95), confusion_matrix.png, boundary_error.csv (boundary IoU, upper/lower gingiva
@@ -21,13 +25,14 @@ from gsv4.config import load_config, resolve
 from gsv4.eval.boundary import boundary_report
 from gsv4.io.coco import load_annotations
 from gsv4.masks.extract import from_coco, from_png
-from gsv4.train.common import is_done, mark_done, per_class_metrics, run_dir
+from gsv4.train.common import is_done, mark_done, per_class_metrics, release_cuda, run_dir
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default=None)
     ap.add_argument("--weights", default=None, help="default runs/final/weights/best.pt")
+    ap.add_argument("--batch", type=int, default=None, help="images per prediction chunk (default: yolo.predict_batch in config.yaml, 8)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     cfg = load_config(args.config)
@@ -35,9 +40,11 @@ def main() -> int:
     pred = resolve(cfg, cfg["paths"]["predictions"])
     best = Path(args.weights) if args.weights else run_dir(cfg, "final") / "weights" / "best.pt"
     test_list = ds / "lists" / "main_test.txt"
+    from gsv4.train.cv_predict import predict_batch_size, predict_list
+
     if args.dry_run:
         n = len(test_list.read_text().splitlines()) if test_list.exists() else "MISSING"
-        print(f"[eval] DRY RUN — weights {best} (exists: {best.exists()}); test images: {n}; outputs -> {pred}")
+        print(f"[eval] DRY RUN — weights {best} (exists: {best.exists()}); test images: {n}; predict_batch {predict_batch_size(cfg, args.batch)}; outputs -> {pred}")
         return 0
     if is_done(cfg, "eval"):
         print("[eval] already DONE")
@@ -46,9 +53,7 @@ def main() -> int:
         raise SystemExit(f"weights not found: {best}")
     from ultralytics import YOLO
 
-    from gsv4.train.cv_predict import predict_list
-
-    model = YOLO(str(best))
+    model = YOLO(str(best))  # validation instance only; a fresh one is loaded for prediction
     m = model.val(data=str(ds / "data_main.yaml"), split="test", imgsz=int(cfg["yolo"]["imgsz"]), conf=float(cfg["yolo"]["conf"]),
                   iou=float(cfg["yolo"]["iou"]), max_det=int(cfg["yolo"]["max_det"]), plots=True, verbose=True,
                   project=str(run_dir(cfg, "eval")), name="test", exist_ok=True)
@@ -64,9 +69,14 @@ def main() -> int:
     except Exception:  # noqa: BLE001
         pass
 
+    # everything needed from validation is now plain Python; free the validation model
+    # and its cached CUDA blocks before the (separate) prediction model is loaded
+    del m, model
+    release_cuda()
+
     # test-set masks from the final model + boundary errors against GT
     out_dir = pred / "test"
-    df = predict_list(cfg, best, test_list, out_dir, "test", {"weights": str(best)})
+    df = predict_list(cfg, best, test_list, out_dir, "test", {"weights": str(best)}, batch=args.batch)
     df.to_csv(out_dir / "test_predictions.csv", index=False)
     idx = pd.read_csv(ds / "yolo_index.csv").set_index("image")
     coco_root = resolve(cfg, cfg["paths"]["coco_root"])

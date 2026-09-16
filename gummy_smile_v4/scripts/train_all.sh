@@ -13,6 +13,9 @@ cd "$(dirname "$0")/.."
 mkdir -p logs runs
 PY=${PY:-python}
 export PYTHONUNBUFFERED=1
+# Let the CUDA caching allocator grow segments instead of failing on fragmentation
+# (large retina-mask tensors during prediction). Must be set before torch is imported.
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 step() {                       # step <name> <command...>
   local name=$1; shift

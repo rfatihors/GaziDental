@@ -7,6 +7,7 @@ works with ``--dry-run`` on a machine without torch/ultralytics.
 from __future__ import annotations
 
 import datetime as dt
+import gc
 import json
 import shutil
 import subprocess
@@ -165,6 +166,22 @@ def train_model(cfg: Dict[str, Any], data_yaml: Path, name: str, dry_run: bool =
         raise SystemExit(f"[{name}] training ended without weights/best.pt — DONE not written")
     mark_done(cfg, name, {"best": str(best)})  # written by Python only, after a successful training
     return best
+
+
+def release_cuda() -> None:
+    """Drop unreachable objects and return cached CUDA blocks to the driver.
+
+    Called between the validation and the prediction model in evaluate_test.py and after
+    every prediction chunk in cv_predict.py. A no-op without torch / without a GPU.
+    """
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def per_class_metrics(metrics: Any, names: Dict[int, str]) -> Dict[str, Dict[str, float]]:
