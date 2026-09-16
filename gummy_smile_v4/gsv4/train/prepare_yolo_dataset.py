@@ -114,7 +114,7 @@ def build_dataset(cfg: Dict[str, Any], out_dir: Path | None = None) -> Dict[str,
 
     def write_list(name: str, names: Sequence[str]) -> str:
         p = list_dir / f"{name}.txt"
-        p.write_text("\n".join(f"images/all/{n}" for n in sorted(names)) + "\n", encoding="utf-8")
+        p.write_text("\n".join(f"{p.parent.parent}/images/all/{n}" for n in sorted(names)) + "\n", encoding="utf-8")
         return f"lists/{name}.txt"
 
     def write_yaml(name: str, train: str, val: str, test: str | None = None) -> Path:

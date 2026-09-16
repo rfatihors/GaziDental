@@ -1,0 +1,132 @@
+# gummy_smile_v4 — single source of truth for paths, names, thresholds and seeds.
+# All relative paths are resolved against the gummy_smile_v4/ directory.
+
+seed: 42
+
+paths:
+  # v3 COCO export is read in place; nothing is copied and nothing is written there.
+  coco_root: ../gummy_smile_v3/data/coco_dataset
+  inputs: data/inputs
+  manifest_dir: data/manifest
+  expert_dir: data/expert
+  outputs: outputs
+  yolo_dataset: data/yolo_dataset      # generated symlinks + labels (not versioned)
+  runs: runs                           # Ultralytics run directories (not versioned)
+  predictions: outputs/05_predictions  # small artefacts that come back from the workstation (versioned)
+
+inputs:
+  measurements_xlsx: Hasta_ID-_Ölçümler.xlsx
+  calibration_xlsx: calibration.xlsx
+  same_patient_pairs_csv: ayni_hasta_aday_ciftler.csv
+  unmeasured_high_csv: olcumsuz_yuksek_gulme_hatti_66.csv
+  expert_set_csv: uzman_seti_145_goruntu.csv
+  anonymisation_key_csv: ANAHTAR_arastirmaci.csv
+
+excel:
+  high_sheet: "Yüksek Gülme Hattı"
+  low_sheet: "Düşük Gülme Hattı"
+  normal_sheet: "Normal Gülme Hattı"
+  # 0-based row index of the header row on the high sheet (data starts on the next row)
+  high_header_row: 1
+  # Tooth order left-to-right as recorded by the clinician (FDI numbers)
+  teeth: [13, 12, 11, 21, 22, 23]
+  # 0-based column indices on the high sheet
+  high_columns:
+    name: 0
+    teeth: [1, 2, 3, 4, 5, 6]
+    etiology: [8, 9, 10, 11, 12, 13]
+    treatment: [14, 15, 16, 17, 18, 19]
+    age: 23
+    sex: 24
+  demo_columns:        # low / normal sheets, header on row 0
+    name: 0
+    age: 2
+    sex: 3
+  calibration:
+    first_sheet: "İlk Ölçümler"
+    second_sheet: "İkinci Ölçümler"
+    header_rows: 3     # data starts at 0-based row 3
+    name_column: 0
+    teeth_columns: [2, 3, 4, 5, 6, 7]
+
+coco:
+  groups: [high, low, normal]
+  splits: [train, valid, test]
+  annotation_file: _annotations.coco.json
+  category_ids: {gingiva: 1, lip: 2}      # 0 is the supercategory, never used in annotations
+  reference_frame: {width: 2698, height: 1799, tolerance_px: 2}
+
+class_names:
+  gingiva: diseti
+  lip: dudak
+
+dataset:
+  # Clinical decision (12 Sep 2026): the 66 high-smile-line images without a reference
+  # measurement are DROPPED. If true, they are kept in the train split only (never in
+  # valid/test, never in any analysis) and only when their same-patient twin is not held out.
+  keep_unmeasured_high_in_train: false
+  # Image explicitly excluded because two different Excel rows carry its name.
+  row_ambiguous_exclude: [IMG_7366]
+  split_ratios:
+    high:   {train: 0.60, valid: 0.20, test: 0.20}
+    low:    {train: 0.70, valid: 0.15, test: 0.15}
+    normal: {train: 0.70, valid: 0.15, test: 0.15}
+  cv_folds: 5
+
+thresholds:
+  # Table 1 of the manuscript. Bounds are explicit: lower/upper and inclusivity.
+  # E1 < 4 ; E2 [3, 6] ; E3 [4, 8] ; E4 > 8   (mm, image-level mean gingival display)
+  E1: {min_mm: 0.0, min_inclusive: false, max_mm: 4.0, max_inclusive: false}
+  E2: {min_mm: 3.0, min_inclusive: true,  max_mm: 6.0, max_inclusive: true}
+  E3: {min_mm: 4.0, min_inclusive: true,  max_mm: 8.0, max_inclusive: true}
+  E4: {min_mm: 8.0, min_inclusive: false, max_mm: null, max_inclusive: false}
+  # Distances to the clinical thresholds used for stratifying disagreements
+  boundaries_mm: [3.0, 4.0, 6.0, 8.0]
+
+measurement:
+  px_per_mm: 16.8397          # global scale, fitted on the oracle dev subset (Stage 3)
+  method: {regioning: C, estimator: p25, anchored: false}  # selected in Stage 3 on dev MAE
+  regions: 6
+  median_filter_frac: 0.01        # of the measurement-window width, forced odd
+  zenith_window_frac: 0.01        # method C: half-window around each zenith (of image width)
+  zenith_min_distance_frac: 0.03  # method C: minimum spacing between zenith candidates (of image width)
+  festoon_min_distance_frac: 0.03 # method B: minimum spacing between papilla maxima (of window width)
+  boundary_gap_max_frac: 0.02     # lip-bottom to gingiva-top gap above this (of image height) -> flag
+  implausible_mm: 20.0
+  # Combination that fills gingival_display_px until Stage 3 selects `method`
+  default_method: {regioning: A, estimator: p25, anchored: false}
+
+rules:
+  ambiguous_policy:
+    use_metadata: false      # smile-line class has no causal link to etiology; never used
+  applicability: "high smile line only (visible gingiva); 0 mm -> NO_VISIBLE_GINGIVA"
+
+yolo:
+  model: yolo11x-seg.pt
+  imgsz: 640
+  conf: 0.25
+  iou: 0.5
+  max_det: 20
+  retina_masks: true
+  train:
+    epochs: 100
+    batch: 16
+    lr0: 0.0005
+    lrf: 0.02
+    optimizer: AdamW
+    cos_lr: true
+    close_mosaic: 10
+    patience: 20
+    imgsz: 640
+    cache: true
+    workers: 8
+    seed: 42
+    deterministic: true
+  learning_curve_fractions: [0.25, 0.50, 0.75, 1.00]
+
+expert:
+  n_images: 145
+  n_repeats: 20
+  form_sheet: Degerlendirme
+  form_header_row: 3         # 0-based; data from row 4
+  bootstrap_samples: 2000

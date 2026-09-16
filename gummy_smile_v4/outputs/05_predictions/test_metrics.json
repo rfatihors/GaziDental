@@ -1,0 +1,89 @@
+{
+ "boundary_n_images": 192,
+ "boundary_summary": {
+  "gingiva_mask_iou": {
+   "mean": 0.507549446288959,
+   "median": 0.5484873692045007
+  },
+  "gingiva_boundary_iou": {
+   "mean": 0.274948538085851,
+   "median": 0.2886046511627907
+  },
+  "gingiva_n_columns_gt": {
+   "mean": 368.7291666666667,
+   "median": 279.5
+  },
+  "gingiva_n_columns_pred": {
+   "mean": 371.9583333333333,
+   "median": 302.0
+  },
+  "gingiva_n_columns_both": {
+   "mean": 327.8333333333333,
+   "median": 244.0
+  },
+  "gingiva_columns_missed_frac": {
+   "mean": 0.1662224343612395,
+   "median": 0.05775017824938137
+  },
+  "gingiva_columns_spurious_frac": {
+   "mean": 0.14835944181091895,
+   "median": 0.047344674981320764
+  },
+  "gingiva_top_edge_mae_px": {
+   "mean": 5.068004309661419,
+   "median": 3.698883283887066
+  },
+  "gingiva_top_edge_median_px": {
+   "mean": 4.467105263157895,
+   "median": 3.0
+  },
+  "gingiva_top_edge_bias_px": {
+   "mean": 0.27262704680664346,
+   "median": -0.5314111579934364
+  },
+  "gingiva_bottom_edge_mae_px": {
+   "mean": 11.154076921752528,
+   "median": 10.110105580693816
+  },
+  "gingiva_bottom_edge_median_px": {
+   "mean": 10.447368421052632,
+   "median": 10.0
+  },
+  "gingiva_bottom_edge_bias_px": {
+   "mean": 9.707042849889088,
+   "median": 9.288041638456331
+  },
+  "gingiva_thickness_mae_px": {
+   "mean": 12.041576674710479,
+   "median": 10.641917730779461
+  },
+  "lip_mask_iou": {
+   "mean": 0.7855372942288855,
+   "median": 0.8160770057949238
+  },
+  "lip_boundary_iou": {
+   "mean": 0.2210306077438452,
+   "median": 0.22204402349970626
+  }
+ },
+ "boundary_by_group": {
+  "high": {
+   "gingiva_mask_iou": 0.7634131680388595,
+   "gingiva_boundary_iou": 0.28118889849067286,
+   "gingiva_top_edge_mae_px": 5.458826124524501,
+   "gingiva_bottom_edge_mae_px": 12.719360789270844
+  },
+  "low": {
+   "gingiva_mask_iou": 0.279535685568267,
+   "gingiva_boundary_iou": 0.22839912453544722,
+   "gingiva_top_edge_mae_px": 2.84621333974878,
+   "gingiva_bottom_edge_mae_px": 8.903837970143911
+  },
+  "normal": {
+   "gingiva_mask_iou": 0.492330827592235,
+   "gingiva_boundary_iou": 0.2836455724842604,
+   "gingiva_top_edge_mae_px": 5.317406327184866,
+   "gingiva_bottom_edge_mae_px": 11.086726261557388
+  }
+ }
+}

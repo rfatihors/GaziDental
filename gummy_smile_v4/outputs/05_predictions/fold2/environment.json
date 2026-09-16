@@ -1,0 +1,36 @@
+{
+ "environment": {
+  "time": "2026-09-16T08:41:56",
+  "git_commit": "8aaa95a87e640330303a2f51c6cb520b453ceca0",
+  "torch": "2.14.0+cu130",
+  "cuda_available": true,
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "gpu_capability": [
+   12,
+   0
+  ],
+  "cuda": "13.0",
+  "ultralytics": "8.4.153"
+ },
+ "train_args": {
+  "data": "/home/fatihors/Projects/GaziDental/gummy_smile_v4/data/yolo_dataset/data_fold2.yaml",
+  "epochs": 100,
+  "batch": 16,
+  "imgsz": 640,
+  "lr0": 0.0005,
+  "lrf": 0.02,
+  "optimizer": "AdamW",
+  "cos_lr": true,
+  "close_mosaic": 10,
+  "patience": 20,
+  "cache": true,
+  "workers": 8,
+  "seed": 42,
+  "deterministic": true,
+  "project": "/home/fatihors/Projects/GaziDental/gummy_smile_v4/runs",
+  "name": "fold2",
+  "exist_ok": true,
+  "plots": true,
+  "verbose": true
+ }
+}

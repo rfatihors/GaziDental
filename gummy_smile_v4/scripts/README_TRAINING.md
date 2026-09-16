@@ -110,6 +110,31 @@ On a `CUDA out of memory` the step stops with the message *predict_batch değeri
 lower `yolo.predict_batch` (1 is always safe) or re-run the step with `--batch 2`; masks
 already written are kept and `DONE` is only written after the whole list.
 
+**The `eval` step has three stages** (validation, prediction, boundary errors), each
+restartable on its own:
+
+1. `model.val` -> the per-class block of `test_metrics.json`, written **before** prediction
+   starts, so a later failure never costs the validation pass;
+2. prediction -> `test/<image>_{gingiva,lip}.png` and `test/test_predictions.csv`. A complete
+   table already on disk is reused instead of predicting the 192 images again — pass
+   `--repredict` to force a fresh prediction;
+3. boundary errors and the summary tables -> `boundary_error.csv`, the `boundary_*` keys of
+   `test_metrics.json`, and only then `runs/eval/DONE`.
+
+```bash
+python -m gsv4.train.evaluate_test --metrics-only    # stage 3 only, ~40 s, no GPU
+```
+
+`--metrics-only` recomputes `boundary_error.csv` and the summary from the predictions already
+on disk, so a failure in the summary never means re-predicting the test set. It writes `DONE`
+only when `test_metrics.json` already carries the `per_class` block (i.e. validation has run);
+otherwise it says so and leaves the step incomplete.
+
+Ground truth is addressed by **`uid` (= `group/stem`)**: the image stem repeats across groups
+(iPhone numbering), so it is never a join key, and the group and the COCO source split are
+read as `group` / `orig_split` columns from `data/manifest/dataset_manifest.csv` rather than
+parsed out of a path string.
+
 ## 5. After training — what to commit
 
 Only the small artefacts listed above go into git (`.gitignore` already allows PNG masks,

@@ -74,6 +74,9 @@ def test_build_dataset_end_to_end(tmp_path):
     train0 = set((ds / "lists" / "fold0_train.txt").read_text().splitlines())
     valid0 = set((ds / "lists" / "fold0_valid.txt").read_text().splitlines())
     assert held.isdisjoint(train0) and held.isdisjoint(valid0) and train0.isdisjoint(valid0)
-    assert all(n.startswith("images/all/") for n in held)
+    # list entries are absolute: Ultralytics resolves a relative entry against its own image
+    # directory convention, not against the `path` key of data_*.yaml
+    prefix = f"{ds}/images/all/"
+    assert all(n.startswith(prefix) for n in held)
     # low/normal images are always in training for every fold
-    assert all(f"images/all/normal__IMG_{i}_jpg.jpg" in train0 for i in range(100, 107))
+    assert all(f"{prefix}normal__IMG_{i}_jpg.jpg" in train0 for i in range(100, 107))
