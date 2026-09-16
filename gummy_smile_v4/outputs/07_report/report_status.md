@@ -12,7 +12,7 @@
 | Table: Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4) | done |  | data/manifest | outputs/07_report/tables/dataset_counts.md |
 | Table: Demographic coverage (Reviewer 3) | done |  | data/manifest/dataset_manifest.csv | outputs/07_report/tables/demographics.md |
 | Table: Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement) | done |  | outputs/03_oracle | outputs/07_report/tables/measurement_accuracy.md |
-| Table: Segmentation metrics on the fixed test set (per class) | pending | outputs/05_predictions/test_metrics.json without a per_class block — re-run gsv4.train.evaluate_test on the workstation (validation pass) |  | outputs/07_report/tables/segmentation_metrics_test.md |
+| Table: Segmentation metrics on the fixed test set (per class) | done |  | outputs/05_predictions/test_metrics.json | outputs/07_report/tables/segmentation_metrics_test.md |
 | Table: Learning curve points (Supplementary S1) | done |  | outputs/05_predictions/learning_curve.csv | outputs/07_report/tables/learning_curve.md |
 | Table: Model vs expert agreement (Reviewer 4: clinical validity) | pending | real expert forms (current outputs are a synthetic dry run) |  | outputs/07_report/tables/expert_agreement.md |
 | Table: intra-observer reliability of the reference | done |  |  | outputs/03_oracle/intra_observer.md |

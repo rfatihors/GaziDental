@@ -17,4 +17,4 @@ Legend: ✅ available now, ⏳ pending (what is needed is written in `report_sta
 | R4 — external validity claim | Removed; single-centre, single-device limitation stated | manuscript text (Guc_analizi §2) |
 | Figure 6 inconsistency | Explained as a corrected software error (lip contour top-edge deviation, pixels reported as mm; v3 vs v4 on the same masks) and replaced by the corrected measurement vs reference figure | `outputs/02_measure/v3_vs_v4.md`, ✅ `figures/measurement_gt_masks.png`, ✅ `figures/measurement_predicted_masks.png` |
 | Intra-observer reliability (20 images) | ICC(2,1) 0.995 tooth level / 0.998 image level, SD 0.17 mm | ✅ `outputs/03_oracle/intra_observer.md` |
-| Segmentation performance, clean split | Per-class box/mask mAP@50, mAP@50–95, P, R, F1 and confusion matrix on the fixed test set | ⏳ `tables/segmentation_metrics_test.md` |
+| Segmentation performance, clean split | Per-class box/mask mAP@50, mAP@50–95, P, R, F1 and confusion matrix on the fixed test set | ✅ `tables/segmentation_metrics_test.md` |
