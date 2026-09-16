@@ -135,3 +135,63 @@ def test_from_yolo_no_masks_gives_empty_masks():
 def test_from_yolo_shape_mismatch_is_an_error():
     with pytest.raises(ValueError):
         from_yolo(_fake(), class_names=CLASS_NAMES, image_shape=(41, 60))
+
+
+# ---------------------------------------------------------------- shared instance core (architecture comparison)
+class _Detections:
+    """supervision.Detections-shaped stand-in: (K, H, W) boolean masks + one class id each."""
+
+    def __init__(self, mask, class_id):
+        self.mask = mask
+        self.class_id = np.asarray(class_id)
+
+
+def test_from_instances_unions_by_class_and_ignores_other_classes():
+    from gsv4.masks.extract import from_instances
+
+    g1 = np.zeros((40, 60), dtype=bool); g1[20:30, 5:25] = True
+    g2 = np.zeros((40, 60), dtype=bool); g2[20:30, 35:55] = True
+    lip = np.zeros((40, 60), dtype=bool); lip[5:18, :] = True
+    other = np.ones((40, 60), dtype=bool)
+    names = {0: "dudak-diseti", 1: "diseti", 2: "dudak"}
+    cm = from_instances(np.stack([g1, g2, lip, other]), [1, 1, 2, 0], names, CLASS_NAMES, (40, 60), source="rfdetr")
+    assert cm.n_gingiva_instances == 2 and cm.n_lip_instances == 1 and cm.source == "rfdetr"
+    assert cm.gingiva.sum() == g1.sum() + g2.sum() and np.array_equal(cm.lip, lip)
+    assert not cm.gingiva[0, 0] and cm.shape == (40, 60)
+
+
+def test_from_instances_rejects_a_wrong_shape_and_unknown_class_names():
+    from gsv4.masks.extract import from_instances
+
+    names = {0: "dudak-diseti", 1: "diseti", 2: "dudak"}
+    with pytest.raises(ValueError, match="mask shape"):
+        from_instances(np.zeros((1, 20, 30), dtype=bool), [1], names, CLASS_NAMES, (40, 60))
+    with pytest.raises(ValueError, match="do not contain"):
+        from_instances(np.zeros((1, 40, 60), dtype=bool), [1], {0: "gum", 1: "lip"}, CLASS_NAMES, (40, 60))
+
+
+def test_from_instances_accepts_float_masks_and_a_list():
+    from gsv4.masks.extract import from_instances
+
+    soft = np.zeros((40, 60), dtype=float); soft[10:20, 10:20] = 0.9; soft[25, 25] = 0.4
+    cm = from_instances([soft], [1], {1: "diseti", 2: "dudak"}, CLASS_NAMES, (40, 60))
+    assert cm.gingiva.sum() == 100 and cm.lip is None and cm.n_lip_instances == 0
+
+
+def test_from_detections_matches_from_yolo_on_the_same_instances():
+    from gsv4.masks.extract import from_detections
+
+    r = _fake()                                   # retina masks, classes [1, 1, 2]
+    names = r.names
+    ref = from_yolo(r, class_names=CLASS_NAMES, image_shape=(40, 60))
+    det = _Detections(np.asarray(r.masks.data.numpy()) > 0.5, [1, 1, 2])
+    cm = from_detections(det, names, CLASS_NAMES, (40, 60), source="rfdetr")
+    assert np.array_equal(cm.gingiva, ref.gingiva) and np.array_equal(cm.lip, ref.lip)
+    assert cm.n_gingiva_instances == ref.n_gingiva_instances and cm.source == "rfdetr"
+
+
+def test_from_detections_without_any_instance_gives_empty_masks():
+    from gsv4.masks.extract import from_detections
+
+    cm = from_detections(_Detections(None, []), {1: "diseti", 2: "dudak"}, CLASS_NAMES, (40, 60))
+    assert cm.gingiva.sum() == 0 and cm.lip is None and cm.n_gingiva_instances == 0 and cm.source.endswith(":none")

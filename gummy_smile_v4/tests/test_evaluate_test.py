@@ -222,3 +222,47 @@ def test_load_predictions_requires_a_complete_table(project):
     (pred / "test" / "test_predictions.csv").unlink()
     with pytest.raises(SystemExit, match="no predictions to score"):
         load_predictions(pred, test_list)
+
+
+# ---------------------------------------------------------------- evaluation settings (PROTOCOL.md §4)
+def test_eval_settings_separates_the_reported_map_from_the_operating_point():
+    from gsv4.train.evaluate_test import STANDARD_EVAL, eval_settings
+
+    cfg = {"yolo": {"conf": 0.25, "iou": 0.5, "max_det": 20, "imgsz": 640}}
+    std, op = eval_settings(cfg, True), eval_settings(cfg, False)
+    assert (std["conf"], std["iou"], std["max_det"]) == (STANDARD_EVAL["conf"], STANDARD_EVAL["iou"], STANDARD_EVAL["max_det"])
+    assert std["kind"] == "standard" and std["imgsz"] == 640
+    assert (op["conf"], op["iou"], op["max_det"], op["kind"]) == (0.25, 0.5, 20, "operating_point")
+
+
+def test_reported_metrics_prefers_standard_and_labels_a_legacy_file():
+    from gsv4.train.evaluate_test import reported_metrics
+
+    block, st = reported_metrics({"per_class_standard": {"all": {"seg_map50": 0.7}}, "eval_settings_standard": {"kind": "standard", "conf": 0.001},
+                                  "per_class": {"all": {"seg_map50": 0.7}}, "per_class_operating_point": {"all": {"seg_map50": 0.4}}})
+    assert block["all"]["seg_map50"] == 0.7 and st["kind"] == "standard"
+    block, st = reported_metrics({"per_class": {"all": {"seg_map50": 0.4}}})
+    assert block["all"]["seg_map50"] == 0.4 and st["kind"] == "operating_point_legacy"
+    assert reported_metrics({}) == ({}, {"kind": "operating_point_legacy"})
+
+
+def test_segmentation_metrics_table_carries_both_blocks_and_warns_on_a_legacy_file(tmp_path):
+    import json as _json
+
+    from gsv4.report.tables import segmentation_metrics
+
+    (tmp_path / "test_metrics.json").write_text(_json.dumps({
+        "n_images": 192, "weights": "best.pt",
+        "per_class": {"diseti": {"seg_map50": 0.62}}, "per_class_standard": {"diseti": {"seg_map50": 0.62}},
+        "eval_settings_standard": {"kind": "standard", "conf": 0.001, "max_det": 300},
+        "per_class_operating_point": {"diseti": {"seg_map50": 0.41}},
+        "eval_settings_operating_point": {"kind": "operating_point", "conf": 0.25, "max_det": 20}}))
+    df, st = segmentation_metrics(tmp_path)
+    assert set(df["settings"]) == {"standard (reported mAP)", "operating point (pipeline)"}
+    assert df[df.settings.str.startswith("standard")]["seg_map50"].item() == 0.62
+    assert df[df.settings.str.startswith("operating")]["seg_map50"].item() == 0.41
+    assert st["settings_of_the_reported_map"] == "standard" and "understates" not in st["note"]
+    (tmp_path / "test_metrics.json").write_text(_json.dumps({"n_images": 192, "per_class": {"diseti": {"seg_map50": 0.41}}}))
+    df, st = segmentation_metrics(tmp_path)
+    assert st["settings_of_the_reported_map"] == "operating_point_legacy" and "understates mAP" in st["note"]
+    assert len(df) == 1

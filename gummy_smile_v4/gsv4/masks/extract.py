@@ -121,6 +121,54 @@ def _to_numpy(x: Any) -> np.ndarray:
     return np.asarray(x)
 
 
+def role_by_class_id(id_to_name: Dict[int, str], class_names: Dict[str, str]) -> Dict[int, str]:
+    """``class id -> role`` ("gingiva" / "lip") through the model's own class names.
+
+    ``id_to_name`` is the predictor's class list; ``class_names`` the configured role -> name
+    map (``diseti`` / ``dudak``). Every configured name must be present, or the prediction
+    came from a model that cannot answer this question and a ``ValueError`` is raised.
+    """
+    names = {int(k): str(v) for k, v in dict(id_to_name).items()}
+    missing = [n for n in class_names.values() if n not in names.values()]
+    if missing:
+        raise ValueError(f"model class names {sorted(names.values())} do not contain {missing}")
+    return {cid: role for role, name in class_names.items() for cid, n in names.items() if n == name}
+
+
+def from_instances(instance_masks: Any, class_ids: Sequence[int], id_to_name: Dict[int, str],
+                   class_names: Dict[str, str], image_shape: Tuple[int, int], source: str = "instances") -> ClassMasks:
+    """Union the per-instance masks of one image into one mask per class.
+
+    This is the shared core of every predictor adapter: any model that can produce a stack of
+    instance masks at the original image resolution plus a class id per instance can be measured
+    by this pipeline. ``instance_masks`` is indexable per instance and each element must be, or
+    convert to, an ``(H, W)`` array matching ``image_shape``; values above 0.5 are foreground.
+    Instances of a class that is neither role are ignored.
+    """
+    h, w = int(image_shape[0]), int(image_shape[1])
+    role_by_id = role_by_class_id(id_to_name, class_names)
+    gingiva = np.zeros((h, w), dtype=bool)
+    lip = np.zeros((h, w), dtype=bool)
+    n_g = n_l = 0
+    for i, cid in enumerate(np.asarray(class_ids).astype(int)):
+        role = role_by_id.get(int(cid))
+        if role is None:
+            continue
+        inst = _to_numpy(instance_masks[i])
+        if inst.shape != (h, w):
+            raise ValueError(f"instance {i} mask shape {inst.shape} != image shape {(h, w)}")
+        inst = inst > 0.5
+        if role == "gingiva":
+            gingiva |= inst
+            n_g += 1
+        else:
+            lip |= inst
+            n_l += 1
+    cm = ClassMasks(gingiva, lip if n_l else None, n_g, n_l, source=source)
+    cm.check_shape((h, w))
+    return cm
+
+
 def from_yolo(result: Any, class_names: Dict[str, str], image_shape: Tuple[int, int]) -> ClassMasks:
     """Class-aware masks from one Ultralytics ``Results`` object.
 
@@ -128,42 +176,44 @@ def from_yolo(result: Any, class_names: Dict[str, str], image_shape: Tuple[int, 
     the model's names must contain the configured ``class_names`` (``diseti``/``dudak``)
     or a ``ValueError`` is raised. Masks are taken from ``masks.data`` when it already
     is at the original resolution (``retina_masks=True``); otherwise ``masks.xy``
-    polygons (always in original coordinates) are rasterised. The final shape is
-    asserted against ``image_shape``.
+    polygons (always in original coordinates) are rasterised, and the union per class is
+    formed by ``from_instances``. The final shape is asserted against ``image_shape``.
     """
-    names = {int(k): str(v) for k, v in dict(result.names).items()}
-    wanted = {role: name for role, name in class_names.items()}
-    missing = [n for n in wanted.values() if n not in names.values()]
-    if missing:
-        raise ValueError(f"model class names {sorted(names.values())} do not contain {missing}")
-    role_by_id = {cid: role for role, name in wanted.items() for cid, n in names.items() if n == name}
     h, w = int(image_shape[0]), int(image_shape[1])
+    role_by_class_id(result.names, class_names)   # fail early on a model with the wrong classes
     orig = getattr(result, "orig_shape", None)
     if orig is not None and tuple(int(v) for v in orig[:2]) != (h, w):
         raise ValueError(f"result.orig_shape {tuple(orig[:2])} != image shape {(h, w)}")
-    gingiva = np.zeros((h, w), dtype=bool)
-    lip = np.zeros((h, w), dtype=bool)
-    n_g = n_l = 0
-    source = "yolo:none"
-    if result.masks is not None and result.boxes is not None and len(result.boxes.cls) > 0:
-        cls = _to_numpy(result.boxes.cls).astype(int)
-        data = _to_numpy(result.masks.data) if getattr(result.masks, "data", None) is not None else None
-        use_data = data is not None and data.ndim == 3 and tuple(data.shape[1:]) == (h, w)
-        source = "yolo:masks.data" if use_data else "yolo:masks.xy"
-        for i, cid in enumerate(cls):
-            role = role_by_id.get(int(cid))
-            if role is None:
-                continue
-            if use_data:
-                inst = data[i] > 0.5
-            else:
-                inst = rasterize_polygons([np.asarray(result.masks.xy[i])], (h, w))
-            if role == "gingiva":
-                gingiva |= inst
-                n_g += 1
-            else:
-                lip |= inst
-                n_l += 1
-    cm = ClassMasks(gingiva, lip if n_l else None, n_g, n_l, source=source)
-    cm.check_shape((h, w))
-    return cm
+    if result.masks is None or result.boxes is None or len(result.boxes.cls) == 0:
+        cm = ClassMasks(np.zeros((h, w), dtype=bool), None, 0, 0, source="yolo:none")
+        cm.check_shape((h, w))
+        return cm
+    cls = _to_numpy(result.boxes.cls).astype(int)
+    data = _to_numpy(result.masks.data) if getattr(result.masks, "data", None) is not None else None
+    use_data = data is not None and data.ndim == 3 and tuple(data.shape[1:]) == (h, w)
+    if use_data:
+        instances: Any = data
+    else:
+        instances = [rasterize_polygons([np.asarray(result.masks.xy[i])], (h, w)) for i in range(len(cls))]
+    return from_instances(instances, cls, result.names, class_names, (h, w),
+                          source="yolo:masks.data" if use_data else "yolo:masks.xy")
+
+
+def from_detections(detections: Any, id_to_name: Dict[int, str], class_names: Dict[str, str],
+                    image_shape: Tuple[int, int], source: str = "detections") -> ClassMasks:
+    """Class masks from a ``supervision.Detections``-shaped object (RF-DETR and anything else
+    that follows that convention): ``.mask`` is an ``(K, H, W)`` boolean array at the original
+    image resolution and ``.class_id`` holds one class id per instance.
+
+    RF-DETR upsamples its masks to the image size by default
+    (``PostProcess.upsample_masks_to_image_size``); a predictor left at mask-head resolution
+    would fail the shape check in ``from_instances`` rather than be silently resized here.
+    """
+    h, w = int(image_shape[0]), int(image_shape[1])
+    masks = getattr(detections, "mask", None)
+    class_ids = getattr(detections, "class_id", None)
+    if masks is None or class_ids is None or len(np.asarray(class_ids)) == 0:
+        cm = ClassMasks(np.zeros((h, w), dtype=bool), None, 0, 0, source=f"{source}:none")
+        cm.check_shape((h, w))
+        return cm
+    return from_instances(masks, class_ids, id_to_name, class_names, (h, w), source=source)

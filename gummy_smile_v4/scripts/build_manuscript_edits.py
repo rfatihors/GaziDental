@@ -38,6 +38,21 @@ DOCS = {
 }
 
 
+def read_segmentation_metrics(path):
+    """The reported per-class block of tables/segmentation_metrics_test.csv plus its settings label.
+
+    The table carries one block per evaluation setting since PROTOCOL.md §4; a file written before
+    that has a single, unlabelled block computed at the pipeline operating point.
+    """
+    t = pd.read_csv(path)
+    if "settings" not in t.columns:
+        return t.set_index("class"), "operating_point_legacy"
+    std = t[t["settings"].str.startswith("standard")]
+    if len(std):
+        return std.set_index("class"), "standard"
+    return t.set_index("class"), str(t["settings"].iloc[0])
+
+
 def clean(t: str) -> str:
     """Strip the bold/italic markers the export scattered through the text."""
     t = t.replace("**", "").replace("*", "")
@@ -84,7 +99,7 @@ def main() -> int:
     # ------------------------------------------------------------------ numbers
     dc = pd.read_csv(tab / "dataset_counts.csv").set_index("group")
     dem = pd.read_csv(tab / "demographics.csv").set_index("group")
-    seg = pd.read_csv(tab / "segmentation_metrics_test.csv").set_index("class")
+    seg, seg_kind = read_segmentation_metrics(tab / "segmentation_metrics_test.csv")
     tm = json.loads((o5 / "test_metrics.json").read_text())
     lc = pd.read_csv(tab / "learning_curve.csv")
     lc_rule = (o5 / "learning_curve.md").read_text(encoding="utf-8").splitlines()[2]

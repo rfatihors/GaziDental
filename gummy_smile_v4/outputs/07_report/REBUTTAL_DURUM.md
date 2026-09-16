@@ -1,6 +1,6 @@
 # Rebuttal durumu — hakem maddeleri (klinik ekibe)
 
-Üretim: `scripts/build_rebuttal.py`; sayılar `outputs/` altındaki dosyalardan okunur. Durum: READY = analiz çıktılarından cevaplandı; PENDING = uzman formlarını bekliyor; CLINICAL = metni klinik ekip yazacak. Toplam 31 madde: READY 23, PENDING 3, CLINICAL 3, MISSING 2 (hakem belgesinde bulunmayan maddeler; metni sorumlu yazardan istenecek).
+Üretim: `scripts/build_rebuttal.py`; sayılar `outputs/` altındaki dosyalardan okunur. Durum: READY = analiz çıktılarından cevaplandı; PENDING = uzman formlarını bekliyor; CLINICAL = metni klinik ekip yazacak. Toplam 31 madde: READY 21, PENDING 3 (uzman formları), PENDING_RUN 2 (iş istasyonu koşusu), CLINICAL 3, MISSING 2 (hakem belgesinde bulunmayan maddeler; metni sorumlu yazardan istenecek).
 
 Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.md` (gönderilen makale ve Appendix B–F üzerinden, her madde için mevcut cümle / önerilen cümle / gerekçe / hakem maddesi).
 
@@ -15,7 +15,7 @@ Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.
 | R2-5 | Reviewer 2 | 1,315 vs 3,403 images and the instance counts in Figure 4 | **READY** | teknik | outputs/07_report/tables/dataset_counts.md |
 | R2-6 | Reviewer 2 | Image- or patient-level split; data leakage; small test set | **READY** | teknik | outputs/07_report/tables/dataset_counts.md; outputs/01_data/manifest_summary.md |
 | R2-7 | Reviewer 2 | Not in the document — text to be requested from the corresponding author | **MISSING** | klinik | — text to be requested from the corresponding author |
-| R2-8 | Reviewer 2 | Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation | **READY** | teknik | outputs/07_report/tables/segmentation_metrics_test.md; outputs/06_prediction/boundary_by_set.md |
+| R2-8 | Reviewer 2 | Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation | **PENDING_RUN** | teknik | outputs/07_report/tables/segmentation_metrics_test.md; outputs/06_prediction/boundary_by_set.md; outputs/08_architecture/PROTOCOL.md |
 | R2-9 | Reviewer 2 | No meaningful performance gain despite tuning, expansion and scaling | **READY** | teknik | outputs/07_report/figures/learning_curve.png; outputs/07_report/tables/learning_curve.md; outputs/07_report/tables/segmentation_metrics_test.md |
 | R2-10 | Reviewer 2 | Lip vs gingiva mAP gap should be investigated quantitatively | **READY** | teknik | outputs/06_prediction/boundary_by_set.md; outputs/06_prediction/error_decomposition.md; outputs/07_report/figures/boundary_error.png |
 | R2-sample-size | Reviewer 2 | Whether a G*Power chi-square calculation is appropriate for a deep-learning segmentation model | **READY** | teknik | outputs/07_report/figures/learning_curve.png; outputs/07_report/tables/learning_curve.md; docs/Istatistik_analiz_plani.md |
@@ -36,6 +36,6 @@ Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.
 | R4-6 | Reviewer 4 | Validation-set metrics reported as final results instead of test-set metrics | **READY** | teknik | outputs/07_report/tables/segmentation_metrics_test.md; outputs/07_report/tables/dataset_counts.md; outputs/06_prediction/measurement_accuracy.csv |
 | R4-7 | Reviewer 4 | Unclear splitting scheme (70/15/15 then 92/4/4), 1,315 to 3,403, patient-level partitioning (CLAIM 2024) | **READY** | teknik | outputs/07_report/tables/dataset_counts.md; outputs/01_data/manifest_summary.md |
 | R4-external-validity | Reviewer 4 | Sample size does not establish external validity; no external testing | **READY** | teknik | outputs/07_report/figures/learning_curve.png; outputs/07_report/tables/learning_curve.md; outputs/07_report/MANUSCRIPT_EDITS.md |
-| R4-8 | Reviewer 4 | Architecture comparison is not fair (different dataset versions) | **READY** | teknik | outputs/07_report/tables/segmentation_metrics_test.md; outputs/07_report/MANUSCRIPT_EDITS.md |
+| R4-8 | Reviewer 4 | Architecture comparison is not fair (different dataset versions) | **PENDING_RUN** | teknik | outputs/08_architecture/PROTOCOL.md; outputs/07_report/tables/segmentation_metrics_test.md; outputs/07_report/MANUSCRIPT_EDITS.md |
 
 Not: hakemlerin orijinal metni depoda yok (`docs/Hakem_revizyonları.docx`); madde numaraları ve alıntılar belge geldiğinde `docs/hakem_maddeleri.yaml` üzerinden tamamlanacak. Listedeki maddeler teknik denetim raporu ve görev belgesinden derlendi; belgede başka maddeler varsa eklenecek.

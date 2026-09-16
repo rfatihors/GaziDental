@@ -5,8 +5,10 @@
 
 Three stages, in this order, each restartable on its own:
 
-1. validation (``model.val``) -> per-class metrics, written to test_metrics.json immediately
-   so a later crash never costs the validation pass;
+1. validation (``model.val``) twice -> per-class metrics at the standard evaluation settings
+   (conf 0.001, iou 0.7, max_det 300; the reported mAP) and at the pipeline's operating point
+   (configs/config.yaml; its precision, recall, F1 and confusion matrix), written to
+   test_metrics.json immediately so a later crash never costs the validation pass;
 2. prediction -> class masks under ``test/`` plus ``test/test_predictions.csv`` (chunked, see
    cv_predict.py; an existing complete table is reused unless ``--repredict``);
 3. boundary errors and the summary tables -> boundary_error.csv, the ``boundary_*`` keys of
@@ -41,6 +43,34 @@ from gsv4.train.common import is_done, mark_done, per_class_metrics, release_cud
 
 # Columns reported per group in test_metrics.json["boundary_by_group"].
 GROUP_COLUMNS = ("gingiva_mask_iou", "gingiva_boundary_iou", "gingiva_top_edge_mae_px", "gingiva_bottom_edge_mae_px")
+
+# Average precision is only meaningful when the precision-recall curve is traced to its end, so the
+# reported mAP is computed at the evaluation convention (a confidence floor near zero, NMS IoU 0.7,
+# 300 detections). The pipeline itself runs at the operating point in configs/config.yaml
+# (conf 0.25, iou 0.5, max_det 20): that is what produces the masks, and its precision, recall, F1
+# and confusion matrix are reported separately. Reporting mAP at conf 0.25 truncates the curve and
+# understates average precision; it is also not comparable with a COCO-style evaluation of another
+# architecture (outputs/08_architecture/PROTOCOL.md §4).
+STANDARD_EVAL = {"conf": 0.001, "iou": 0.7, "max_det": 300}
+
+
+def eval_settings(cfg: Dict[str, Any], standard: bool) -> Dict[str, Any]:
+    """The val() thresholds for the reported mAP (standard) or for the pipeline's operating point."""
+    y = cfg["yolo"]
+    s = dict(STANDARD_EVAL) if standard else {"conf": float(y["conf"]), "iou": float(y["iou"]), "max_det": int(y["max_det"])}
+    return {**s, "imgsz": int(y["imgsz"]), "kind": "standard" if standard else "operating_point"}
+
+
+def reported_metrics(metrics: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """The per-class block to report and the settings it was computed at.
+
+    Prefers the standard-settings block. A metrics file written before this distinction existed
+    has only ``per_class``, computed at the operating point; it is returned with the settings
+    marked ``operating_point_legacy`` so that every table says which convention it is showing.
+    """
+    if "per_class_standard" in metrics:
+        return metrics["per_class_standard"], metrics.get("eval_settings_standard", {"kind": "standard"})
+    return metrics.get("per_class", {}), metrics.get("eval_settings", {"kind": "operating_point_legacy"})
 
 
 def manifest_identity(cfg: Dict[str, Any]) -> pd.DataFrame:
@@ -238,20 +268,36 @@ def main() -> int:
     from ultralytics import YOLO
 
     model = YOLO(str(best))  # validation instance only; a fresh one is loaded for prediction
-    m = model.val(data=str(ds / "data_main.yaml"), split="test", imgsz=int(cfg["yolo"]["imgsz"]), conf=float(cfg["yolo"]["conf"]),
-                  iou=float(cfg["yolo"]["iou"]), max_det=int(cfg["yolo"]["max_det"]), plots=True, verbose=True,
-                  project=str(run_dir(cfg, "eval")), name="test", exist_ok=True)
-    names = {int(k): v for k, v in m.names.items()}
-    metrics = {"weights": str(best), "split": "test", "n_images": len(test_list.read_text().splitlines()), "per_class": per_class_metrics(m, names),
-               "speed_ms": getattr(m, "speed", None)}
+    metrics: Dict[str, Any] = {"weights": str(best), "split": "test", "n_images": len(test_list.read_text().splitlines())}
     pred.mkdir(parents=True, exist_ok=True)
-    cm = run_dir(cfg, "eval") / "test" / "confusion_matrix.png"
-    if cm.exists():
-        shutil.copy(cm, pred / "confusion_matrix.png")
-    try:
-        metrics["confusion_matrix"] = m.confusion_matrix.matrix.tolist()
-    except Exception:  # noqa: BLE001
-        pass
+    for standard in (True, False):
+        st = eval_settings(cfg, standard)
+        print(f"[eval] validation at the {st['kind']} settings: conf {st['conf']}, iou {st['iou']}, max_det {st['max_det']}")
+        m = model.val(data=str(ds / "data_main.yaml"), split="test", imgsz=st["imgsz"], conf=st["conf"], iou=st["iou"],
+                      max_det=st["max_det"], plots=not standard, verbose=True, project=str(run_dir(cfg, "eval")),
+                      name="test" if not standard else "test_standard", exist_ok=True)
+        names = {int(k): v for k, v in m.names.items()}
+        suffix = "_standard" if standard else "_operating_point"
+        metrics[f"per_class{suffix}"] = per_class_metrics(m, names)
+        metrics[f"eval_settings{suffix}"] = st
+        metrics[f"speed_ms{suffix}"] = getattr(m, "speed", None)
+        if not standard:
+            # the confusion matrix and its false positive / false negative counts describe the
+            # configuration the pipeline runs at; at conf 0.001 they would count noise
+            cmp_ = run_dir(cfg, "eval") / "test" / "confusion_matrix.png"
+            if cmp_.exists():
+                shutil.copy(cmp_, pred / "confusion_matrix.png")
+            try:
+                metrics["confusion_matrix"] = m.confusion_matrix.matrix.tolist()
+            except Exception:  # noqa: BLE001
+                pass
+        del m
+        release_cuda()
+    # `per_class` stays the reported block (standard settings) so that readers of the old key are
+    # not silently handed operating-point numbers
+    metrics["per_class"] = metrics["per_class_standard"]
+    metrics["eval_settings"] = metrics["eval_settings_standard"]
+    metrics["speed_ms"] = metrics["speed_ms_operating_point"]
     write_metrics(pred, metrics)  # before prediction: a crash below must not cost the validation pass
 
     # everything needed from validation is now plain Python; free the validation model

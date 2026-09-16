@@ -129,11 +129,27 @@ def segmentation_metrics(pred_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[s
         # the workstation ran the boundary stage only (--metrics-only); validation metrics are still missing
         return None, {"status": "pending", "needs": f"{p} without a per_class block — re-run gsv4.train.evaluate_test on the workstation (validation pass)",
                       "boundary_by_group": m.get("boundary_by_group")}
+    from gsv4.train.evaluate_test import reported_metrics
+
+    reported, settings = reported_metrics(m)
+    label = {"standard": "standard (reported mAP)", "operating_point_legacy": "operating point (legacy file, see note)"}.get(
+        settings.get("kind", ""), str(settings.get("kind", "unknown")))
+    blocks = [(label, reported, settings)]
+    if "per_class_operating_point" in m:
+        blocks.append(("operating point (pipeline)", m["per_class_operating_point"], m.get("eval_settings_operating_point", {})))
     rows = []
-    for cname, vals in m["per_class"].items():
-        rows.append({"class": cname, **vals})
+    for label, block, st_ in blocks:
+        for cname, vals in block.items():
+            rows.append({"settings": label, "conf": st_.get("conf"), "max_det": st_.get("max_det"), "class": cname, **vals})
     df = pd.DataFrame(rows)
-    st = {"status": "done", "source": str(p), "n_test_images": m.get("n_images"), "weights": m.get("weights")}
+    st = {"status": "done", "source": str(p), "n_test_images": m.get("n_images"), "weights": m.get("weights"),
+          "settings_of_the_reported_map": settings.get("kind"),
+          "note": ("mAP is reported at the standard evaluation settings (conf 0.001, NMS IoU 0.7, max_det 300); "
+                   "the operating-point rows are the configuration the measurement pipeline runs at"
+                   if settings.get("kind") == "standard" else
+                   "WARNING: this file predates the two-settings evaluation, so the numbers below were computed at the "
+                   "pipeline operating point (conf 0.25, max_det 20), which truncates the precision-recall curve and "
+                   "understates mAP — re-run gsv4.train.evaluate_test to get the standard-settings figures")}
     if "boundary_by_group" in m:
         st["boundary_by_group"] = m["boundary_by_group"]
     return df, st
