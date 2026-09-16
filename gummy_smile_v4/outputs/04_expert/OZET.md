@@ -5,6 +5,6 @@
 - Referans: çoğunluk; konsensüs bekleyen 12.
 - Birincil (145 görüntü, OOF, katı, global ölçek): doğrusal ağırlıklı κ 0.549 [0.388, 0.688], n = 133. İkincil (sabit test): κ 0.471 [-0.145, 0.836].
 - Uzmanlar arası Fleiss κ 0.130 [0.036, 0.218]; mm ICC(2,1) 0.991; ölçek ICC(2,1) 0.356, görüntü içi CV medyan 0.048.
-- Model–uzman ortalaması mm: ICC(2,1) 0.868, sapma +0.16 mm.
+- Model–uzman ortalaması mm (düzeltmesiz, birincil): ICC(2,1) 0.868, sapma +0.16 mm; düzeltilmiş (ikincil, offset_px +0): ICC 0.868, sapma +0.16 mm.
 - Karma modeller: 3/3 kuruldu; 0 tanesi MixedLM, gerisi sınır durumu (hasta varyansı ≈ 0) → küme-dayanıklı OLS.
 - Üretilen dosyalar: form_qc.csv, forms_long.csv, reference_standard.csv, consensus_pending.csv, class_agreement.csv, per_class.csv, strata.csv, intra_expert.csv, inter_expert.json, mm_agreement.csv, tooth_level_long.csv, mixed_models.md, scale_agreement.md, frame_scale_comparison.csv, expert_summary.md, manuscript_numbers.md.

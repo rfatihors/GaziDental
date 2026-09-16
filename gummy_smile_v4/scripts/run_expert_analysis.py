@@ -36,6 +36,7 @@ from gsv4.eval.expert import (  # noqa: E402
     strata_by_threshold, tooth_long, tooth_mixed_models,
 )
 from gsv4.io.forms import form_qc_summary, join_key, read_form, split_repeats  # noqa: E402
+from gsv4.measure.calibration import offset_mm_at, offset_px_from_config  # noqa: E402
 
 
 def md_table(df: pd.DataFrame, fmt: str = "{:.3f}") -> str:
@@ -151,9 +152,18 @@ The protocol originally named the fixed test subset (n = {len(test_images)}) as 
     intra = intra_expert(pairs, n_boot, seed)
     intra.to_csv(out_dir / "intra_expert.csv", index=False)
 
-    # ---- model side (global scale primary, expert scale secondary)
-    model = model_table(per, expert_scale)
-    scales = ["global", "expert"] if model["model_mm_expert"].notna().sum() >= 10 else ["global"]
+    # ---- model side: global scale uncorrected = PRIMARY; corrected (config offset_px, converted with
+    # the scale in use) = secondary; expert per-image scale (uncorrected and corrected) = secondary.
+    # the offset corrects *predicted* masks only; a Stage-3 table (ground-truth masks) gets no offset
+    predicted_table = "masks" in per.columns and str(per["masks"].iloc[0]) in ("oof", "final")
+    offset_px = offset_px_from_config(cfg) if predicted_table else 0.0
+    model = model_table(per, expert_scale, offset_px=offset_px)
+    scales = ["global", "global_corrected"] + (["expert", "expert_corrected"] if model["model_mm_expert"].notna().sum() >= 10 else [])
+    scale_note = (("" if predicted_table else "**Model table comes from ground-truth masks (Stage 3 / synthetic dry run): the post-hoc offset applies to predicted masks only, so offset_px = 0 here and the corrected columns equal the uncorrected ones.** ")
+                  + f"Model scales: `global` = uncorrected, global {cfg['measurement']['px_per_mm']} px/mm (PRIMARY); `global_corrected` = post-hoc pixel offset "
+                  f"{offset_px:+.0f} px of config.yaml at the global scale ({offset_mm_at(float(cfg['measurement']['px_per_mm']), offset_px):+.2f} mm; secondary); "
+                  f"`expert` / `expert_corrected` = the experts' mean per-image scale, the same pixel offset converted with that per-image scale (secondary). "
+                  f"Corrected values below 0 mm are clipped to 0 and flagged (`model_clipped_*`; clipped: global {int(model['model_clipped_global_corrected'].sum())}, expert {int(model['model_clipped_expert_corrected'].sum())}).")
     cls, per_class = class_agreement(model, reference, subsets, n_boot, seed, scales=scales)
     cls.to_csv(out_dir / "class_agreement.csv", index=False)
     per_class.to_csv(out_dir / "per_class.csv", index=False)
@@ -164,6 +174,9 @@ The protocol originally named the fixed test subset (n = {len(test_images)}) as 
     long = tooth_long(model, first, all_images, "global")
     long.to_csv(out_dir / "tooth_level_long.csv", index=False)
     mixed = tooth_mixed_models(long)
+    long_c = tooth_long(model, first, all_images, "global_corrected")
+    long_c.to_csv(out_dir / "tooth_level_long_corrected.csv", index=False)
+    mixed_c = tooth_mixed_models(long_c)
 
     # frame-outside subset: does the expert scale close the gap to the clinical reference?
     frame_txt = ""
@@ -180,8 +193,8 @@ The protocol originally named the fixed test subset (n = {len(test_images)}) as 
         frame_txt = md_table(frame_df)
 
     # ---- reports
-    mixed_md = "# Tooth-level mixed models (model − expert mean, per tooth; random intercept per patient)\n\n"
-    for r in mixed:
+    mixed_md = "# Tooth-level mixed models (model − expert mean, per tooth; random intercept per patient)\n\nUncorrected model values (PRIMARY) first, then the corrected values (secondary, `global_corrected`).\n\n"
+    for r in [dict(m, formula=m["formula"] + "  [uncorrected, PRIMARY]") for m in mixed] + [dict(m, formula=m["formula"] + "  [corrected, secondary]") for m in mixed_c]:
         if "error" in r:
             mixed_md += f"`{r['formula']}`: failed — {r['error']}\n\n"
             continue
@@ -199,7 +212,7 @@ Experts' mean per-image scale: n = {inter.get('scale_n', 0)}, mean {inter.get('s
 Agreement among the three experts on the scale: ICC(2,1) {ci(inter.get('scale_icc2_1'), inter.get('scale_icc2_1_ci_low'), inter.get('scale_icc2_1_ci_high'))}; within-image CV median {inter.get('scale_cv_within_image_median', float('nan')):.3f} (mean {inter.get('scale_cv_within_image_mean', float('nan')):.3f}). This directly measures the precision of probe-based calibration in these photographs.
 Intra-expert scale repeatability (20 repeats): {', '.join(f"expert {int(r['expert'])}: ICC {r.get('scale_icc2_1', float('nan')):.3f}, CV {r.get('scale_cv_repeat', float('nan')):.3f}" for _, r in intra.iterrows())}.
 
-Model mm was computed twice: global scale (primary) and expert per-image scale (secondary); both appear in class_agreement.csv and mm_agreement.csv.
+{scale_note} All four appear in class_agreement.csv and mm_agreement.csv.
 
 ## Frame-outside images: does the per-image expert scale close the gap to the clinical reference?
 {frame_txt or '(expert scale not available)'}
@@ -211,6 +224,7 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
     sec = cls[(cls["scale"] == "global") & (cls["subset"].str.contains("secondary")) & (cls["scoring"] == "strict")]
     sec = sec.iloc[0] if len(sec) else None
     mm_glob = mm_rows[(mm_rows["scale"] == "global")].set_index("comparator")
+    mm_glob_c = mm_rows[(mm_rows["scale"] == "global_corrected")].set_index("comparator")
 
     def num(label, v, lo, hi, n, fmt="{:.3f}"):
         if v is None or pd.isna(v):
@@ -225,6 +239,10 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
                     num("… PABAK", prim["pabak"], prim["pabak_ci_low"], prim["pabak_ci_high"], int(prim["n"]))]
     if sec is not None:
         numbers += [num("Model vs expert majority, linear-weighted κ (secondary: fixed test subset, strict)", sec["kappa_linear"], sec["kappa_linear_ci_low"], sec["kappa_linear_ci_high"], int(sec["n"]))]
+    prim_c = cls[(cls["scale"] == "global_corrected") & (cls["subset"].str.contains("primary")) & (cls["scoring"] == "strict")]
+    if len(prim_c):
+        r = prim_c.iloc[0]
+        numbers += [num(f"… corrected model values (offset_px {offset_px:+.0f}, secondary), linear-weighted κ (primary set, strict)", r["kappa_linear"], r["kappa_linear_ci_low"], r["kappa_linear_ci_high"], int(r["n"]))]
     len_row = cls[(cls["scale"] == "global") & (cls["subset"].str.contains("primary")) & (cls["scoring"] == "lenient")]
     if len(len_row):
         r = len_row.iloc[0]
@@ -236,10 +254,11 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
     if "mm4_icc2_1" in inter:
         numbers += [num("ICC(2,1), 3 experts + clinical reference", inter["mm4_icc2_1"], inter["mm4_icc2_1_ci_low"], inter["mm4_icc2_1_ci_high"], inter["mm4_n"])]
     for comp, label in (("expert_mean", "Model vs expert mean, ICC(2,1) mm"), ("clinical_reference", "Model vs clinical reference, ICC(2,1) mm")):
-        if comp in mm_glob.index and pd.notna(mm_glob.at[comp, "icc2_1"]):
-            r = mm_glob.loc[comp]
-            numbers += [num(label, r["icc2_1"], r["icc2_1_ci_low"], r["icc2_1_ci_high"], int(r["n"])),
-                        num(f"… bias (model − {comp.replace('_', ' ')}), mm", r["bias"], r["bias_ci_low"], r["bias_ci_high"], int(r["n"]), "{:+.2f}")]
+        for tbl, tag in ((mm_glob, "uncorrected, PRIMARY"), (mm_glob_c, "corrected, secondary")):
+            if comp in tbl.index and pd.notna(tbl.at[comp, "icc2_1"]):
+                r = tbl.loc[comp]
+                numbers += [num(f"{label} — {tag}", r["icc2_1"], r["icc2_1_ci_low"], r["icc2_1_ci_high"], int(r["n"])),
+                            num(f"… bias (model − {comp.replace('_', ' ')}), mm — {tag}", r["bias"], r["bias_ci_low"], r["bias_ci_high"], int(r["n"]), "{:+.2f}")]
     for _, r in intra.iterrows():
         numbers += [num(f"Intra-expert κ (linear), expert {int(r['expert'])}", r.get("kappa_linear"), r.get("kappa_linear_ci_low"), r.get("kappa_linear_ci_high"), int(r.get("n_class_pairs", 0))),
                     num(f"Intra-expert ICC(2,1) image mm, expert {int(r['expert'])}", r.get("icc2_1_image"), r.get("icc2_1_image_ci_low"), r.get("icc2_1_image_ci_high"), int(r.get("n_mm_pairs", 0)))]
@@ -248,7 +267,11 @@ Model mm was computed twice: global scale (primary) and expert per-image scale (
     for r in mixed:
         if "error" not in r and r["formula"].startswith("diff ~ 1 "):
             fe = r["fixed_effects"].loc["Intercept"]
-            numbers += [num("Tooth-level bias (mixed model intercept), mm", fe["estimate"], fe["ci_low"], fe["ci_high"], r["n_obs"], "{:+.3f}")]
+            numbers += [num("Tooth-level bias (mixed model intercept), mm — uncorrected (PRIMARY)", fe["estimate"], fe["ci_low"], fe["ci_high"], r["n_obs"], "{:+.3f}")]
+    for r in mixed_c:
+        if "error" not in r and r["formula"].startswith("diff ~ 1 "):
+            fe = r["fixed_effects"].loc["Intercept"]
+            numbers += [num("Tooth-level bias (mixed model intercept), mm — corrected (secondary)", fe["estimate"], fe["ci_low"], fe["ci_high"], r["n_obs"], "{:+.3f}")]
     numbers_md = "\n".join(numbers) + "\n\nE4 has no reference case in this dataset (per_class.csv shows n = 0); the E4/T4 branch is not validated.\n\n" + prespec_note + "\n"
     (out_dir / "manuscript_numbers.md").write_text(numbers_md, encoding="utf-8")
 
@@ -267,6 +290,7 @@ Rows are never dropped: empty rows, blank teeth, zero values, missing confidence
 Majority of three primary classes; unanimous {int((reference['reference_kind'] == 'unanimous').sum())}, majority {int((reference['reference_kind'] == 'majority').sum())}, consensus (blinded) {int((reference['reference_kind'] == 'consensus').sum())}, **consensus pending {len(pending)}** (excluded from the primary analysis; `consensus_pending.csv`; drop a `consensus.csv` with columns image,class into the forms directory to resolve), insufficient votes {int((reference['reference_kind'] == 'insufficient_votes').sum())}.
 
 ## Model vs expert reference — class (model = selected method mm + rule engine)
+{scale_note}
 Scoring: strict = model's first candidate; lenient = agreement if the expert class is among the model's candidates; lenient2 = also the expert's second candidate (reported only). Bootstrap CIs: {n_boot} resamples, seed {seed}.
 
 {md_table(cls[["scale", "subset", "scoring", "n", "n_consensus_pending_excluded", "n_model_unclassified", "kappa_linear", "kappa_linear_ci_low", "kappa_linear_ci_high", "kappa_unweighted", "observed_agreement", "pabak"]])}
@@ -298,7 +322,7 @@ Tooth-level analysis: `mixed_models.md` (random intercept per patient; tooth pos
 - Referans: çoğunluk; konsensüs bekleyen {len(pending)}.
 - Birincil (145 görüntü, OOF, katı, global ölçek): doğrusal ağırlıklı κ {ci(prim['kappa_linear'], prim['kappa_linear_ci_low'], prim['kappa_linear_ci_high']) if prim is not None else 'n/a'}, n = {int(prim['n']) if prim is not None else 0}. İkincil (sabit test): κ {ci(sec['kappa_linear'], sec['kappa_linear_ci_low'], sec['kappa_linear_ci_high']) if sec is not None else 'n/a'}.
 - Uzmanlar arası Fleiss κ {ci(inter.get('fleiss_kappa'), inter.get('fleiss_kappa_ci_low'), inter.get('fleiss_kappa_ci_high'))}; mm ICC(2,1) {inter.get('mm_icc2_1', float('nan')):.3f}; ölçek ICC(2,1) {inter.get('scale_icc2_1', float('nan')):.3f}, görüntü içi CV medyan {inter.get('scale_cv_within_image_median', float('nan')):.3f}.
-- Model–uzman ortalaması mm: ICC(2,1) {mm_glob.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob.index else float('nan'):.3f}, sapma {mm_glob.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob.index else float('nan'):+.2f} mm.
+- Model–uzman ortalaması mm (düzeltmesiz, birincil): ICC(2,1) {mm_glob.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob.index else float('nan'):.3f}, sapma {mm_glob.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob.index else float('nan'):+.2f} mm; düzeltilmiş (ikincil, offset_px {offset_px:+.0f}): ICC {mm_glob_c.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob_c.index else float('nan'):.3f}, sapma {mm_glob_c.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob_c.index else float('nan'):+.2f} mm.
 - Karma modeller: {len([r for r in mixed if 'error' not in r])}/3 kuruldu; {len([r for r in mixed if r.get('estimator', '').startswith('MixedLM')])} tanesi MixedLM, gerisi sınır durumu (hasta varyansı ≈ 0) → küme-dayanıklı OLS.
 - Üretilen dosyalar: form_qc.csv, forms_long.csv, reference_standard.csv, consensus_pending.csv, class_agreement.csv, per_class.csv, strata.csv, intra_expert.csv, inter_expert.json, mm_agreement.csv, tooth_level_long.csv, mixed_models.md, scale_agreement.md, frame_scale_comparison.csv, expert_summary.md, manuscript_numbers.md.
 """

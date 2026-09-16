@@ -6,6 +6,7 @@
 | Figure: segmentation examples GT vs prediction (Reviewer 1) | done |  | outputs/05_predictions/test | outputs/07_report/figures/segmentation_examples.png |
 | Figure: measurement vs clinical reference, GT masks (replaces Figure 6) | done |  |  | outputs/07_report/figures/measurement_gt_masks.png |
 | Figure: measurement vs clinical reference, predicted masks (OOF) | done |  |  | outputs/07_report/figures/measurement_predicted_masks.png |
+| Figure: measurement vs clinical reference, predicted masks (OOF), corrected (secondary) | done |  |  | outputs/07_report/figures/measurement_predicted_masks_corrected.png |
 | Figure: learning curve (Reviewers 2 & 4, Supplementary S1) | done |  | outputs/05_predictions/learning_curve.png | outputs/07_report/figures/learning_curve.png |
 | Figure: boundary error, upper/lower gingiva edge (Reviewer 2 #10) | done |  | outputs/05_predictions/boundary_error.csv | outputs/07_report/figures/boundary_error.png |
 | Figure: GT overlay examples (Stage 2) | done |  | outputs/02_measure/gt_overlay_examples.png | outputs/07_report/figures/gt_overlay_examples.png |

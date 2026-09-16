@@ -4,7 +4,7 @@ Experts' mean per-image scale: n = 134, mean 16.89 px/mm (SD between images 0.94
 Agreement among the three experts on the scale: ICC(2,1) 0.356 [0.249, 0.465]; within-image CV median 0.048 (mean 0.051). This directly measures the precision of probe-based calibration in these photographs.
 Intra-expert scale repeatability (20 repeats): expert 1: ICC 0.604, CV 0.060, expert 2: ICC 0.304, CV 0.060, expert 3: ICC 0.222, CV 0.084.
 
-Model mm was computed twice: global scale (primary) and expert per-image scale (secondary); both appear in class_agreement.csv and mm_agreement.csv.
+**Model table comes from ground-truth masks (Stage 3 / synthetic dry run): the post-hoc offset applies to predicted masks only, so offset_px = 0 here and the corrected columns equal the uncorrected ones.** Model scales: `global` = uncorrected, global 16.8397 px/mm (PRIMARY); `global_corrected` = post-hoc pixel offset +0 px of config.yaml at the global scale (+0.00 mm; secondary); `expert` / `expert_corrected` = the experts' mean per-image scale, the same pixel offset converted with that per-image scale (secondary). Corrected values below 0 mm are clipped to 0 and flagged (`model_clipped_*`; clipped: global 0, expert 0). All four appear in class_agreement.csv and mm_agreement.csv.
 
 ## Frame-outside images: does the per-image expert scale close the gap to the clinical reference?
 | frame | n | mae_global_scale | mae_expert_scale | mean_expert_px_per_mm |

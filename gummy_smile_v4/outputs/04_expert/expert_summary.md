@@ -17,6 +17,7 @@ Rows are never dropped: empty rows, blank teeth, zero values, missing confidence
 Majority of three primary classes; unanimous 48, majority 85, consensus (blinded) 0, **consensus pending 12** (excluded from the primary analysis; `consensus_pending.csv`; drop a `consensus.csv` with columns image,class into the forms directory to resolve), insufficient votes 0.
 
 ## Model vs expert reference — class (model = selected method mm + rule engine)
+**Model table comes from ground-truth masks (Stage 3 / synthetic dry run): the post-hoc offset applies to predicted masks only, so offset_px = 0 here and the corrected columns equal the uncorrected ones.** Model scales: `global` = uncorrected, global 16.8397 px/mm (PRIMARY); `global_corrected` = post-hoc pixel offset +0 px of config.yaml at the global scale (+0.00 mm; secondary); `expert` / `expert_corrected` = the experts' mean per-image scale, the same pixel offset converted with that per-image scale (secondary). Corrected values below 0 mm are clipped to 0 and flagged (`model_clipped_*`; clipped: global 0, expert 0).
 Scoring: strict = model's first candidate; lenient = agreement if the expert class is among the model's candidates; lenient2 = also the expert's second candidate (reported only). Bootstrap CIs: 2000 resamples, seed 42.
 
 | scale | subset | scoring | n | n_consensus_pending_excluded | n_model_unclassified | kappa_linear | kappa_linear_ci_low | kappa_linear_ci_high | kappa_unweighted | observed_agreement | pabak |
@@ -27,12 +28,24 @@ Scoring: strict = model's first candidate; lenient = agreement if the expert cla
 | global | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.471 | -0.145 | 0.836 | 0.357 | 0.815 | 0.753 |
 | global | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
 | global | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
+| global_corrected | all 145 images, OOF (primary) | strict | 133 | 12 | 0 | 0.549 | 0.388 | 0.688 | 0.499 | 0.797 | 0.729 |
+| global_corrected | all 145 images, OOF (primary) | lenient | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
+| global_corrected | all 145 images, OOF (primary) | lenient2 | 133 | 12 | 0 | 0.717 | 0.567 | 0.832 | 0.685 | 0.865 | 0.820 |
+| global_corrected | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.471 | -0.145 | 0.836 | 0.357 | 0.815 | 0.753 |
+| global_corrected | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
+| global_corrected | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.724 | 0.276 | 1.000 | 0.676 | 0.889 | 0.852 |
 | expert | all 145 images, OOF (primary) | strict | 133 | 12 | 0 | 0.475 | 0.322 | 0.607 | 0.412 | 0.767 | 0.689 |
 | expert | all 145 images, OOF (primary) | lenient | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
 | expert | all 145 images, OOF (primary) | lenient2 | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
 | expert | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.360 | -0.110 | 0.685 | 0.282 | 0.815 | 0.753 |
 | expert | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
 | expert | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
+| expert_corrected | all 145 images, OOF (primary) | strict | 133 | 12 | 0 | 0.475 | 0.322 | 0.607 | 0.412 | 0.767 | 0.689 |
+| expert_corrected | all 145 images, OOF (primary) | lenient | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
+| expert_corrected | all 145 images, OOF (primary) | lenient2 | 133 | 12 | 0 | 0.698 | 0.551 | 0.814 | 0.668 | 0.857 | 0.810 |
+| expert_corrected | fixed test subset (secondary) | strict | 27 | 2 | 0 | 0.360 | -0.110 | 0.685 | 0.282 | 0.815 | 0.753 |
+| expert_corrected | fixed test subset (secondary) | lenient | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
+| expert_corrected | fixed test subset (secondary) | lenient2 | 27 | 2 | 0 | 0.803 | 0.362 | 1.000 | 0.765 | 0.926 | 0.901 |
 
 ### Per class (primary set, strict, global scale; counts and Wilson 95 % CIs)
 | class | n_reference | n_predicted | sensitivity | sensitivity_ci_low | sensitivity_ci_high | specificity | specificity_ci_low | specificity_ci_high |
@@ -68,10 +81,20 @@ With the clinical reference observer as 4th rater: ICC(2,1) 0.993 [0.991, 0.995]
 | global | expert_3 | 145 | 0.546 | 0.772 | 0.863 | 0.812 | 0.900 | 0.154 | 0.030 | 0.279 | -1.333 | 1.642 | -0.047 | 0.292 |
 | global | expert_mean | 145 | 0.540 | 0.754 | 0.868 | 0.819 | 0.904 | 0.155 | 0.034 | 0.277 | -1.297 | 1.607 | -0.037 | 0.394 |
 | global | clinical_reference | 145 | 0.542 | 0.756 | 0.868 | 0.819 | 0.904 | 0.150 | 0.028 | 0.272 | -1.307 | 1.608 | -0.044 | 0.315 |
+| global_corrected | expert_1 | 145 | 0.555 | 0.768 | 0.862 | 0.812 | 0.900 | 0.160 | 0.036 | 0.284 | -1.317 | 1.637 | -0.035 | 0.437 |
+| global_corrected | expert_2 | 142 | 0.537 | 0.746 | 0.870 | 0.822 | 0.905 | 0.139 | 0.017 | 0.262 | -1.303 | 1.582 | -0.051 | 0.250 |
+| global_corrected | expert_3 | 145 | 0.546 | 0.772 | 0.863 | 0.812 | 0.900 | 0.154 | 0.030 | 0.279 | -1.333 | 1.642 | -0.047 | 0.292 |
+| global_corrected | expert_mean | 145 | 0.540 | 0.754 | 0.868 | 0.819 | 0.904 | 0.155 | 0.034 | 0.277 | -1.297 | 1.607 | -0.037 | 0.394 |
+| global_corrected | clinical_reference | 145 | 0.542 | 0.756 | 0.868 | 0.819 | 0.904 | 0.150 | 0.028 | 0.272 | -1.307 | 1.608 | -0.044 | 0.315 |
 | expert | expert_1 | 145 | 0.574 | 0.808 | 0.847 | 0.792 | 0.887 | 0.146 | 0.015 | 0.277 | -1.417 | 1.709 | -0.042 | 0.376 |
 | expert | expert_2 | 142 | 0.555 | 0.778 | 0.857 | 0.806 | 0.895 | 0.120 | -0.008 | 0.248 | -1.393 | 1.633 | -0.063 | 0.176 |
 | expert | expert_3 | 145 | 0.574 | 0.816 | 0.845 | 0.791 | 0.886 | 0.140 | 0.007 | 0.272 | -1.442 | 1.722 | -0.055 | 0.254 |
 | expert | expert_mean | 145 | 0.561 | 0.796 | 0.851 | 0.799 | 0.891 | 0.141 | 0.012 | 0.270 | -1.400 | 1.682 | -0.045 | 0.339 |
 | expert | clinical_reference | 145 | 0.563 | 0.799 | 0.851 | 0.799 | 0.891 | 0.136 | 0.006 | 0.266 | -1.412 | 1.685 | -0.052 | 0.272 |
+| expert_corrected | expert_1 | 145 | 0.574 | 0.808 | 0.847 | 0.792 | 0.887 | 0.146 | 0.015 | 0.277 | -1.417 | 1.709 | -0.042 | 0.376 |
+| expert_corrected | expert_2 | 142 | 0.555 | 0.778 | 0.857 | 0.806 | 0.895 | 0.120 | -0.008 | 0.248 | -1.393 | 1.633 | -0.063 | 0.176 |
+| expert_corrected | expert_3 | 145 | 0.574 | 0.816 | 0.845 | 0.791 | 0.886 | 0.140 | 0.007 | 0.272 | -1.442 | 1.722 | -0.055 | 0.254 |
+| expert_corrected | expert_mean | 145 | 0.561 | 0.796 | 0.851 | 0.799 | 0.891 | 0.141 | 0.012 | 0.270 | -1.400 | 1.682 | -0.045 | 0.339 |
+| expert_corrected | clinical_reference | 145 | 0.563 | 0.799 | 0.851 | 0.799 | 0.891 | 0.136 | 0.006 | 0.266 | -1.412 | 1.685 | -0.052 | 0.272 |
 
 Tooth-level analysis: `mixed_models.md` (random intercept per patient; tooth position and `alignment_uncertain` as fixed effects). Scale comparison: `scale_agreement.md`. Numbers for the manuscript: `manuscript_numbers.md`.

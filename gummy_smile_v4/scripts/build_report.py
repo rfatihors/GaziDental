@@ -50,8 +50,13 @@ def main() -> int:
         status.append({"item": "Figure: measurement vs clinical reference, GT masks", "status": "pending", "needs": str(per), "path": str(fig_dir / "measurement_gt_masks.png")})
     per6 = prediction_eval_dir / "per_image_results.csv"
     if per6.exists():
+        p6 = pd.read_csv(per6)
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)",
-                       **F.scatter_and_bland_altman(pd.read_csv(per6), fig_dir / "measurement_predicted_masks.png", "Full pipeline (predicted masks, out-of-fold) vs clinical reference", subset_col=None)})
+                       **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks.png", "Full pipeline (predicted masks, out-of-fold) vs clinical reference — uncorrected (primary)", subset_col=None)})
+        if "selected_mm_corrected" in p6.columns:
+            status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF), corrected (secondary)",
+                           **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks_corrected.png",
+                                                        f"Full pipeline, out-of-fold masks, corrected by the post-hoc pixel offset ({int(p6['offset_px'].iloc[0]):+d} px) — secondary", value_col="selected_mm_corrected", subset_col=None)})
     else:
         F.placeholder(fig_dir / "measurement_predicted_masks.png", "Measurement on predicted masks (OOF)", "Stage 6: scripts/run_prediction_eval.py")
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)", "status": "pending", "needs": "Stage 6 outputs", "path": str(fig_dir / "measurement_predicted_masks.png")})
@@ -90,6 +95,19 @@ def main() -> int:
         return f"{'✅' if s['status'] == 'done' else '⏳'} `{Path(s.get('path', '?')).relative_to(out) if s.get('path', '?').startswith(str(out)) else s.get('path', '?')}`"
 
     ms = T.measurement_accuracy(oracle_dir, prediction_eval_dir)[1]
+    r2_10 = "Boundary IoU and upper (lip-side) / lower (gingival margin) edge distance errors on the test set"
+    bset = prediction_eval_dir / "boundary_by_set.csv"
+    if bset.exists():
+        b6 = pd.read_csv(bset).set_index("set")
+        a6 = b6.loc["(a) OOF, 145 reference high"]
+        tm = json.loads((pred_dir / "test_metrics.json").read_text()) if (pred_dir / "test_metrics.json").exists() else {}
+        pc = tm.get("per_class", {})
+        off_px = cfg["measurement"].get("offset_px", 0)
+        r2_10 = (f"The mAP gap between lip (seg mAP@50 {pc.get('dudak', {}).get('seg_map50', float('nan')):.2f}) and gingiva ({pc.get('diseti', {}).get('seg_map50', float('nan')):.2f}) is decomposed at the boundary: "
+                 f"on the 145 reference images (OOF) the upper, lip-side gingiva edge is accurate (MAE {a6['gingiva_top_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_top_edge_bias_mm_mean']:+.2f} mm) while the lower, festooned gingival margin is placed systematically too low "
+                 f"(MAE {a6['gingiva_bottom_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm; gingiva mask IoU {a6['gingiva_mask_iou_mean']:.2f}, lip IoU {a6['lip_mask_iou_mean']:.2f}). "
+                 f"The gap is therefore not model incapacity but a constant over-inclusion of the thin lower margin — the same shift in every fold and in the final model — which the pipeline reports as such and corrects post hoc as a secondary result "
+                 f"(pixel offset {off_px:+d} px, `06_prediction/offset_correction.md`, `offset_checks.md`). Low/normal smile lines lower the pooled test IoU further because their annotated gingiva is thin or absent (`06_prediction/boundary_by_set.md`)")
     rev = f"""# REVIZYON_OZETI — reviewer items and the outputs that answer them
 
 Legend: ✅ available now, ⏳ pending (what is needed is written in `report_status.md`). Paths are relative to `outputs/07_report/` unless absolute.
@@ -100,7 +118,7 @@ Legend: ✅ available now, ⏳ pending (what is needed is written in `report_sta
 | R1 — show segmentation outputs | Six images, GT vs predicted class masks side by side | {cell('Figure: segmentation examples')} |
 | R2 #5 / R4 — how 1,315 images became 2,235 / 3,403 | Instances ≠ images (papillae annotated separately: 3,938 gingiva + 1,318 lip instances) and the Roboflow 2× augmentation of the train split (2,814/923 → 5,628/1,846); exact Roboflow version metadata still to be exported by the user | `tables/dataset_counts.md`, audit §5.3 |
 | R2 #6 / R4 (CLAIM) — data leakage | Content-based check found 55 same-patient pairs (22 cross-split, 15 touching the original test set); one image per patient kept, patient-level re-split with a fixed test set, model retrained | {cell('Table: Dataset before/after')} (pairs: {T.dataset_counts(manifest, splits, pairs)[1]['same_patient_pairs_detected']}) |
-| R2 #10 — boundary accuracy | Boundary IoU and upper (lip-side) / lower (gingival margin) edge distance errors on the test set | {cell('Figure: boundary error')} |
+| R2 #10 — boundary accuracy (lip vs gingiva mAP gap) | {r2_10} | {cell('Figure: boundary error')}; `{prediction_eval_dir / 'boundary_by_set.md'}`, `{prediction_eval_dir / 'error_decomposition.md'}` |
 | R2 / R4 — G*Power calculation inappropriate | Calculation removed; learning curve for data adequacy + precision-based justification for the agreement analysis | {cell('Figure: learning curve')}; precision note: {ms.get('precision_note', 'pending')} |
 | R3 — demographics / sex distribution | Age/sex coverage per group on the cleaned dataset ("n with a record") | {cell('Table: Demographic coverage')} |
 | R4 — calibration (px/mm) | Reference: per-image 1 mm probe interval in ImageJ on 2698×1799 copies; pipeline: single global scale fitted on the dev subset ({ms.get('selected_method', '?')}), per-image scale variability and expert-entered scales reported | `{oracle_dir / 'scale_estimation.md'}`, `{expert_dir / 'scale_agreement.md'}` (expert part ⏳ real forms) |

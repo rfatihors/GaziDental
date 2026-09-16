@@ -17,8 +17,14 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
 | OOF region i vs GT-mask region i | 4 | 21 | 144 | 0.635 | 0.578 | 0.482 | 0.956 |
 | OOF region i vs GT-mask region i | 5 | 22 | 144 | 0.702 | 0.525 | 0.749 | 0.919 |
 | OOF region i vs GT-mask region i | 6 | 23 | 144 | 0.912 | 0.635 | 1.069 | 0.787 |
+| OOF region i (corrected, secondary) vs reference tooth i | 1 | 13 | 144 | 0.686 | -0.001 | 1.063 | 0.829 |
+| OOF region i (corrected, secondary) vs reference tooth i | 2 | 12 | 144 | 0.633 | 0.033 | 0.925 | 0.874 |
+| OOF region i (corrected, secondary) vs reference tooth i | 3 | 11 | 144 | 0.455 | -0.239 | 0.687 | 0.910 |
+| OOF region i (corrected, secondary) vs reference tooth i | 4 | 21 | 144 | 0.542 | -0.206 | 0.892 | 0.846 |
+| OOF region i (corrected, secondary) vs reference tooth i | 5 | 22 | 144 | 0.673 | -0.115 | 1.159 | 0.798 |
+| OOF region i (corrected, secondary) vs reference tooth i | 6 | 23 | 144 | 0.668 | 0.179 | 1.045 | 0.810 |
 
-### Pipeline (OOF) − clinical reference
+### Pipeline (OOF, uncorrected, PRIMARY) − clinical reference
 - `diff ~ 1 + (1 | patient)` — MixedLM (REML); n = 864 teeth in 144 patients; var(patient) 0.435, var(residual) 0.586, ICC(patient) 0.43
   - Intercept: +0.684 mm [+0.565, +0.804], p = 2.26e-29
 - `diff ~ C(tooth) + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 1.000, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
@@ -36,6 +42,25 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
   - C(tooth)[T.22]: +0.172 mm [-0.017, +0.362], p = 0.075
   - C(tooth)[T.23]: +0.442 mm [+0.267, +0.617], p = 7.56e-07
   - alignment_uncertain[T.True]: +0.304 mm [-0.009, +0.616], p = 0.0567
+
+### Pipeline (OOF, corrected: offset_px -13 (-0.77 mm at 16.84 px/mm), secondary) − clinical reference
+- `diff ~ 1 + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.448, ICC(patient) 0.00; note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
+  - Intercept: -0.058 mm [-0.176, +0.059], p = 0.331
+- `diff ~ C(tooth) + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.947, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
+  - Intercept: -0.239 mm [-0.351, -0.126], p = 3.18e-05
+  - C(tooth)[T.12]: +0.272 mm [+0.156, +0.387], p = 4.36e-06
+  - C(tooth)[T.13]: +0.237 mm [+0.076, +0.399], p = 0.00399
+  - C(tooth)[T.21]: +0.033 mm [-0.091, +0.156], p = 0.602
+  - C(tooth)[T.22]: +0.123 mm [-0.055, +0.302], p = 0.176
+  - C(tooth)[T.23]: +0.417 mm [+0.249, +0.585], p = 1.13e-06
+- `diff ~ C(tooth) + alignment_uncertain + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.934, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
+  - Intercept: -0.293 mm [-0.423, -0.163], p = 9.68e-06
+  - C(tooth)[T.12]: +0.272 mm [+0.156, +0.387], p = 4.42e-06
+  - C(tooth)[T.13]: +0.237 mm [+0.076, +0.399], p = 0.00401
+  - C(tooth)[T.21]: +0.033 mm [-0.091, +0.156], p = 0.602
+  - C(tooth)[T.22]: +0.123 mm [-0.055, +0.302], p = 0.176
+  - C(tooth)[T.23]: +0.417 mm [+0.249, +0.586], p = 1.14e-06
+  - alignment_uncertain[T.True]: +0.312 mm [+0.011, +0.613], p = 0.0424
 
 ### Pipeline (OOF) − GT-mask measurement (segmentation part only)
 - `diff ~ 1 + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.434, ICC(patient) 0.00; note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead

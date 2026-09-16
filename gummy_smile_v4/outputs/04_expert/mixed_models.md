@@ -1,6 +1,8 @@
 # Tooth-level mixed models (model − expert mean, per tooth; random intercept per patient)
 
-## `diff ~ 1 + (1 | patient)`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = True)
+Uncorrected model values (PRIMARY) first, then the corrected values (secondary, `global_corrected`).
+
+## `diff ~ 1 + (1 | patient)  [uncorrected, PRIMARY]`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = True)
 
 Note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
 
@@ -10,7 +12,7 @@ Note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefin
 
 variance: between-patient 0.0000, residual 0.5767; derived tooth-level ICC(patient) = 0.000; AIC 2571.5
 
-## `diff ~ C(tooth) + (1 | patient)`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = False)
+## `diff ~ C(tooth) + (1 | patient)  [uncorrected, PRIMARY]`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = False)
 
 Note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
 
@@ -25,7 +27,7 @@ Note: mixed model failed (Singular matrix); random-intercept variance at the bou
 
 variance: between-patient 0.0000, residual 1.1197; derived tooth-level ICC(patient) = 0.000; AIC 2573.3
 
-## `diff ~ C(tooth) + alignment_uncertain + (1 | patient)`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = False)
+## `diff ~ C(tooth) + alignment_uncertain + (1 | patient)  [uncorrected, PRIMARY]`  (n_obs = 870, patients = 145, estimator = OLS, cluster-robust SE (patient), converged = False)
 
 Note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
 

@@ -92,14 +92,18 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
     if acc6 is not None and acc6.exists():
         # Stage 6 (scripts/run_prediction_eval.py): method and scale fixed from Stage 3, nothing re-fitted
         pa = pd.read_csv(acc6)
-        wanted = [("(a) OOF masks, all reference images", f"Predicted masks (OOF, fold models), all reference images, {sel} (PRIMARY)"),
-                  ("(a) OOF, Stage-3 holdout", f"Predicted masks (OOF), Stage-3 holdout images, {sel}"),
-                  ("(b) final model masks", f"Predicted masks (final model), test-set high images, {sel} (secondary)")]
-        for prefix, label in wanted:
-            hit = pa[pa["set"].str.startswith(prefix)]
+        wanted = [("(a) OOF masks, all reference images [PRIMARY]", f"Predicted masks (OOF, fold models), all reference images, {sel} — uncorrected (PRIMARY)"),
+                  ("(a) OOF masks, all reference images [PRIMARY] — corrected", f"Predicted masks (OOF, fold models), all reference images, {sel} — corrected, offset_px (secondary)"),
+                  ("(a) OOF, Stage-3 holdout images only (scale never fitted on these)", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — uncorrected"),
+                  ("(a) OOF, Stage-3 holdout images only (scale never fitted on these) — corrected", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — corrected"),
+                  ("(b) final model masks, test high images [secondary set]", f"Predicted masks (final model), test-set high images, {sel} — uncorrected"),
+                  ("(b) final model masks, test high images [secondary set] — corrected", f"Predicted masks (final model), test-set high images, {sel} — corrected")]
+        for name, label in wanted:
+            hit = pa[pa["set"] == name]
             if len(hit) and pd.notna(hit.iloc[0].get("mae", np.nan)):
                 r6 = hit.iloc[0]
-                rows.append(row(label, r6, r6["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"], "kappa_linear": r6.get("threshold_kappa_linear", np.nan)}))
+                rows.append(row(label, r6, r6["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"], "correction": r6.get("correction", ""),
+                                                     "kappa_linear": r6.get("threshold_kappa_linear", np.nan), "n_clipped": r6.get("n_clipped", np.nan)}))
         status["prediction_rows"] = "done"
         status["prediction_source"] = str(acc6)
     else:

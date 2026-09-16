@@ -41,6 +41,7 @@ from gsv4.eval.prediction import (  # noqa: E402
     measurement_table, seg_error_vs_boundary, tooth_long, tooth_table,
 )
 from gsv4.io.forms import TEETH  # noqa: E402
+from gsv4.measure.calibration import corrected_mm, offset_mm_at, offset_px_from_config  # noqa: E402
 from gsv4.measure.qc import QCFlag  # noqa: E402
 from gsv4.report.figures import PLOT_DPI, scatter_and_bland_altman  # noqa: E402
 from gsv4.rules.thresholds import label_for_mm  # noqa: E402
@@ -48,12 +49,12 @@ from gsv4.train.evaluate_test import boundary_table  # noqa: E402
 
 # Okabe–Ito (colour-blind safe), fixed order: (a) OOF, (b) test high final, low, normal
 SET_COLOURS = {"a": "#0072B2", "b": "#D55E00", "low": "#009E73", "normal": "#CC79A7"}
-MEAS_COLS = ["set", "masks", "n", "n_segmentation_failure", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
+MEAS_COLS = ["set", "masks", "correction", "n", "n_segmentation_failure", "n_clipped", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
              "ba_bias", "ba_bias_ci_low", "ba_bias_ci_high", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p",
              "threshold_agreement", "threshold_kappa_linear", "threshold_kappa_linear_ci_low", "threshold_kappa_linear_ci_high", "within_0_5_mm", "within_1_mm"]
 
 
-def build_per_image(rows: pd.DataFrame, meas: pd.DataFrame, stage3: pd.DataFrame, combo: str, k: float, k_alt: dict, masks: str) -> pd.DataFrame:
+def build_per_image(rows: pd.DataFrame, meas: pd.DataFrame, stage3: pd.DataFrame, combo: str, k: float, k_alt: dict, masks: str, offset_px: float = 0.0) -> pd.DataFrame:
     """Stage-3-compatible per-image table (fixed method and scale) plus GT-mask columns."""
     df = rows.merge(meas.drop(columns=["image", "group", "width", "height"]), on="uid", how="left")
     s3 = stage3.set_index("uid")
@@ -74,6 +75,14 @@ def build_per_image(rows: pd.DataFrame, meas: pd.DataFrame, stage3: pd.DataFrame
     per["selected_label"] = per["selected_mm"].map(label_for_mm)
     for i in range(1, 7):
         per[f"selected_region_{i}_mm"] = df[f"{combo}_region_{i}_px"] / k
+    # secondary: pixel offset of config.yaml at the global scale, clipped at 0 and flagged
+    c = corrected_mm(df[f"{combo}_px"], k, offset_px)
+    per["selected_mm_corrected"] = pd.Series(c["mm"], index=df.index)
+    per["clipped"] = pd.Series(c["clipped"], index=df.index)
+    per["selected_label_corrected"] = per["selected_mm_corrected"].map(label_for_mm)
+    per["offset_px"] = float(offset_px)
+    for i in range(1, 7):
+        per[f"selected_region_{i}_mm_corrected"] = pd.Series(corrected_mm(df[f"{combo}_region_{i}_px"], k, offset_px)["mm"], index=df.index)
     for name, ka in k_alt.items():
         per[f"{name}_mm"] = df[f"{name}_px"] / ka
     per["gap_median_px"] = df["gap_median_px"]
@@ -174,6 +183,9 @@ def main() -> int:
     mcfg = cfg["measurement"]
     combo = combo_name(mcfg["method"]["regioning"], mcfg["method"]["estimator"], bool(mcfg["method"]["anchored"]))
     k = float(mcfg["px_per_mm"])
+    off = offset_px_from_config(cfg)
+    off_mm = offset_mm_at(k, off)
+    corr_tag = f"offset_px {off:+.0f} ({off_mm:+.2f} mm at {k:.2f} px/mm), secondary"
     deviations: list = []
 
     # ---- inputs
@@ -210,12 +222,12 @@ def main() -> int:
     rows = ref[rows_cols].reset_index(drop=True)
     print(f"[stage6] measuring {len(rows)} OOF masks with {combo} at {k:.4f} px/mm …")
     meas_oof = measure_images(rows, cfg, coco_root, mask_source=str(oof_dir))
-    per = build_per_image(rows, meas_oof, stage3, combo, k, k_alt, "oof")
+    per = build_per_image(rows, meas_oof, stage3, combo, k, k_alt, "oof", off)
     per.to_csv(out_dir / "per_image_results.csv", index=False)
     rows_t = rows[rows["split"] == "test"].reset_index(drop=True)
     print(f"[stage6] measuring {len(rows_t)} test-set masks of the final model …")
     meas_t = measure_images(rows_t, cfg, coco_root, mask_source=str(test_dir))
-    per_t = build_per_image(rows_t, meas_t, stage3, combo, k, k_alt, "final")
+    per_t = build_per_image(rows_t, meas_t, stage3, combo, k, k_alt, "final", off)
     per_t.to_csv(out_dir / "per_image_results_test.csv", index=False)
     n_missing_t = int(per_t["mask_missing"].sum())
     if n_missing_t:
@@ -235,23 +247,34 @@ def main() -> int:
         "(a) sensitivity: without zenith-fallback images": ~per["alignment_uncertain"],
         "(a) sensitivity: without empty predictions": ~per["empty_prediction"],
     }
-    acc = measurement_table(per, sets_a, n_boot=args.n_boot, seed=seed)
-    acc.insert(1, "masks", "OOF (fold models)")
-    acc_b = measurement_table(per_t, {"(b) final model masks, test high images [secondary]": pd.Series(True, index=per_t.index)}, n_boot=args.n_boot, seed=seed)
-    acc_b.insert(1, "masks", "final model")
+    def both(per_df: pd.DataFrame, sets: dict, masks_label: str) -> pd.DataFrame:
+        """Every set twice: uncorrected (PRIMARY) first, then corrected (secondary)."""
+        u = measurement_table(per_df, sets, n_boot=args.n_boot, seed=seed)
+        u.insert(1, "masks", masks_label); u.insert(2, "correction", "none, PRIMARY"); u["n_clipped"] = 0
+        c = measurement_table(per_df, sets, value_col="selected_mm_corrected", n_boot=args.n_boot, seed=seed)
+        c.insert(1, "masks", masks_label); c.insert(2, "correction", corr_tag)
+        c["set"] = c["set"] + " — corrected"
+        c["n_clipped"] = [int(per_df.loc[m.reindex(per_df.index).fillna(False).astype(bool), "clipped"].sum()) for m in sets.values()]
+        rows = []
+        for i in range(len(u)):
+            rows.append(u.iloc[i]); rows.append(c.iloc[i])
+        return pd.DataFrame(rows).reset_index(drop=True)
+
+    acc = both(per, sets_a, "OOF (fold models)")
+    acc_b = both(per_t, {"(b) final model masks, test high images [secondary set]": pd.Series(True, index=per_t.index)}, "final model")
     acc_gt = measurement_table(per, {"GT masks, all reference images (Stage 3, same method and scale)": T, "GT masks, Stage-3 holdout": per["split"] == "holdout"},
                                value_col="gt_mm", n_boot=args.n_boot, seed=seed)
-    acc_gt.insert(1, "masks", "ground truth")
+    acc_gt.insert(1, "masks", "ground truth"); acc_gt.insert(2, "correction", "n/a (GT masks)")
     parts = [acc, acc_b, acc_gt]
     if k_alt:
         acc_alt = measurement_table(per, {f"(a) OOF, {alt} at its Stage-3 scale {k_alt[alt]:.2f} px/mm (fallback sensitivity)": T}, value_col=f"{alt}_mm", n_boot=args.n_boot, seed=seed)
-        acc_alt.insert(1, "masks", "OOF (fold models)")
+        acc_alt.insert(1, "masks", "OOF (fold models)"); acc_alt.insert(2, "correction", "none")
         parts.append(acc_alt)
     acc_all = pd.concat(parts, ignore_index=True)
     acc_all = acc_all[[c for c in MEAS_COLS if c in acc_all.columns]]
     acc_all.to_csv(out_dir / "measurement_accuracy.csv", index=False)
-    prim = acc_all.iloc[0]
-    sec = acc_b.iloc[0]
+    prim, prim_c = acc_all.iloc[0], acc_all.iloc[1]
+    sec, sec_c = acc_b.iloc[0], acc_b.iloc[1]
     gt_all = acc_gt.iloc[0]
     fb = fallback_rate(per)
     fb_gt = fallback_rate(stage3)
@@ -262,6 +285,8 @@ def main() -> int:
     ok_b = per_t["selected_mm"].notna() & per_t["ref_mm"].notna()
     ct_b = label_confusion(per_t.loc[ok_b, "ref_label"], per_t.loc[ok_b, "selected_label"])
     ct_gt = label_confusion(per.loc[ok_a, "ref_label"], per.loc[ok_a, "gt_label"])
+    ct_a_c = label_confusion(per.loc[ok_a, "ref_label"], per.loc[ok_a, "selected_label_corrected"])
+    ct_b_c = label_confusion(per_t.loc[ok_b, "ref_label"], per_t.loc[ok_b, "selected_label_corrected"])
     class_md = f"""# Threshold-class agreement (Table 1 labels; a measurement check, not a clinical validation)
 
 Rows = clinical reference label, columns = pipeline label. Overlapping bands give combined labels (E1-E2, E2-E3).
@@ -271,10 +296,20 @@ observed agreement {100 * prim['threshold_agreement']:.1f} %, linear-weighted κ
 
 {md_table(ct_a.reset_index())}
 
-## (b) final model, test high images (n = {int(ok_b.sum())}) — secondary
+### (a) corrected ({corr_tag})
+observed agreement {100 * prim_c['threshold_agreement']:.1f} %, linear-weighted κ {prim_c['threshold_kappa_linear']:.3f} [{prim_c['threshold_kappa_linear_ci_low']:.3f}, {prim_c['threshold_kappa_linear_ci_high']:.3f}]; clipped to 0: {int(prim_c['n_clipped'])}
+
+{md_table(ct_a_c.reset_index())}
+
+## (b) final model, test high images (n = {int(ok_b.sum())}) — secondary set
 observed agreement {100 * sec['threshold_agreement']:.1f} %, linear-weighted κ {sec['threshold_kappa_linear']:.3f} [{sec['threshold_kappa_linear_ci_low']:.3f}, {sec['threshold_kappa_linear_ci_high']:.3f}]
 
 {md_table(ct_b.reset_index())}
+
+### (b) corrected ({corr_tag})
+observed agreement {100 * sec_c['threshold_agreement']:.1f} %, linear-weighted κ {sec_c['threshold_kappa_linear']:.3f} [{sec_c['threshold_kappa_linear_ci_low']:.3f}, {sec_c['threshold_kappa_linear_ci_high']:.3f}]; clipped to 0: {int(sec_c['n_clipped'])}
+
+{md_table(ct_b_c.reset_index())}
 
 ## GT masks, all reference images (Stage 3 geometry only)
 observed agreement {100 * gt_all['threshold_agreement']:.1f} %, linear-weighted κ {gt_all['threshold_kappa_linear']:.3f} [{gt_all['threshold_kappa_linear_ci_low']:.3f}, {gt_all['threshold_kappa_linear_ci_high']:.3f}]
@@ -362,14 +397,23 @@ Pixel metrics converted to mm; slope in mm of measurement error per mm (or per u
     pd.concat([tt, tg], ignore_index=True).to_csv(out_dir / "tooth_level.csv", index=False)
     mm_ref = tooth_mixed_models(long_ref)
     mm_gt = tooth_mixed_models(long_gt)
+    per_c = per.copy()
+    for i in range(1, 7):
+        per_c[f"selected_region_{i}_mm"] = per[f"selected_region_{i}_mm_corrected"]
+    long_ref_c = tooth_long(per_c, TEETH, "ref_mm_", group_col="patient_id")
+    tc = tooth_table(long_ref_c); tc.insert(0, "comparison", "OOF region i (corrected, secondary) vs reference tooth i")
+    pd.concat([tt, tg, tc], ignore_index=True).to_csv(out_dir / "tooth_level.csv", index=False)
+    mm_ref_c = tooth_mixed_models(long_ref_c)
     mixed_txt = f"""# Tooth-level analysis with linear mixed models (a: OOF masks)
 
 Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `patient` = same-patient cluster from the manifest, {per['patient_id'].nunique()} clusters for {len(per)} images). Region i (left-to-right, {combo}) is compared with reference tooth i (FDI {TEETH}); alignment is approximate and images where the zenith regioning fell back to equal splits are flagged `alignment_uncertain` ({int(per['alignment_uncertain'].sum())} images).
 
 ## Per tooth
-{md_table(pd.concat([tt, tg], ignore_index=True))}
+{md_table(pd.concat([tt, tg, tc], ignore_index=True))}
 
-{mixed_md("Pipeline (OOF) − clinical reference", mm_ref)}
+{mixed_md("Pipeline (OOF, uncorrected, PRIMARY) − clinical reference", mm_ref)}
+
+{mixed_md(f"Pipeline (OOF, corrected: {corr_tag}) − clinical reference", mm_ref_c)}
 
 {mixed_md("Pipeline (OOF) − GT-mask measurement (segmentation part only)", mm_gt)}
 """
@@ -379,6 +423,8 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
     fig_dir = out_dir / "figures"; fig_dir.mkdir(exist_ok=True)
     scatter_and_bland_altman(per, fig_dir / "measurement_oof.png", f"(a) Full pipeline, out-of-fold masks vs clinical reference — {combo}, {k:.2f} px/mm", subset_col=None)
     scatter_and_bland_altman(per_t, fig_dir / "measurement_test_high.png", f"(b) Final model, test high images vs clinical reference — {combo}, {k:.2f} px/mm", subset_col=None)
+    scatter_and_bland_altman(per, fig_dir / "measurement_oof_corrected.png", f"(a) corrected, secondary: offset_px {off:+.0f} — out-of-fold masks vs clinical reference", value_col="selected_mm_corrected", subset_col=None)
+    scatter_and_bland_altman(per_t, fig_dir / "measurement_test_high_corrected.png", f"(b) corrected, secondary: offset_px {off:+.0f} — final model, test high images", value_col="selected_mm_corrected", subset_col=None)
     boundary_figure({"(a) OOF high\nn=145": (SET_COLOURS["a"], b_oof), "(b) test high\nfinal model": (SET_COLOURS["b"], b_sets["(b) test high, final model"]),
                      "(c) test low": (SET_COLOURS["low"], b_sets["(c) test low"]), "(c) test normal": (SET_COLOURS["normal"], b_sets["(c) test normal"])}, k, fig_dir / "boundary_by_set.png")
     decomposition_figure(dec_per, b_oof.set_index("uid"), k, fig_dir / "error_decomposition.png")
@@ -388,31 +434,38 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
         deviations.append("`outputs/05_predictions/test_metrics.json` has no `per_class` block (box/mask mAP, P, R, F1 of the final model on the test set): the workstation eval ran the boundary stage only (`--metrics-only`) and `runs/eval/DONE` was not written. Re-run `python -m gsv4.train.evaluate_test` on the workstation (validation runs, predictions are reused) and pull; the detection metrics table of Stage 7 stays pending until then.")
     nan_iou = int(b_test["gingiva_mask_iou"].isna().sum()); nan_edge = int(b_test["gingiva_top_edge_mae_px"].isna().sum())
     deviations.append(f"Test-set boundary table: gingiva IoU undefined on {nan_iou} images (both masks empty) and edge errors undefined on {nan_edge} images (no column with gingiva in both masks) — all low/normal; reported as presence categories, not as zeros.")
+    n_clip = int(per["clipped"].sum()) + int(per_t["clipped"].sum())
+    deviations.append(f"Corrected values clipped at 0 mm (flag `clipped`): {int(per['clipped'].sum())} of {len(per)} OOF images, {int(per_t['clipped'].sum())} of {len(per_t)} test images." + (" None." if n_clip == 0 else ""))
     if fb["reevaluate"]:
         deviations.append(f"Zenith-regioning fallback on {fb['n_fallback']}/{fb['n']} OOF images ({100 * fb['frac']:.0f} %) exceeds the pre-registered 30 % — {alt} row in measurement_accuracy.csv is the re-evaluation.")
     (out_dir / "SAPMALAR.md").write_text("# Aşama 6 — sapmalar ve notlar\n\n" + "\n".join(f"- {d}" for d in deviations) + "\n", encoding="utf-8")
 
     # ---- 10. summaries
-    hold = acc_all.iloc[1]
-    bprime = acc_all[acc_all["set"].str.startswith("(b')")].iloc[0]
+    hold, hold_c = acc_all.iloc[2], acc_all.iloc[3]
+    bprime = acc_all[acc_all["set"].str.startswith("(b')") & (acc_all["correction"] == "none, PRIMARY")].iloc[0]
     fmt_row = lambda r: (f"n = {int(r['n'])}: MAE {r['mae']:.3f} mm, RMSE {r['rmse']:.3f} mm, r {r['r']:.3f}, ICC(2,1) {r['icc2_1']:.3f} [{r['icc2_1_ci_low']:.3f}, {r['icc2_1_ci_high']:.3f}], "
                          f"bias {r['ba_bias']:+.3f} mm [{r['ba_bias_ci_low']:+.3f}, {r['ba_bias_ci_high']:+.3f}], LoA {r['ba_loa_low']:.2f} to {r['ba_loa_high']:.2f} mm, "
                          f"proportional-bias slope {r['ba_prop_slope']:+.3f} (p = {r['ba_prop_p']:.3f}); within 0.5 mm {100 * r['within_0_5_mm']:.0f} %, within 1 mm {100 * r['within_1_mm']:.0f} %; "
                          f"label agreement {100 * r['threshold_agreement']:.1f} %, linear-weighted κ {r['threshold_kappa_linear']:.3f} [{r['threshold_kappa_linear_ci_low']:.3f}, {r['threshold_kappa_linear_ci_high']:.3f}]")
-    show = acc_all[["set", "masks", "n", "mae", "rmse", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high", "ba_bias", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p", "threshold_agreement", "threshold_kappa_linear"]]
+    show = acc_all[["set", "correction", "n", "mae", "rmse", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high", "ba_bias", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p", "threshold_agreement", "threshold_kappa_linear"]]
     summary = f"""# Stage 6 — full pipeline on predicted masks
 
-Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. Masks: `outputs/05_predictions/oof` (5 fold models, each predicting only its held-out fold; `oof_check.md`) and `outputs/05_predictions/test` (final model). Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
+Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc pixel offset of config.yaml (`measurement.offset_px = {off:+.0f}`, i.e. {off_mm:+.2f} mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Masks: `outputs/05_predictions/oof` (5 fold models, each predicting only its held-out fold; `oof_check.md`) and `outputs/05_predictions/test` (final model). Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
 
 ## Primary result — (a) all {int(prim['n'])} reference images, out-of-fold masks
 {fmt_row(prim)}.
 **Segmentation failure: n = {int(prim['n_segmentation_failure'])} of {len(per)} ({100 * prim['n_segmentation_failure'] / len(per):.1f} %)** — {', '.join(chk['empty_gingiva_prediction']) or 'none'}: no gingiva instance predicted, so no measurement exists; excluded from the mm and label metrics above and reported as a separate failure category (a deployed system must flag such images for manual review rather than output a value).
 Stage-3 holdout images only (the scale was never fitted on them): {fmt_row(hold)}.
+
+### Secondary — same set, corrected ({corr_tag})
+{fmt_row(prim_c)}. Clipped to 0 mm: {int(prim_c['n_clipped'])}.
+Stage-3 holdout only, corrected: {fmt_row(hold_c)}.
 Same method and scale on the ground-truth masks (Stage 3): MAE {gt_all['mae']:.3f} mm, r {gt_all['r']:.3f}, ICC {gt_all['icc2_1']:.3f}, bias {gt_all['ba_bias']:+.3f} mm → the segmentation adds {prim['mae'] - gt_all['mae']:+.3f} mm MAE and {prim['ba_bias'] - gt_all['ba_bias']:+.3f} mm bias (see `error_decomposition.md`).
 
 ## Secondary — (b) final model, {int(sec['n'])} test-set high images
 {fmt_row(sec)}.
 The fold models on the same images (b'): MAE {bprime['mae']:.3f} mm, bias {bprime['ba_bias']:+.3f} mm, ICC {bprime['icc2_1']:.3f}.
+Corrected ({corr_tag}): {fmt_row(sec_c)}. Clipped: {int(sec_c['n_clipped'])}.
 
 ## Error decomposition (a)
 Segmentation part: bias {ds['e_seg_bias']:+.3f} mm, MAE {ds['e_seg_mae']:.3f} mm; geometry part (Stage 3): bias {ds['e_meas_bias']:+.3f} mm, MAE {ds['e_meas_mae']:.3f} mm; variance shares {100 * ds['share_seg']:.0f} % / {100 * ds['share_meas']:.0f} % / covariance {100 * ds['share_cov']:+.0f} %. The segmentation error follows the lower gingiva edge: bias {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm (predicted gingiva extends below the annotated edge), upper edge bias {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm — `error_decomposition.md`, figure `figures/error_decomposition.png`.
@@ -448,7 +501,8 @@ See `SAPMALAR.md`.
 - **Birincil (a) — 145 ölçümlü high, OOF maske (ölçülen n = {int(prim['n'])}):** MAE {prim['mae']:.2f} mm, RMSE {prim['rmse']:.2f}, r {prim['r']:.3f}, ICC(2,1) {prim['icc2_1']:.3f} [{prim['icc2_1_ci_low']:.3f}, {prim['icc2_1_ci_high']:.3f}]; sapma {prim['ba_bias']:+.2f} mm, LoA {prim['ba_loa_low']:.2f}…{prim['ba_loa_high']:.2f}; sınıf uyumu {100 * prim['threshold_agreement']:.0f} %, doğrusal ağırlıklı κ {prim['threshold_kappa_linear']:.2f} [{prim['threshold_kappa_linear_ci_low']:.2f}, {prim['threshold_kappa_linear_ci_high']:.2f}].
   - Aynı yöntem GT maskede (Aşama 3): MAE {gt_all['mae']:.2f}, sapma {gt_all['ba_bias']:+.2f} → segmentasyonun eklediği: MAE {prim['mae'] - gt_all['mae']:+.2f} mm, sapma {ds['e_seg_bias']:+.2f} mm (alt dişeti kenarı GT'den {ba['gingiva_bottom_edge_bias_mm_mean']:.2f} mm aşağıda çiziliyor; üst kenar {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm).
   - Aşama 3 holdout'u (ölçek hiç görmedi, n = {int(hold['n'])}): MAE {hold['mae']:.2f}, ICC {hold['icc2_1']:.3f}.
-- **İkincil (b) — test high {int(sec['n'])} görüntü, final model:** MAE {sec['mae']:.2f} mm, r {sec['r']:.3f}, ICC {sec['icc2_1']:.3f}, sapma {sec['ba_bias']:+.2f}; κ {sec['threshold_kappa_linear']:.2f} [{sec['threshold_kappa_linear_ci_low']:.2f}, {sec['threshold_kappa_linear_ci_high']:.2f}] (n küçük, GA geniş).
+  - **İkincil, düzeltilmiş (config `offset_px` = {off:+.0f} px = {off_mm:+.2f} mm):** MAE {prim_c['mae']:.2f} mm, ICC {prim_c['icc2_1']:.3f}, sapma {prim_c['ba_bias']:+.2f}, sınıf uyumu {100 * prim_c['threshold_agreement']:.0f} %, κ {prim_c['threshold_kappa_linear']:.2f} [{prim_c['threshold_kappa_linear_ci_low']:.2f}, {prim_c['threshold_kappa_linear_ci_high']:.2f}]; holdout MAE {hold_c['mae']:.2f}; 0'a kırpılan {int(prim_c['n_clipped'])}.
+- **İkincil (b) — test high {int(sec['n'])} görüntü, final model:** MAE {sec['mae']:.2f} mm, r {sec['r']:.3f}, ICC {sec['icc2_1']:.3f}, sapma {sec['ba_bias']:+.2f}; κ {sec['threshold_kappa_linear']:.2f} [{sec['threshold_kappa_linear_ci_low']:.2f}, {sec['threshold_kappa_linear_ci_high']:.2f}] (n küçük, GA geniş). Düzeltilmiş: MAE {sec_c['mae']:.2f}, sapma {sec_c['ba_bias']:+.2f}, κ {sec_c['threshold_kappa_linear']:.2f}.
 - **Segmentasyon kalitesi:** (a) dişeti IoU {ba['gingiva_mask_iou_mean']:.3f}, üst kenar MAE {ba['gingiva_top_edge_mae_mm_mean']:.2f} mm, alt kenar MAE {ba['gingiva_bottom_edge_mae_mm_mean']:.2f} mm (sapma {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f}), dudak IoU {ba['lip_mask_iou_mean']:.3f}; (b) IoU {bb['gingiva_mask_iou_mean']:.3f}; (c) tüm test {int(bc['n'])} görüntü IoU {bc['gingiva_mask_iou_mean']:.3f} — low {b_low['gingiva_mask_iou_mean']:.3f}, normal {b_norm['gingiva_mask_iou_mean']:.3f}. Low/normal'da düşük IoU beklenen bir durum: dişeti ince ya da görünmüyor (low'da GT dişeti genişliği medyan {b_low['gingiva_n_columns_gt_median']:.0f} sütun, high'da {ba['gingiva_n_columns_gt_median']:.0f}); kenar hataları high'dan büyük değil. Birincil sonuç (a) üzerinden verilir.
 - Zenith bölgeleme (C) geri düşme oranı OOF'ta {100 * fb['frac']:.0f} % (GT'de {100 * fb_gt['frac']:.0f} %); %30 kuralı {'TETİKLENDİ' if fb['reevaluate'] else 'tetiklenmedi'}; {alt} satırı tabloda.
 - Diş düzeyi karma model (hasta rastgele kesişim): sapma {mm_ref[0]['fixed_effects'].loc['Intercept', 'estimate']:+.2f} mm [{mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_low']:+.2f}, {mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_high']:+.2f}].

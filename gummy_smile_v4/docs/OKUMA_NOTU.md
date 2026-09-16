@@ -72,6 +72,7 @@ Kaynaklar: docs/ altındaki 6 belge + `../gummy_smile_v3/` kodu (salt okunur). A
 ## Aşama 7 (yerel kısım)
 
 - `scripts/build_report.py` her çalıştırmada mevcut verilerle figür/tabloları üretir; iş istasyonu (Aşama 5/6) ve gerçek uzman formları (Aşama 4) gelmeden bekleyen ögeler "pending" yer tutucu olarak yazılır, `report_status.md` neyin gerektiğini listeler. `REVIZYON_OZETI.md` hakem maddesi ↔ çıktı eşlemesi.
+- Post-hoc kalibrasyon (16 Eylül 2026): `measurement.offset_px = -13` (alt dişeti kenarı; Aşama 3 dev listesinde kestirildi, holdout ve test setinde doğrulandı; `06_prediction/offset_correction.md`, `offset_checks.md`). Piksel cinsinden tanımlı, her görüntünün geçerli px/mm'iyle mm'ye çevrilir; 0'ın altı 0'a kırpılır ve `clipped` bayrağı konur. **Düzeltmesiz = birincil, düzeltilmiş = ikincil; her tabloda ikisi de, birincil önce.**
 - Sıra: iş istasyonunda `train_all.sh` → `git pull` → Aşama 6 (`scripts/run_prediction_eval.py`: yöntem ve ölçek config'ten sabit, yeniden uydurma yok; fallback oranı > %30 ise A_p25'e karşı yeniden değerlendirme — satır her durumda tabloda) → gerçek formlar gelince `run_expert_analysis.py --model-table outputs/06_prediction/per_image_results.csv` → `build_report.py`.
 
 ## Ortam durumu
