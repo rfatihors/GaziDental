@@ -1,0 +1,106 @@
+# Reviewer items for the rebuttal (scripts/build_rebuttal.py).
+# `quote`: the reviewer's ORIGINAL text, verbatim. The docx (docs/Hakem_revizyonları.docx) is not in
+# the repository; when it arrives, paste each item's text here (or provide the docx and run the
+# builder with --docx: it lists the paragraphs so the quotes can be copied). Until then the
+# builder prints "[verbatim reviewer text — to be pasted from docs/Hakem_revizyonları.docx]" and
+# shows `paraphrase` (from the technical audit and the task document) in its place.
+# `owner`: technical (answered from outputs/) or clinical (text from the clinical team).
+reviewers:
+  - name: Reviewer 1
+    items:
+      - id: R1-1
+        topic: System diagram missing
+        quote: null
+        paraphrase: The manuscript does not present an overall diagram of the proposed system.
+        answer: diagram
+        owner: technical
+      - id: R1-2
+        topic: Segmentation outputs not shown
+        quote: null
+        paraphrase: Example segmentation outputs of the model should be shown.
+        answer: segmentation_examples
+        owner: technical
+  - name: Reviewer 2
+    items:
+      - id: R2-5
+        topic: Image counts (1,315 → 2,235 / 3,403)
+        quote: null
+        paraphrase: How did 1,315 images become 2,235 and 3,403? The dataset numbers are inconsistent.
+        answer: image_counts
+        owner: technical
+      - id: R2-6
+        topic: Data leakage between splits
+        quote: null
+        paraphrase: Photographs of the same patient may appear in more than one subset (train/validation/test), which would inflate the reported performance.
+        answer: leakage
+        owner: technical
+      - id: R2-10
+        topic: Boundary accuracy; lip vs gingiva performance gap
+        quote: null
+        paraphrase: The gingiva class performs much worse than the lip class; boundary accuracy of the gingival margin should be reported.
+        answer: boundary
+        owner: technical
+      - id: R2-power
+        topic: G*Power calculation inappropriate
+        quote: null
+        paraphrase: A chi-square based G*Power calculation is not an appropriate way to determine the training-set size of a segmentation model.
+        answer: power
+        owner: technical
+      - id: R2-fig6
+        topic: Figure 6 inconsistency (measurement vs reference)
+        quote: null
+        paraphrase: The values in Figure 6 are inconsistent / implausible.
+        answer: figure6
+        owner: technical
+  - name: Reviewer 3
+    items:
+      - id: R3-1
+        topic: Demographics / sex distribution
+        quote: null
+        paraphrase: Age and sex distribution of the sample are not reported.
+        answer: demographics
+        owner: technical
+  - name: Reviewer 4
+    items:
+      - id: R4-1
+        topic: Sample size and external validity
+        quote: null
+        paraphrase: The sample-size calculation does not support the claim of external validity; the cohort is from a single centre.
+        answer: external_validity
+        owner: technical
+      - id: R4-2
+        topic: Calibration (pixel to mm)
+        quote: null
+        paraphrase: How were pixels converted to millimetres; how was calibration performed and how precise is it?
+        answer: calibration
+        owner: technical
+      - id: R4-3
+        topic: Circular validation of the E/T classification
+        quote: null
+        paraphrase: The E/T class assignment is validated against the same measurements it is derived from; an independent clinical validation is needed.
+        answer: expert_validation
+        owner: technical
+      - id: R4-4
+        topic: Overlap with the earlier (J Dent 2026) cohort
+        quote: null
+        paraphrase: Does the dataset overlap with the authors' earlier publication?
+        answer: overlap
+        owner: clinical
+      - id: R4-5
+        topic: Data leakage (CLAIM 2024)
+        quote: null
+        paraphrase: Per the CLAIM checklist, the splits must be independent at patient level.
+        answer: leakage
+        owner: technical
+      - id: R4-6
+        topic: Intra-observer reliability of the reference
+        quote: null
+        paraphrase: The reliability of the manual reference measurement should be reported.
+        answer: intra_observer
+        owner: technical
+      - id: R4-7
+        topic: Terminology, rare classes and limitations
+        quote: null
+        paraphrase: Rare classes (E4), pigmentation/phenotype and other limitations should be discussed.
+        answer: limitations
+        owner: clinical

@@ -139,6 +139,7 @@ Legend: ✅ available now, ⏳ pending (what is needed is written in `report_sta
 - Hazır: blok diyagramı, GT overlay, GT-maske ölçüm figürü (Figure 6 yerine), veri seti sayıları, demografi, mm doğruluğu (GT satırları), gözlemci içi.
 - Bekleyen: segmentasyon örnekleri, öğrenme eğrisi, sınır hatası, test metrikleri (iş istasyonu); tahmin maskesi doğruluğu (Aşama 6); uzman uyumu (gerçek formlar).
 - `REVIZYON_OZETI.md`: hakem maddesi ↔ çıktı eşlemesi (✅ / ⏳).
+- Hakem cevabı taslağı: `RESPONSE_TO_REVIEWERS.md`, durum tablosu `REBUTTAL_DURUM.md`, Türkçe özet `REBUTTAL_OZET.md` (üretim: `scripts/build_rebuttal.py`).
 """, encoding="utf-8")
     # portable reports: strip the absolute project root from every written markdown/csv
     root = str(cfg["_root"]) + "/"

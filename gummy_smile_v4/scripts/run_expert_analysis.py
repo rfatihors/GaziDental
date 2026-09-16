@@ -243,7 +243,7 @@ Intra-expert scale repeatability (20 repeats): {', '.join(f"expert {int(r['exper
     prim_c = cls[(cls["scale"] == "global_corrected") & (cls["subset"].str.contains("primary")) & (cls["scoring"] == "strict")]
     if len(prim_c):
         r = prim_c.iloc[0]
-        numbers += [num(f"… corrected model values (offset_px {offset_px:+.0f}, secondary), linear-weighted κ (primary set, strict)", r["kappa_linear"], r["kappa_linear_ci_low"], r["kappa_linear_ci_high"], int(r["n"]))]
+        numbers += [num(f"… corrected model values (mask-level lower edge {offset_px:+.0f} px, secondary), linear-weighted κ (primary set, strict)", r["kappa_linear"], r["kappa_linear_ci_low"], r["kappa_linear_ci_high"], int(r["n"]))]
     len_row = cls[(cls["scale"] == "global") & (cls["subset"].str.contains("primary")) & (cls["scoring"] == "lenient")]
     if len(len_row):
         r = len_row.iloc[0]
@@ -323,7 +323,7 @@ Tooth-level analysis: `mixed_models.md` (random intercept per patient; tooth pos
 - Referans: çoğunluk; konsensüs bekleyen {len(pending)}.
 - Birincil (145 görüntü, OOF, katı, global ölçek): doğrusal ağırlıklı κ {ci(prim['kappa_linear'], prim['kappa_linear_ci_low'], prim['kappa_linear_ci_high']) if prim is not None else 'n/a'}, n = {int(prim['n']) if prim is not None else 0}. İkincil (sabit test): κ {ci(sec['kappa_linear'], sec['kappa_linear_ci_low'], sec['kappa_linear_ci_high']) if sec is not None else 'n/a'}.
 - Uzmanlar arası Fleiss κ {ci(inter.get('fleiss_kappa'), inter.get('fleiss_kappa_ci_low'), inter.get('fleiss_kappa_ci_high'))}; mm ICC(2,1) {inter.get('mm_icc2_1', float('nan')):.3f}; ölçek ICC(2,1) {inter.get('scale_icc2_1', float('nan')):.3f}, görüntü içi CV medyan {inter.get('scale_cv_within_image_median', float('nan')):.3f}.
-- Model–uzman ortalaması mm (düzeltmesiz, birincil): ICC(2,1) {mm_glob.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob.index else float('nan'):.3f}, sapma {mm_glob.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob.index else float('nan'):+.2f} mm; düzeltilmiş (ikincil, offset_px {offset_px:+.0f}): ICC {mm_glob_c.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob_c.index else float('nan'):.3f}, sapma {mm_glob_c.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob_c.index else float('nan'):+.2f} mm.
+- Model–uzman ortalaması mm (düzeltmesiz, birincil): ICC(2,1) {mm_glob.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob.index else float('nan'):.3f}, sapma {mm_glob.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob.index else float('nan'):+.2f} mm; düzeltilmiş (ikincil, maske düzeyi {offset_px:+.0f} px): ICC {mm_glob_c.at['expert_mean', 'icc2_1'] if 'expert_mean' in mm_glob_c.index else float('nan'):.3f}, sapma {mm_glob_c.at['expert_mean', 'bias'] if 'expert_mean' in mm_glob_c.index else float('nan'):+.2f} mm.
 - Karma modeller: {len([r for r in mixed if 'error' not in r])}/3 kuruldu; {len([r for r in mixed if r.get('estimator', '').startswith('MixedLM')])} tanesi MixedLM, gerisi sınır durumu (hasta varyansı ≈ 0) → küme-dayanıklı OLS.
 - Üretilen dosyalar: form_qc.csv, forms_long.csv, reference_standard.csv, consensus_pending.csv, class_agreement.csv, per_class.csv, strata.csv, intra_expert.csv, inter_expert.json, mm_agreement.csv, tooth_level_long.csv, mixed_models.md, scale_agreement.md, frame_scale_comparison.csv, expert_summary.md, manuscript_numbers.md.
 """
