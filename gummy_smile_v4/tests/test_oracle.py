@@ -1,4 +1,6 @@
 """Oracle harness logic on a synthetic per-image table with a known scale."""
+import zlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -18,9 +20,11 @@ def _table(n=100, seed=0):
     df = pd.DataFrame({"uid": [f"high/IMG_{i}" for i in range(n)], "ref_mm": ref})
     for reg, est, anch in COMBOS:
         k = 17.0 if not anch else 19.0
-        noise = {"p25": 0.3, "median": 0.3, "p10": 0.4, "min": 0.6, "max": 1.0}[est]
+        noise = {"p25": 0.3, "median": 0.3, "p10": 0.4, "p05": 0.5, "min": 0.6, "max": 1.0}[est]
         noise += {"A": 0.0, "B": 0.05, "C": 0.1}[reg]
-        df[f"{combo_name(reg, est, anch)}_px"] = k * ref + rng.normal(0, noise * k, n)
+        # per-combination stream so that adding an estimator does not reshuffle the noise of the others
+        crng = np.random.default_rng(zlib.crc32(combo_name(reg, est, anch).encode()) + seed)
+        df[f"{combo_name(reg, est, anch)}_px"] = k * ref + crng.normal(0, noise * k, n)
     df["frame_ok"] = True
     df["has_dash_zero"] = False
     df["has_ambiguous_100_999"] = False

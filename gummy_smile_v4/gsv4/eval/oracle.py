@@ -7,7 +7,7 @@ Protocol (fixed before looking at the data):
   through the origin) and applied unchanged to holdout;
 * the method is selected on **dev MAE**; combinations within ``tolerance_mm`` of the
   best are tied and the simplest wins (regioning A > B > C, gingiva thickness >
-  lip-anchored, estimator p25 > median > p10 > min > max);
+  lip-anchored, estimator p25 > median > p10 > p05 > min > max);
 * holdout numbers are reported once, for all combinations, never used for selection.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from gsv4.measure.qc import QCFlag, flags_to_str
 from gsv4.rules.thresholds import label_for_mm
 
 COMBOS: List[Tuple[str, str, bool]] = [(r, e, a) for r in REGIONINGS for e in ESTIMATORS for a in (False, True)]
-SIMPLICITY = {"regioning": {"A": 0, "B": 1, "C": 2}, "estimator": {"p25": 0, "median": 1, "p10": 2, "min": 3, "max": 4}}
+SIMPLICITY = {"regioning": {"A": 0, "B": 1, "C": 2}, "estimator": {"p25": 0, "median": 1, "p10": 2, "p05": 3, "min": 4, "max": 5}}
 LABEL_ORDER = ["NO_VISIBLE_GINGIVA", "E1", "E1-E2", "E2-E3", "E3", "E4"]
 
 
@@ -152,7 +152,7 @@ def select_method(results: pd.DataFrame, tolerance_mm: float = 0.02) -> Tuple[Di
     chosen = tied.iloc[0]
     why = (f"selection on dev MAE (n = {int(chosen['n_dev'])}); best dev MAE = {best:.3f} mm; "
            f"{len(tied)} combination(s) within {tolerance_mm:.2f} mm of it ({', '.join(tied['combo'])}); "
-           f"the simplest of those is chosen (A > B > C, gingiva thickness > lip-anchored, p25 > median > p10 > min > max).")
+           f"the simplest of those is chosen (A > B > C, gingiva thickness > lip-anchored, p25 > median > p10 > p05 > min > max).")
     return {"regioning": chosen["regioning"], "estimator": chosen["estimator"], "anchored": bool(chosen["anchored"]),
             "combo": chosen["combo"], "px_per_mm": float(chosen["px_per_mm_dev"]), "mae_dev": float(chosen["mae_dev"])}, why
 

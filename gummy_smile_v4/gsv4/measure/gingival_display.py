@@ -31,7 +31,7 @@ from gsv4.measure.regions import (
     zeniths_midline,
 )
 
-ESTIMATORS = ("p10", "p25", "median", "min", "max")
+ESTIMATORS = ("p05", "p10", "p25", "median", "min", "max")
 REGIONINGS = ("A", "B", "C")
 MethodKey = Tuple[str, str, bool]  # (regioning, estimator, lip_anchored)
 
@@ -50,6 +50,8 @@ DEFAULT_CFG: Dict[str, Any] = {
 def _estimate(values: np.ndarray, estimator: str) -> float:
     if values.size == 0:
         return math.nan
+    if estimator == "p05":
+        return float(np.percentile(values, 5))
     if estimator == "p10":
         return float(np.percentile(values, 10))
     if estimator == "p25":

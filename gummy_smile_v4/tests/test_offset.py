@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from gsv4.eval.offset import (
-    apply_constant, apply_regression, best_pixel_shift, fit_constant, fit_regression, select_correction, shift_lower_edge_up,
+    apply_constant, clip_corrected, offset_by_group, apply_regression, best_pixel_shift, fit_constant, fit_regression, select_correction, shift_lower_edge_up,
 )
 
 
@@ -47,3 +47,21 @@ def test_select_correction_rule():
     assert s["chosen"] == "constant" and s["best_holdout"] == "pixel" and s["delta_mm"] == pytest.approx(0.02)
     t.loc[(t.subset == "holdout") & (t.correction == "pixel"), "mae"] = 0.50
     assert select_correction(t, 0.03)["chosen"] == "pixel"
+
+
+def test_clip_corrected_flags_negatives_only():
+    r = clip_corrected([0.5, -0.2, np.nan, 0.0, -1.0])
+    assert r["n_clipped"] == 2 and r["clipped"].tolist() == [False, True, False, False, True]
+    assert r["values"][1] == 0.0 and r["values"][0] == 0.5 and np.isnan(r["values"][2])
+
+
+def test_offset_by_group_recovers_group_means_and_flags_heterogeneity():
+    rng = np.random.default_rng(0)
+    df = pd.DataFrame({"fold": np.repeat([0, 1, 2], 40), "ref": rng.uniform(1, 6, 120)})
+    df["pred"] = df["ref"] + 0.7 + rng.normal(0, 0.3, 120)
+    t = offset_by_group(df, "pred", "ref", "fold")
+    assert list(t["group"]) == [0, 1, 2] and all(abs(t["offset_mm"] - 0.7) < 0.15) and t.attrs["anova_p"] > 0.05
+    assert (t["ci_low"] < 0.7).all() and (t["ci_high"] > 0.7).all()
+    df.loc[df.fold == 2, "pred"] += 1.0
+    t2 = offset_by_group(df, "pred", "ref", "fold")
+    assert t2.attrs["anova_p"] < 0.001 and t2.attrs["range_mm"] > 0.8

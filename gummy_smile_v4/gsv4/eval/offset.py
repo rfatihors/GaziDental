@@ -96,3 +96,35 @@ def _finite(a: Sequence[float], b: Sequence[float]):
     b = np.asarray(b, dtype=float)
     ok = np.isfinite(a) & np.isfinite(b)
     return a[ok], b[ok]
+
+
+def clip_corrected(values: Sequence[float]) -> Dict[str, Any]:
+    """Corrected values below 0 mm are clipped to 0 and flagged; the rule engine would
+    otherwise read a negative value as NO_VISIBLE_GINGIVA."""
+    v = np.asarray(values, dtype=float)
+    clipped = np.isfinite(v) & (v < 0)
+    out = v.copy()
+    out[clipped] = 0.0
+    return {"values": out, "clipped": clipped, "n_clipped": int(clipped.sum())}
+
+
+def offset_by_group(df: pd.DataFrame, value_col: str, ref_col: str, group_col: str) -> pd.DataFrame:
+    """Mean error (value − ref) per group with a t-based 95 % CI, plus the across-group
+    spread and a one-way ANOVA p-value for equal means."""
+    from scipy import stats
+
+    d = df[[group_col, value_col, ref_col]].dropna().copy()
+    d["err"] = d[value_col] - d[ref_col]
+    rows = []
+    for g, part in d.groupby(group_col, sort=True):
+        e = part["err"].to_numpy(float)
+        n = len(e)
+        sd = float(e.std(ddof=1)) if n > 1 else math.nan
+        half = stats.t.ppf(0.975, n - 1) * sd / math.sqrt(n) if n > 1 else math.nan
+        rows.append({"group": g, "n": n, "offset_mm": float(e.mean()), "ci_low": float(e.mean() - half), "ci_high": float(e.mean() + half), "sd_mm": sd})
+    out = pd.DataFrame(rows)
+    groups = [part["err"].to_numpy(float) for _, part in d.groupby(group_col) if len(part) > 1]
+    out.attrs["anova_p"] = float(stats.f_oneway(*groups).pvalue) if len(groups) > 1 else math.nan
+    out.attrs["range_mm"] = float(out["offset_mm"].max() - out["offset_mm"].min()) if len(out) else math.nan
+    out.attrs["sd_between_mm"] = float(out["offset_mm"].std(ddof=1)) if len(out) > 1 else math.nan
+    return out
