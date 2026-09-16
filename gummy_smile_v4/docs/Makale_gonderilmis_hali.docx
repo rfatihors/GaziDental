@@ -1,0 +1,301 @@
+**AI-****driven**** ****quantification**** of gingival ****display**** ****from**** smile ****photographs****: ****Toward**** ****etiological**** ****interpretation**** and ****treatment**** ****planning**
+
+**ABSTRACT**
+
+*Objectives:* The aim of this study was to develop and evaluate an artificial intelligence (AI)-based framework for quantitative assessment of gingival display from smile photographs and subsequent etiological interpretation and treatment planning. 
+
+*Methods**:* A total of 1,315 frontal smiling photographs were categorized according to smile line. Gingiva and lip regions were manually annotated and analyzed using a two-class instance segmentation pipeline. First, three segmentation architectures (RF-DETR-Seg, YOLOv26, and YOLOv11) were compared to identify the strongest model architecture. Model performance was evaluated using mAP@50, mAP@50-95, precision, recall, F1-score, confusion matrix analysis, and intra-observer reliability testing. Quantified gingival display measurements were subsequently integrated with a literature-derived decision framework to generate potential etiological hypotheses and corresponding treatment recommendations.
+
+*Results**: *YOLOv11x-seg demonstrated the best overall segmentation performance, with a mask mAP@50 of 0.79369, mAP@50-95 of 0.50101, precision of 0.85466, recall of 0.81039, and F1-score of 0.831936. Lip segmentation showed consistently high accuracy, while gingiva segmentation required higher boundary sensitivity compared with lip segmentation. The framework enabled systematic mapping of quantified gingival display values to potential etiological and treatment categories.
+
+*Conclusions**:* The proposed framework enables objective quantification of gingival display and translates these measurements into structured clinical decision support for etiological interpretation and treatment planning. This approach may contribute to more standardized and clinically interpretable assessment of excessive gingival display.
+
+*Clinical Significance:* The proposed framework may improve the consistency of excessive gingival display assessment by providing objective measurements that support standardized clinical interpretation and treatment planning.
+
+*Keywords**:*
+
+Artificial intelligence
+
+Excessive gingival display
+
+Smile esthetics
+
+Image segmentation
+
+- **Introduction**
+
+The smile line is defined as the position of the upper lip relative to the maxillary incisors and gingiva during a natural full smile. A high smile line is characterized by full exposure of the maxillary anterior crowns together with excessive gingival display [1]. The esthetic assessment of smile lines is clinically important because increasing gingival display has been associated with reduced smile attractiveness [2]. At the more pronounced end of this spectrum, gummy smile, characterized by the excessive display of gingival tissue during smiling, represents one of the major reasons for seeking treatment, particularly among individuals with high esthetic expectations [1,3,4]. Gummy smile is a multifactorial developmental condition that cannot be attributed to a single pathophysiological mechanism. Vertical maxillary excess, hyperactivity of the upper lip elevator muscles, altered passive eruption, and dentoalveolar compensations constitute the main components of its etiological spectrum[1]. Because etiological classification largely relies on clinical observation, measurement standardization may be limited and diagnostic uncertainty may arise, particularly in complex cases [1,4,5]. This situation underscores the increasing need for standardized and quantitative diagnostic tools.
+
+With the advancement of digital dentistry, more precise measurement of esthetic parameters and simulation-based treatment planning have become feasible [6]. Three-dimensional digital analysis approaches contribute to the predictable modeling of the smile line and facial esthetics, thereby enhancing the consistency of clinical evaluations [7]. The integration of this digital infrastructure with artificial intelligence-based image processing and segmentation supports enables objective and reproducible measurements in dental esthetic analyses. It has been reported that AI-assisted digital smile design approaches, with their capacity for individualized analysis, can improve both clinician and patient satisfaction as well as esthetic outcomes [6,8-10].
+
+In the literature, artificial intelligence–based image analysis studies have predominantly focused on the quantitative assessment of gingival exposure and the classification of smile parameters. However, these quantitative outputs have rarely been translated into structured clinical interpretation and treatment planning. This gap highlights the need to extend AI applications beyond descriptive image analysis toward clinically applicable decision-support systems.
+
+To address this gap, the present study was designed to accurately identify the gingival and upper lip regions in smile photographs using AI-based segmentation and to quantify gingival display from these image-derived outputs. The quantified measurements were subsequently integrated into a traceable, literature-derived decision framework for etiological interpretation and treatment planning. Rather than directly predicting the underlying etiology, the proposed framework combines objective quantitative measurement with structured clinical decision support. The diagnostic performance of the segmentation model and the potential clinical applicability of the overall framework were also evaluated.
+
+- **M****aterials and methods**
+
+- *Study **d**esign*
+
+This study employed a multi-stage artificial intelligence analysis framework developed using image data derived from smile photographs. The framework comprised two sequential components: (i) an artificial intelligence–based segmentation module for quantitative assessment of gingival display and (ii) a literature-derived categorization module that assigned potential etiological hypotheses and corresponding treatment options based on the quantified measurements.
+
+The sample size for this study was calculated using G*Power software, version 3.1.9.7, based on a chi-square test designed to compare the correct and incorrect detections made by the artificial intelligence model. The calculation was performed with a medium effect size according to Cohen’s criteria (w = 0.30), a significance level set at α = 0.05, and statistical power set at 95% [11]. Using these parameters, the minimum required sample size was determined to be 145. Because the study involved multi-category classification, including low, average, and high smile lines and the corresponding etiology- and treatment-related classes associated with these smile-line categories, a second-stage analysis was performed using 9 degrees of freedom (df = 9). This analysis yielded a minimum required sample size of 263 participants (Appendix A). Accordingly, the total of 1,315 images included in the present study substantially exceeded the minimum required sample size and provided sufficient statistical power for the analyses. Moreover, in artificial intelligence-based models, particularly deep learning approaches, the use of large datasets is recommended to improve model generalizability, reduce the risk of overfitting, and achieve more stable performance. In this respect, the sample size of the present study supports the reliability and external validity of the model.
+
+- *Ethics **a**pproval*
+
+This study was designed as a single-center, observational, methodological investigation for the development and validation of an artificial intelligence model. Reporting was guided by the DENTAL-AI checklist and the STROBE statement. The study protocol was approved by the Clinical Research Ethics Committee of the relevant university (Approval No: E-77082166-604.01-881629; Date: February 13, 2024; Session No: 03). Written informed consent was obtained from all participants prior to inclusion in the study.
+
+- *Study **p**opulation *
+
+Individuals eligible for inclusion were required to be ≥ 18 years of age, present with all teeth in the maxillary anterior segment (#13–23), and provide informed consent for participation in the study. Individuals were excluded if they exhibited missing teeth in the maxillary anterior region; significant craniofacial anomalies or pronounced facial asymmetry that could affect clinical evaluation; orthodontic appliances, facial piercings, or dense facial hair (beard/moustache) that could interfere with smile analysis; image artifacts such as motion blur, inadequate lighting, or improper framing that compromised image quality; or any conditions preventing clear delineation of gingival margins. Images meeting these criteria were included in the labeling procedures and subsequent artificial intelligence–based analysis pipeline.
+
+- *Image **a**cquisition*
+
+All clinical photographs were acquired using the same mobile camera system (iPhone 15, Apple Inc., Cupertino, CA, USA). During image acquisition, resolution parameters were standardized, and ambient lighting as well as color balance were standardized for all participants. In this way, variability related to differing imaging conditions was minimized.
+
+During photography, participants were positioned in an upright seated posture, and head position was adjusted to be parallel to the Frankfort horizontal plane. The distance between the camera and the face was maintained at approximately 15 cm for each image. To ensure reproducibility of image framing, the device’s reference grid lines were aligned using the horizontal axis of the interpupillary line and the vertical axis of the nasal alae.
+
+- *Gingival **v**isibility **a**ssessment, **s**mile **l**ine **c**lassification, and **e**tiology-**t**reatment **c**ategorization*
+
+Smile line classification was performed according to the criteria defined by Tjan and Miller. According to gingival display, the smile line was categorized as low (< 75 % visibility of the maxillary anterior teeth), medium (75–100 % visibility of the maxillary anterior teeth and interproximal gingiva), and high (conditions in which the gingival margin and the cervical regions of the teeth are clearly visible) [12].
+
+In individuals classified as having a high smile line, gingival display was quantitatively assessed by measuring the vertical distance between the inferior border of the upper lip and the gingival margin in the maxillary anterior six-tooth region [13]. All measurements were performed using image analysis software (ImageJ, National Institutes of Health, Bethesda, MD, USA). The measurement values reported in this study are based on geometric calculations derived from segmentation masks.
+
+Classifications, etiological distributions, and treatment supports related to excessive gingival display reported in the literature were systematically reviewed. Based on this review, a literature-derived categorical table was compiled, representing etiological profiles and corresponding treatment approaches associated with gingival display measurement ranges expressed in millimeters [14-23]. This table served as the reference for mapping quantified gingival display measurements to predefined etiological categories and corresponding treatment recommendations. During the classification process, an overlapping interval approach was adopted to allow boundary values to be evaluated within adjacent categories. In this way, potential classification bias was minimized by accounting for measurement uncertainty at threshold values.
+
+The quantified gingival display measurements were processed according to predefined literature-derived thresholds to assign potential etiological categories and corresponding treatment recommendations. Based on the literature-derived decision matrix, four potential etiology categories and their corresponding treatment strategies (E1–E4 / T1–T4) were defined according to predefined gingival display thresholds ( Table 1).
+
+- *Image **d**ataset and **p**reprocessing *
+
+This study utilized a dataset consisting of 1,315 frontal smiling photographs (896 females, 419 males; mean age: 36 years). Images were categorized according to smile line phenotype as high (n = 216), average (n = 796), and low (n = 303). All images underwent preprocessing to ensure sufficient image quality for reliable identification of gingival and lip boundaries.
+
+The dataset was initially divided into training, validation, and test sets using a 70 %, 15 %, and 15 % split, respectively, to establish a baseline evaluation. During the hyperparameter optimization phase, an expanded dataset version was used, and the data were re-partitioned using a 92 %, 4 %, and 4 % split to maximize the amount of training data. The final model performance reported in this study is based on the optimized dataset configuration. Data augmentation was applied only to the training dataset, while validation and test datasets remained unchanged. The test set remained fixed across all experimental stages to avoid data leakage. Detailed preprocessing and augmentation procedures are described in Appendix B.
+
+- *Annotation and **l**abeling **p**rocedure*
+
+A two-class instance segmentation approach was adopted for all images, targeting the following anatomical structures:
+
+- Gingiva and
+
+- Lip
+
+The annotation process was performed using a web-based annotation platform (Roboflow, [https://app.roboflow.com/](https://app.roboflow.com/)), employing a manual polygon-based masking approach (Fig. 1).*** ***All image annotations were performed by a single examiner experienced in periodontal image assessment.*** ***In each image, the gingival and lip boundaries were labeled as separate instance masks, and the annotations were exported in a YOLO-compatible segmentation format.
+
+In the v7 dataset used for the detailed YOLOv8 and YOLOv11 training experiments, the annotated instance distribution comprised 2,814 gingiva instances and 923 lip instances. Dataset management and versioning were performed using a web-based dataset management system. During the subsequent hyperparameter tuning phase, the training data were further expanded, resulting in an updated dataset version containing 3,403 images. Prior to model training, all annotations underwent visual quality control, and anatomical boundary consistency was verified. Detailed information regarding dataset versioning and preprocessing procedures is provided in Appendix C.
+
+- *Model **a**rchitecture and **c**omparative **a**nalysis*
+
+A two-stage experimental comparison process was conducted to determine the most appropriate segmentation approach.
+
+*2.**8**.1.** **Preliminary comparison phase*
+
+In the first stage, three different instance segmentation architectures were trained under standardized conditions using the same annotation structure (gingiva + lip), and a rapid performance comparison was performed:
+
+- RF-DETR-Seg (Medium)
+
+- YOLOv26 (Fast)
+
+- YOLOv11 (Fast)
+
+The purpose of this stage was to assess the overall performance tendency of different architectures on the dataset and to identify the strongest candidate architecture before proceeding to the detailed training phase. RF-DETR-Seg was evaluated on dataset v1, whereas YOLOv26 and YOLOv11 were evaluated on datasets v2 and v3, respectively; however, these versions were based on the same baseline dataset configuration and the same split strategy.
+
+The architectures identified during the preliminary comparison were further trained and optimized using the Ultralytics framework in a Google Colab environment (80 GB GPU memory). Multiple dataset configurations and model scales were evaluated to determine the optimal segmentation performance. Detailed training settings and hyperparameter optimization procedures are described in Appendix D.
+
+*2.**8**.**2**.** **Shared training parameters*
+
+All models were trained using standardized baseline configurations, including fixed input resolution, optimizer selection, and learning rate scheduling. A grid search strategy was employed to optimize training parameters across multiple configurations.
+
+To ensure reproducibility and transparency, the detailed training settings, parameter ranges, and hyperparameter optimization procedures are reported in Appendix E.
+
+*2.**8**.**3**.** **Evaluation **m**etrics*
+
+Model performance was evaluated using the following metrics:
+
+· mAP@50
+
+· mAP@50–95
+
+· Precision
+
+· Recall
+
+· F1-score
+
+In addition, during the training process, box_loss, seg_loss, cls_loss, and dfl_loss were monitored, and overfitting analysis was performed based on the training and validation curves.
+
+- *Intra-observer** **c**alibration**:*
+
+All image measurements were performed by a single examiner. Intra-observer reliability was assessed on 20 randomly selected images using repeated measurements at different time points. Agreement was evaluated using intraclass correlation coefficients (ICCs) and paired t-tests, demonstrating excellent reliability with high ICC values and no significant differences (p > 0.05).
+
+- **Results**
+
+The segmentation model was primarily used as a measurement tool to enable accurate quantification of gingival display for subsequent clinical classification.
+
+- *Model **s**election and **s**egmentation **p**erformance** *
+
+Comparative analyses indicated that, within the YOLOv11 family, the YOLOv11x-seg variant demonstrated the highest and most balanced overall segmentation performance. In the preliminary evaluation conducted using a web-based training and evaluation environment, the YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3 %), followed by YOLOv26 (76.9 %) and RF-DETR-Seg (72.0 %). In addition, the most balanced recall performance was observed for YOLOv11 (78.1 %). Therefore, the YOLOv11 family was selected as the leading architecture for the subsequent Colab-based training and hyperparameter optimization stages, from which the final YOLOv11x-seg model was later derived for the complete instance segmentation and measurement pipeline. The validation results of the final YOLOv11x-seg model were as follows:
+
+· mAP@50 (Mask): 0.79369
+
+· mAP@50–95 (Mask): 0.50101
+
+· Precision (Box): 0.85466
+
+· Recall (Box): 0.81039
+
+· F1 Score: 0.831936
+
+These values represent the validation metrics of the final YOLOv11x-seg model, whereas the confidence-dependent curves presented in Figure 2 reflect threshold-specific performance behavior rather than the final summary validation metrics.
+
+In the class-wise evaluation, lip segmentation showed consistently high performance across all models, with class-wise mAP values ranging from 97.0% to 99.0%, whereas gingiva segmentation showed greater variability among architectures. The YOLOv11x-seg model improved mask continuity particularly along the lip-gingiva boundary, reduced the number of fragmented masks, and decreased false-negative rates. Visual comparisons of segmentation outputs across different models are presented in Appendix F.
+
+Analysis of the training dynamics indicated that the model achieved rapid convergence during the initial epochs, followed by a stable plateau in validation metrics after approximately 30–40 epochs. No pronounced divergence was observed between the training and validation loss curves, suggesting that the model achieved good generalization without overfitting.
+
+Both mAP@50 and mAP@50–95 metrics increased consistently as training progressed across epochs. The use of a cosine learning rate scheduler enabled a controlled reduction in the learning rate, contributing to stable convergence.
+
+Overall, the YOLOv11x-seg model demonstrated advantages over the YOLOv26x-seg model in terms of accuracy metrics, training time, and computational cost. Therefore, the YOLOv11x-seg architecture was selected for the final measurement and clinical decision-support pipeline** **(Fig. 3).
+
+- *Class **d**istribution** and **a**nnotation** **g**eometry*
+
+Prior to model training, the class distribution and geometric characteristics of the segmentation annotations were analyzed. In the augmented dataset configuration used for the larger-model experiments, the total number of annotated instances increased to 5,628 gingiva instances and 1,846 lip instances (Fig. 4).
+
+The distribution of annotation centers (x–y) indicated that the segmentation regions were predominantly concentrated in the upper-central area of the images. This pattern is consistent with the standard framing of frontal smiling photographs and supports that the annotations exhibit a consistent spatial distribution.
+
+Analysis of the width-height distribution (bounding box/mask dimensions) showed that the lip class exhibited a wider geometry occupying a larger area along the horizontal axis, whereas the gingiva class was narrower, thinner, and located adjacent to the upper lip boundary. This geometric difference indicates that gingiva segmentation requires higher boundary sensitivity compared with lip segmentation.
+
+Overall, the analyses of class distribution and annotation geometry demonstrated that the annotations in the dataset exhibit a consistent distribution in terms of spatial location and scale, compatible with the clinical composition of frontal smile images and suitable for model training.
+
+- *Confusion matrix analysis *
+
+For a model trained with two classes (gingiva and lip), performance was analyzed on a class-wise basis using a normalized confusion matrix. However, the Ultralytics evaluation module automatically introduces a background category to represent false positive and false negative predictions. Consequently, the confusion matrix is presented as a 3 × 3 matrix, although the background class does not represent a clinical category.** **For the lip class, the diagonal cell value was ≈ 98 %, indicating that the model was able to distinguish this class with high reliability. False positive and false negative rates in lip segmentation were minimal.
+
+For the gingiva class, the normalized diagonal value was ≈ 72 %. This suggests that the model exhibited a certain degree of confusion with the background during gingiva segmentation, particularly in thin anatomical boundary regions where false-negative predictions may occur. The smaller spatial extent of the gingiva class and its adjacency to the lip boundary may be contributing factors to this outcome (Fig. 5). Overall, the confusion matrix analysis indicates that lip segmentation was highly stable, whereas gingiva segmentation represented a more challenging task. 
+
+- *Precision, Recall, and F1 **s**core **b**ehavior **a**cross **c**onfidence **l**evels*
+
+Model performance was evaluated not only at a fixed threshold but also by examining the behavior of precision, recall, and F1 scores across different confidence thresholds.*** ***
+
+Precision–recall curves indicated the presence of a high-performance region for both classes (Fig. 2a). For the lip class, precision and recall values remained high across a wide range of confidence thresholds (Fig. 2b***)****.* The recall–confidence analysis further demonstrated stable recall performance across a wide range of confidence thresholds, particularly for the lip class* *(Fig. 2c). 
+
+In the F1-confidence analysis, the all-classes F1 score reached approximately 0.79 at the optimal confidence threshold (Fig. 2d), whereas the gingiva class showed lower class-specific F1 values than the lip class. Analysis of the F1–confidence curves showed that the F1 score stabilized beyond a certain confidence threshold. This indicates that the model’s decision mechanism operated more consistently within higher confidence ranges.
+
+During the training process, precision, recall, and F1 scores showed a gradual increase, and no pronounced divergence was observed between the training and validation losses. These findings support that the model achieved good generalization without entering an overfitting regime.
+
+- *Clinical threshold-based classification*
+
+To enable clinically interpretable output, the quantified gingival display values were integrated into a predefined threshold-based decision framework, allowing systematic mapping of measurements to corresponding etiological and treatment categories (Fig. 6). The quantified gingival display values were categorized according to predefined literature-derived thresholds, allowing systematic mapping to corresponding etiological categories and treatment recommendations (Fig. 6). Measurements falling within overlapping threshold ranges were assigned to all matching categories rather than a single category, and the corresponding treatment recommendations were reported simultaneously. In such cases, the system output was labeled as "ambiguous", and all matching etiological categories were reported together.
+
+- **D****iscussion**
+
+This study presents an integrated, multi-stage framework that combines artificial intelligence–based segmentation of the gingival and upper lip regions with quantitative assessment of gingival display and a literature-derived threshold-based decision framework for the assignment of potential etiological hypotheses and corresponding treatment recommendations. To the best of our knowledge, no previous study has integrated AI-based quantitative gingival display measurement with a traceable, published criteria-based decision framework for etiological interpretation and treatment guidance within a single workflow. Accordingly, the principal contribution of the present study is the integration of validated AI-based quantitative measurement with an interpretable clinical decision-support workflow, extending the application of image segmentation beyond measurement alone toward structured clinical interpretation. The proposed framework should not be interpreted as an artificial intelligence system that directly predicts the underlying etiology. Instead, artificial intelligence is used to generate objective quantitative gingival display measurements, which are subsequently interpreted using an explicit, literature-derived decision framework.
+
+Gummy smile represents a clinically heterogeneous condition arising from the interaction of upper lip dynamics, vertical maxillary growth pattern, dentoalveolar compensations, and periodontal morphology [1]. This multifactorial nature necessitates etiology-specific and individualized treatment approaches to achieve optimal clinical outcomes [4]. Previous studies have demonstrated that treatment responses may vary significantly according to patient profiles and that comparisons between different treatment modalities often remain limited by low levels of evidence [24]. From a periodontal perspective, the critical role of soft tissue architecture in determining esthetic outcomes has been emphasized [25], and this heterogeneity increasingly underscores the need for objective and standardized diagnostic tools [26,27]. These trends further support the growing expectation that artificial intelligence–based systems may evolve into platforms for simulation, personalized design, and clinical decision support in esthetic dentistry [28]. However, current classification and diagnostic assessment processes largely rely on the clinician’s visual interpretation and individual experience, which may limit diagnostic consistency and lead to considerable variability in treatment planning among clinicians. The proposed framework, which provides consistent and reproducible outputs, contributes to the establishment of more objective and standardized approaches in etiological assessment and treatment planning.
+
+Artificial intelligence–based segmentation and quantitative image analysis have previously been shown to enable accurate and reproducible assessment of peri-oral tissues, gingival exposure, lip position, and smile line parameters [8,29]. These studies demonstrate that AI-derived image measurements can achieve close agreement with conventional clinical assessments. In our previous study, we established the validity of AI-based gingival display quantification by demonstrating close agreement between AI-derived and clinical measurements obtained from standardized smile photographs [30]. The DeepLabV3+-based segmentation and regression model developed in that study primarily focused on objective quantitative measurement and its clinical validation. Building upon this validated quantitative measurement framework, the present study represents the next stage of our research by integrating objective AI-derived measurements with a transparent, literature-derived decision framework for etiological interpretation and treatment planning. Unlike our previous work, the novelty of the present study lies not in further improving measurement accuracy, but in transforming validated quantitative measurements into an interpretable clinical decision-support workflow. To achieve this, the proposed framework incorporates simultaneous lip and gingival segmentation, comparative evaluation of different segmentation architectures, and integration of quantitative measurements with an evidence-based etiological interpretation and treatment-planning framework.
+
+ It has been reported that the clinical value of AI-assisted esthetic systems is not limited solely to measurement accuracy, but also extends to the standardization of esthetic perception and the rationalization of clinical workflows [31]. Within this framework, quantitative assessment of gingival display was integrated with a literature-based etiological classification, and corresponding treatment options could be systematically proposed. The ability of the framework to generate outputs consistent with clinician measurements while providing structured etiological hypotheses and corresponding treatment recommendations extends previous findingsbeyond technical accuracy toward clinically actionable decision support. Furthermore, data-driven analyses are anticipated to contribute to reducing the risk of treatment errors, particularly in irreversible esthetic interventions, and to support the clinical decision-making process by enabling the direct integration of model outputs into clinical workflows and the establishment of a shared reference framework among clinicians through a holistic approach.
+
+In the present study, a segmentation-based approach was adopted for the assessment of gingival display. The primary rationale for this approach was the ability to delineate anatomical boundaries at the pixel level, allowing the measurement to be calculated geometrically directly from segmentation masks. The YOLOv11x-seg model generated mask outputs that enabled the separation of gingival and lip regions from a single image, thereby allowing quantitative measurement of gingival exposure.
+
+The software architecture was designed as a modular pipeline in which the training and inference stages were separated. Automatic end-to-end output generation from a single image was achieved by sequentially integrating segmentation, measurement, threshold-based classification, and reporting steps. This modular design also enables the potential integration of alternative segmentation models or different clinical threshold sets in future developments of the system.
+
+An important methodological feature of the proposed framework is the decision to report multiple etiological candidates within overlapping threshold intervals. Rather than forcing a deterministic classification at borderline values, this approach reduces the risk of incorrect definitive diagnoses when interpreting gingival display measurements. It also allows clinicians to directly observe which clinical thresholds contribute to the suggested etiological interpretations and corresponding treatment options. Consequently, the system functions as a reproducible and traceable clinical decision-support mechanism in which the relationship between the measured value and the proposed diagnostic categories can be explicitly followed without requiring a secondary machine-learning classifier. Importantly, the etiological output of the proposed framework should not be interpreted as a definitive diagnosis. Rather, it represents etiological hypotheses derived from the application of a literature-derived decision framework to objectively quantified gingival display measurements. Comprehensive clinical examination, cephalometric evaluation, assessment of lip morphology, and periodontal examination remain essential for establishing the definitive underlying etiology and selecting the appropriate treatment.In addition, the storage of segmentation masks as intermediate outputs increased the traceability of the measurement process and enabled visual verification when necessary. This strategy supports the use of the automated measurement system as a clinically interpretable and transparent decision-support tool. Accordingly, the present study represents a translational extension of our previously validated AI-based quantitative measurement framework [30], advancing objective gingival display quantification toward an interpretable clinical decision-support workflow through the integration of a traceable, literature-derived decision framework. 
+
+This study has several limitations. The fact that the model performs analysis solely on frontal two-dimensional images may limit certain aspects of etiological interpretation. Indeed, it has been reported in the literature that three-dimensional esthetic analyses enable more accurate and objective measurement of reference points compared to two-dimensional images, whereas two-dimensional analyses may be affected by camera angle and postural variability [6]. In addition, the relatively limited demographic and phenotypic diversity of the dataset may have led to insufficient representation of rare smile patterns. Nevertheless, the present study provides a foundation for future research incorporating cephalometric measurements, clinical crown dimensions, lip morphology, and dynamic smile parameters, as well as multi-center, heterogeneous, and three-dimensional biometric datasets.
+
+In conclusion, the multi-stage artificial intelligence model developed in this study demonstrates that smile analysis can be transformed from a purely quantitative measurement level into a structured clinical workflow incorporating etiological classification and treatment guidance. Integration of the model into clinical software platforms, supported by prospective multi-center validation studies, may further enhance the accuracy and standardization of clinical decision-making. In the future, the development of personalized esthetic treatment supports and real-time clinical decision-support systems may contribute to positioning artificial intelligence as a supportive tool in clinical decision-making processes in esthetic dentistry.
+
+The novelty of the present study lies not in enabling AI to diagnose the underlying etiology, but in combining validated AI-based quantitative measurement with an interpretable, evidence-based clinical decision-support framework that transparently links objective measurements to potential etiological hypotheses and treatment options.
+
+- **Conclusion**
+
+This study presents a segmentation-based analytical pipeline that enables the objective measurement of gingival display from smile images. The integration of these quantitative measurements with a transparent, literature-derived decision framework provides structured decision support for etiological interpretation and treatment planning in cases of excessive gingival display. The proposed approach offers a practical foundation for more standardized and explicit clinical evaluation. Future integration of multimodal data sources and data-driven etiological models may further advance personalized esthetic treatment planning.
+
+|  |
+| --- |
+
+**References**
+
+[1]	M. Brizuela, D. Ines. Excessive gingival display.  StatPearls [Internet]: StatPearls Publishing; 2023.
+
+[2]	Y.G. Xu, N. Wei, J.X. Zhang, C. Wang, Y.L. Zhang, W.J. Hu, et al., Layperson assessment of smile lines and upper lip combined images in smile esthetics, J. Prosthet. Dent. 134 (2025) 1280-1289, [https://doi.org/10.1016/j.prosdent.2024.01.037](https://doi.org/10.1016/j.prosdent.2024.01.037).
+
+[3]	G. Angulo-Manzaneque, M. Baus-Domínguez, G. Ruiz-de-León, M. Serrera-Figallo, F.S. Aguilera, D. Torres-Lagares, Proposal of a New Therapeutic Classification in Gingival Smiles Focused on Treatment with Semi-Permanent Infiltrations, Dent J (Basel). 12 (2024) [https://doi.org/10.3390/dj12100319](https://doi.org/10.3390/dj12100319).
+
+[4]	A. Venugopal, P. Manzano, F. Ahmed, N. Vaiid, S.J. Bowman, editors. Gummy smiles: etiologies, diagnoses & formulating a clinically effective treatment protocol. Semin. Orthod.; 2024: Elsevier.
+
+[5]	B. Mahardawi, T. Chaisamut, N. Wongsirichat, Gummy smile: A review of etiology, manifestations, and treatment, Siriraj Medical Journal. 71 (2019) 168-174, 
+
+[6]	R.E. Baaj, T.A. Alangari, Artificial intelligence applications in smile design dentistry: A scoping review, J. Prosthodont. 34 (2025) 341-349, [https://doi.org/10.1111/jopr.14000](https://doi.org/10.1111/jopr.14000).
+
+[7]	R.S. Saini, K. Kaur, V. Gurumurthy, R.I.H. Binduhayyim, A. Kaushik, M.S. Kuruniyan, et al., Impact of artificial intelligence-based digital smile design on patient and clinician satisfaction and facial esthetic outcomes: A systematic review and meta-analysis, Digit Health. 11 (2025) 20552076251388392, [https://doi.org/10.1177/20552076251388392](https://doi.org/10.1177/20552076251388392).
+
+[8]	S. Lee, G. Jin, J.H. Park, H.I. Jung, J.E. Kim, Evaluation metric of smile classification by peri-oral tissue segmentation for the automation of digital smile design, J. Dent. 145 (2024) 104871, [https://doi.org/10.1016/j.jdent.2024.104871](https://doi.org/10.1016/j.jdent.2024.104871).
+
+[9]	R.A.K. Abdillah, P. Indra, F. Hadinata, A.A. Alhasyimi, Innovative and Precise Solutions in Gummy Smile Management: The Impact of Digital Technology on Smile Regeneration, Contemp. Clin. Dent. 16 (2025) 202-206, [https://doi.org/10.4103/ccd.ccd_288_25](https://doi.org/10.4103/ccd.ccd_288_25).
+
+[10]	M. Koseoglu, R.A. Ramachandran, H. Ozdemir, M.D. Ariani, F. Bayindir, C. Sukotjo, Automated facial landmark measurement using machine learning: A feasibility study, J. Prosthet. Dent. 134 (2025) 1148-1155, [https://doi.org/10.1016/j.prosdent.2024.04.007](https://doi.org/10.1016/j.prosdent.2024.04.007).
+
+[11]	N. Silberberg, M. Goldstein, A. Smidt, Excessive gingival display--etiology, diagnosis, and treatment modalities, Quintessence Int. 40 (2009) 809-818, 
+
+[12]	A.H. Tjan, G.D. Miller, J.G. The, Some esthetic factors in a smile, The Journal of prosthetic dentistry. 51 (1984) 24-28, 
+
+[13]	E. Dilaver, S. Uckan, Effect of V–Y plasty on lip lengthening and treatment of gummy smile, Int. J. Oral Maxillofac. Surg. 47 (2018) 184-187, 
+
+[14]	D.A. Garber, M.A. Salama, The aesthetic smile: diagnosis and treatment, Periodontol. 2000. 11 (1996) 18-28, 
+
+[15]	J. Coslet, R. Vanarsdall, A. Weisgold, Diagnosis and classification of delayed passive eruption of the dentogingival junction in the adult, The Alpha Omegan. 70 (1977) 24-28, 
+
+[16]	M. Polo, Botulinum toxin type A (Botox) for the neuromuscular correction of excessive gingival display on smiling (gummy smile), Am. J. Orthod. Dentofacial Orthop. 133 (2008) 195-203, 
+
+[17]	R. Mazzuco, D. Hexsel, Gummy smile and botulinum toxin: a new approach based on the gingival exposure area, J. Am. Acad. Dermatol. 63 (2010) 1042-1051, 
+
+[18]	V.G. Kokich, editor Esthetics: the orthodontic-periodontic restorative connection. Semin. Orthod.; 1996: Elsevier.
+
+[19]	M. Redlich, Z. Mazor, N. Brezniak, Severe high Angle Class II Division 1 malocclusion with vertical maxillary excess and gummy smile: a case report, Am. J. Orthod. Dentofacial Orthop. 116 (1999) 317-320, 
+
+[20]	B.N. Epker, Superior surgical repositioning of the maxilla: long term results, J. Maxillofac. Surg. 9 (1981) 237-246, 
+
+[21]	W.H. Bell, T.D. Creekmore, R. Alexander, Surgical correction of the long face syndrome, Am. J. Orthod. 71 (1977) 40-67, 
+
+[22]	D. Hexsel, T. Dal’Forno, F. Camozzato, I. Valente, M. Soirefmann, A.F. Silva, et al., Effects of different doses of abobotulinumtoxinA for the treatment of anterior gingival smile, Archives of dermatological research. 313 (2021) 347-355, 
+
+[23]	B.P. Silva, E. Jiménez‐Castellanos, K. Stanley, E. Mahn, C. Coachman, S. Finkel, Layperson's perception of axial midline angulation in asymmetric faces, Journal of Esthetic and Restorative Dentistry. 30 (2018) 119-125, 
+
+[24]	A.D. Inchingolo, A.M. Inchingolo, F. Viapiano, A. Netti, A.M. Ciocia, I. Ferrara, et al., Effectiveness and Personalized Approaches in the Correction of Gummy Smile: A Systematic Review of Orthodontic and Surgical Treatments, J Clin Med. 13 (2024) [https://doi.org/10.3390/jcm13226843](https://doi.org/10.3390/jcm13226843).
+
+[25]	P. Bajaj, K.R. Bhombe, R.R. Oza, Periodontal Management of Gummy Smile Due to Altered Passive Eruption: A Case Report, Cureus. 14 (2022) e29174, [https://doi.org/10.7759/cureus.29174](https://doi.org/10.7759/cureus.29174).
+
+[26]	M. Maleki, B. Huang, V.C. Mendes, M.F. Caminiti, Y. Finer, A Systematic Review and Meta-Analysis Comparing Surgical and Nonsurgical Treatments for Excessive Gingival Display, Dentistry Journal. 12 (2024) 154, 
+
+[27]	E. Kezban, Gummy Smile Etiology and Treatment Options, Selcuk Dental Journal. 12 (2025) 166-171, 
+
+[28]	T. Mourgues, M.J. González-Olmo, L. Huanca Ghislanzoni, C. Peñacoba, M. Romero-Maroto, Artificial Intelligence in Aesthetic Dentistry: Is Treatment with Aligners Clinically Realistic?, Journal of Clinical Medicine. 13 (2024) 6074, 
+
+[29]	S. Lee, J.E. Kim, Evaluating the Precision of Automatic Segmentation of Teeth, Gingiva and Facial Landmarks for 2D Digital Smile Design Using Real-Time Instance Segmentation Network, J Clin Med. 11 (2022) [https://doi.org/10.3390/jcm11030852](https://doi.org/10.3390/jcm11030852).
+
+[30]	Z.T. Çankaya, G. Çolak, R.F. Örs, A. Bodur, AI-based segmentation of gingival display for gummy smile assessment: Model development and clinical validation, J. Dent. 170 (2026) 106667, [https://doi.org/10.1016/j.jdent.2026.106667](https://doi.org/10.1016/j.jdent.2026.106667).
+
+[31]	K. Kaushik, A. Sales, S.J. Rodrigues, Comparative analysis of facial aesthetics in AI generated versus conventionally crafted digital smile designs-a cross-sectional study, BDJ Open. 11 (2025) 79, [https://doi.org/10.1038/s41405-025-00367-z](https://doi.org/10.1038/s41405-025-00367-z).
+
+| Gingival Display | Etiology | Treatment |
+| --- | --- | --- |
+| < 4 mm | **E1** | Altered passive eruption Gingival enlargement Thick gingival phenotype | **T1** | Gingivectomy Gingivoplasty |
+| 3 - 6 mm | **E2** | Hypermobile (hyperactive) upper lip Short upper lip (< 20 mm) | **T2** | Lip repositioning Botulinum toxin injections |
+| 4 - 8 mm | **E3** | Dentoalveolar extrusion Deep bite | **T3** | Orthodontic therapy Osteotomy |
+| > 8 mm | **E4** | Vertical maxillary excess (VME) | **T4** | Le Fort I osteotomy |
+
+**Tabl****e**** ****1****.** Literature-derived reference decision matrix presenting potential etiological factors and corresponding treatment approaches according to gingival display levels. ***Note******:**** **The **etiological** **classifications** and **treatment** **approaches** **presented** in **this** **table** **were** **synthesized** **from** **previously** reported **studies** by **Garber** and Salama**[14]**, **Coslet** et al.**[15]**, Polo**[16]**, **Mazzuco** and **Hexsel**[17]**, **Kokich**[18]**, **Redlich** et al.**[19]**, **Epker**[20]**, **Bell et al.**[21]**,* *Hexsel** et al.**[22]** **, and Silva et al**.**[23]*
+
+**Figure**** ****legend**
+
+**Figure 1.** Visual annotation of gingival and lip boundaries in an individual with a high smile line.
+
+**Figure**** 2.** Performance evaluation of the segmentation model across confidence thresholds. (a) precision–recall curve,  (b) precision–confidence curve, (c) recall–confidence curve, and (d) F1–confidence curve showing that the all-classes F1 score reached approximately 0.79 at the optimal confidence threshold, while the lip class maintained higher F1 values than the gingiva class across most confidence levels.
+
+**Figure ****3****. **Training dynamics and performance metrics of the YOLOv11x-seg model.
+
+**Figure**** ****4****.** Visualization of class distribution and label geometry in the dataset.
+
+**Figure**** ****5****. **Normalized confusion matrix of the YOLOv11 model.
+
+**Figure 6*****.*** Example output demonstrating the integration of AI-derived gingival display measurements with the literature-derived decision framework for generation of potential etiological hypotheses and corresponding treatment recommendations.

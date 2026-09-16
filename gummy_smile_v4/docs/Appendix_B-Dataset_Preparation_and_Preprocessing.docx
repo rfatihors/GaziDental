@@ -1,0 +1,9 @@
+**APPENDIX ****B**
+
+**B****.1 | ****Dataset**** ****p****reparation**** and ****p****reprocessing**
+
+The raw dataset consisted of 1,315 original images obtained for gingival display analysis. According to smile-line grouping, the dataset was distributed as 796 normal, 303 low, and 216 high images. All images were annotated for two-class instance segmentation, with gingiva and lip defined as the target classes. These annotations were versioned on the Roboflow platform and managed together with training, validation, and test partitions for subsequent model development.
+
+To improve model generalizability, data augmentation was applied only to the training dataset. In the first stage, augmentation was performed on Roboflow using ± 5° rotation and ± 5 exposure variations, resulting in approximately a threefold expansion of the dataset from 1,315 to ~ 3,155 images. In this initial version, images were also fitted within a 432 × 432 frame, and this version was used as the common baseline for the first Roboflow-based model comparisons. In subsequent experiments, images were subjected to auto-orientation and resized to 640 × 640 resolution. This preprocessing-only version corresponded to dataset v6 (2401_preprocessing) and preserved the original dataset size of 1,315 images. Additionally, a further augmented dataset (v7; 2401_Final_Pre+Aug) was generated using horizontal flip, −5° to +5° rotation, hue (−3 to +3), saturation (−5 to +5), brightness (−7 to +7), and bounding-box augmentation, resulting in a dataset containing 2,235 images.
+
+The dataset was initially divided into 70 % training, 15 % validation, and 15 % test sets. During the hyperparameter optimization phase, an updated dataset version containing 3,403 images was used, with a 92 % training, 4 % validation, and 4 % test split to increase the amount of training data. No augmentation was applied to the validation or test datasets during evaluation.

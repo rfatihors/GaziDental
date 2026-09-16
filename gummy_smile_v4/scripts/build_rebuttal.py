@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import pandas as pd
 import yaml
 
@@ -160,6 +161,12 @@ def main() -> int:
     e_seg_bias, e_meas_bias = float(dec["e_seg"].mean()), float(dec["e_meas"].mean())
     ref_max = float(per6["ref_mm"].max()); n_e4 = int((per6["ref_label"] == "E4").sum())
     seg_g, seg_l, seg_all = seg.loc["diseti"], seg.loc["dudak"], seg.loc["all"]
+    cm = np.array(tm.get("confusion_matrix", [[np.nan]]))          # rows = predicted, cols = true (last = background)
+    g_tp = g_fp = g_fn = l_tp = l_fn = float("nan")
+    if cm.shape == (3, 3):
+        g_tp, g_fp, g_fn = cm[0, 0], cm[0, 2], cm[2, 0] + cm[1, 0]
+        l_tp, l_fn = cm[1, 1], cm[2, 1] + cm[0, 1]
+    n_high_pct = 100 * int(dc.loc["high", "kept"]) / int(dc.loc["total", "kept"])
     lc100 = lc[lc["fraction"] == 1.0].iloc[0]; lc25 = lc[lc["fraction"] == 0.25].iloc[0]
 
     def f(x, d=2, sign=False):
@@ -223,12 +230,6 @@ def main() -> int:
         f"On predicted masks (out-of-fold, n = {int(P['n'])}; {n_fail} image with no gingiva predicted reported as a segmentation failure) the full pipeline gives {acc_line(P)}. "
         f"A new Figure 6 shows both scatter and Bland–Altman plots against the clinical reference."),
         changes="[Figure 6 — replaced] `figures/measurement_gt_masks.png` (annotated masks) and `figures/measurement_predicted_masks.png` (full pipeline, primary); Methods 2.x (measurement) rewritten; Results 3.x; erratum sentence in the Discussion", files=["outputs/02_measure/v3_vs_v4.md", "outputs/07_report/figures/measurement_gt_masks.png", "outputs/07_report/figures/measurement_predicted_masks.png", "outputs/07_report/tables/measurement_accuracy.md"], sources=[S["v34"], S["acc"], S["est3"]])
-    A["demographics"] = dict(status="READY", text=(
-        f"Age and sex were recorded for part of the cohort only, and we report the coverage explicitly rather than imputing. In the cleaned dataset (n = {int(dem.loc['all', 'n'])}) age is available for {int(dem.loc['all', 'age_recorded'])} participants "
-        f"(mean {f(dem.loc['all', 'age_mean'], 1)} ± {f(dem.loc['all', 'age_sd'], 1)} years, range {dem.loc['all', 'age_min']:.0f}–{dem.loc['all', 'age_max']:.0f}) and sex for {int(dem.loc['all', 'sex_recorded'])} ({int(dem.loc['all', 'female'])} female, {int(dem.loc['all', 'male'])} male; {f(dem.loc['all', 'female_pct_of_recorded'], 0)} % female of those recorded). "
-        f"For the {int(dem.loc['high', 'n'])} high-smile-line images with a reference measurement: age recorded for {int(dem.loc['high', 'age_recorded'])} (mean {f(dem.loc['high', 'age_mean'], 1)} ± {f(dem.loc['high', 'age_sd'], 1)}), sex for {int(dem.loc['high', 'sex_recorded'])} ({f(dem.loc['high', 'female_pct_of_recorded'], 0)} % female). "
-        "The incomplete demographic record is stated as a limitation."),
-        changes="[Table — new: demographic coverage per group] `tables/demographics.md`; Methods 2.1; Limitations", files=["outputs/07_report/tables/demographics.md"], sources=[S["dem"]])
     A["external_validity"] = dict(status="READY", text=(
         "We agree with the reviewer. The a priori χ² calculation addressed a frequency comparison that is not performed in this study and does not inform the data requirement of a segmentation network; it has been removed together with the statement that the cohort size supports external validity. "
         "Data adequacy is now shown empirically with a learning curve (see our response on the power calculation) and the agreement analysis is justified by precision rather than power. "
@@ -256,23 +257,121 @@ def main() -> int:
         (f"Draft from the clinical team (to be confirmed and signed off by them): \"{m_overlap.group(1)}\"" if m_overlap else "[CLINICAL — text from the clinical team on the relationship with the earlier study]")
         + f" Technical check: {m_match.group(1) if m_match else '?'} of the {int(dc.loc['high', 'images_roboflow_export'])} high-smile-line images have a reference measurement in the earlier study's measurement file; the earlier partition was not reused (new participant-level split, different label scheme and model)."),
         changes="Methods 2.1 (relationship to the earlier study); `outputs/07_report/overlap_with_prior_study.md` [to be generated]", files=["docs/Klinik_ekip_kararlari_15Eylul.md", "outputs/01_data/OZET.md"], sources=[S["clin"], S["ozet1"]])
-    A["intra_observer"] = dict(status="READY", text=(
-        (f"We report the intra-observer reliability of the clinical reference on the complete two-session file. We note a correction: the calibration files used for the original submission contained {m_15.group(1)} images per session although {m_15.group(2)} were stated; the clinical team supplied the complete 20-image file and the statistics were recomputed. " if m_15 else "")
-        + (f"Twenty images × six teeth measured twice by the same observer: tooth level ICC(2,1) {tooth_row[2]}, mean difference {tooth_row[5]} mm, SD {tooth_row[6]} mm, 95 % limits of agreement {tooth_row[7]} mm (n = {tooth_row[1]}); image-mean level ICC(2,1) {image_row[2]} (n = {image_row[1]}). " if tooth_row and image_row else "")
-        + (f"({intra_in_coco.group(1)} of these {intra_in_coco.group(2)} images belong to the present dataset.) " if intra_in_coco else "")
-        + f"The tooth-level SD of {tooth_row[6] if tooth_row else '?'} mm is the repeatability floor of the reference against which the pipeline's MAE is interpreted."),
-        changes="Methods 2.x (reference measurement); Results (intra-observer table) `outputs/03_oracle/intra_observer.md`", files=["outputs/03_oracle/intra_observer.md"], sources=[S["intra"], S["audit"]])
-    A["limitations"] = dict(status="CLINICAL", text=(
-        "The Discussion and Limitations are being revised by the clinical team; the technical facts to be stated are: (i) terminology — 'high smile line' is used throughout instead of 'gummy smile / excessive gingival display', and the decision table lists possible aetiological conditions and treatment alternatives, not diagnoses; "
-        f"(ii) the E4 class (> 8 mm) does not occur among the reference images (maximum {f(ref_max)} mm), so that branch is not validated; (iii) external validity: single centre, single device, internal estimate only; "
-        + (f"(iv) \"{m_pigment.group(1)}\"; " if m_pigment else "(iv) gingival and skin pigmentation were not recorded; ")
-        + f"(v) demographic records are incomplete (see Reviewer 3); (vi) the segmentation model places the lower gingival margin {f(a6['gingiva_bottom_edge_bias_mm_mean'])} mm too low on average; the correction is post hoc and secondary; (vii) {n_fail} of {int(P['n']) + n_fail} images produced no gingiva mask and must be flagged for manual review in any deployment."),
-        changes="Discussion / Limitations [text from the clinical team]", files=["docs/Klinik_ekip_kararlari_15Eylul.md", "outputs/06_prediction/prediction_summary.md"], sources=[S["clin"], S["per6"], S["bset"]])
+    A["narrow_or_compare"] = dict(status="PENDING", text=(
+        "We have done both of the things the reviewer asks for. (i) The segmentation and measurement part is now properly validated: the measurement module was rewritten after we found a geometry error in it (see our response to Reviewer 4 on Figure 6), "
+        f"and its millimetre accuracy against the clinical reference measurements is reported on {int(P['n'])} high-smile-line images predicted out-of-fold ({acc_line(P)}) and on the fixed test set ({acc_line(B)}). "
+        "(ii) The decision layer is compared with independent clinical assessment: three clinicians, blinded to each other and to the threshold table, assign the class from their own clinical judgement and measure gingival display per tooth; the majority class is the reference standard and the primary statistic is the linear-weighted κ. "
+        "[PENDING — the expert forms are being completed; the agreement numbers will be inserted from `outputs/04_expert/manuscript_numbers.md`.] "
+        "Where the data cannot support a claim we now say so explicitly: the E4 branch has no case in this cohort and is not validated, and the conclusions are restricted accordingly (Reviewer 3, Abstract and Discussion)."),
+        changes="Title and Abstract narrowed; [Results 3.x — measurement accuracy, new]; [Results 3.x — agreement with clinical assessment, to be inserted]; Conclusion rewritten", files=["outputs/06_prediction/prediction_summary.md", "outputs/04_expert/expert_summary.md"], sources=[S["acc"], S["status"]])
+    A["abstract_claims"] = dict(status="PENDING", text=(
+        "We agree. The Abstract now reports the millimetre accuracy of the measurement rather than segmentation metrics alone, and the conclusions and clinical significance are restricted to what was evaluated. "
+        f"The revised Abstract states the measurement accuracy against the clinical reference on the {int(P['n'])} high-smile-line images with out-of-fold predictions ({acc_line(P)}) and the segmentation performance on the fixed test set separately. "
+        "The validation of the etiological and treatment categories is an agreement analysis against blinded clinical assessment; until those data are complete the Abstract does not claim clinical validation of the decision layer. "
+        "[PENDING — expert agreement numbers.] The phrase 'clinically validated' has been removed from the Conclusions and the Clinical Significance statement (see Reviewer 3, Discussion item 5)."),
+        changes="[Abstract — rewritten: Results and Conclusions]; [Clinical Significance — rewritten]", files=["outputs/07_report/MANUSCRIPT_EDITS.md", "outputs/06_prediction/prediction_summary.md"], sources=[S["acc"]])
+    A["clinical_validation_claim"] = dict(status="CLINICAL", text=(
+        "We agree and have removed every statement that implies clinical validation of the decision layer. The manuscript now separates three claims: (i) the segmentation model performs as reported on an independent test set; "
+        f"(ii) the measurement agrees with the clinical reference to {acc_line(P).split(',')[0]} on out-of-fold predictions; (iii) the etiology-treatment layer is a transparent application of published thresholds whose agreement with clinical judgement is assessed in an agreement study, not a validation of diagnostic accuracy. "
+        f"The Conclusion states explicitly that the framework has not been validated as a clinical decision tool, that the E4 branch has no case in this cohort (maximum mean gingival display {f(ref_max)} mm) and that prospective, multi-centre clinical validation is required before use. [CLINICAL — final wording from the clinical team.]"),
+        changes="[Conclusions — rewritten]; [Abstract, Conclusions and Clinical Significance — rewritten]; Discussion limitation paragraph", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["acc"], S["per6"]])
+    A["group_sizes"] = dict(status="READY", text=(
+        "The three smile-line groups are not a designed factor: the photographs are a consecutive clinical series and the group sizes reflect the natural distribution of the smile line in that series "
+        f"({int(dc.loc['high', 'images_roboflow_export'])} high, {int(dc.loc['normal', 'images_roboflow_export'])} average and {int(dc.loc['low', 'images_roboflow_export'])} low before cleaning; {int(dc.loc['high', 'kept'])}, {int(dc.loc['normal', 'kept'])} and {int(dc.loc['low', 'kept'])} after). "
+        "Equal group sizes are not required by any of the analyses reported here and enforcing them would mean discarding a large part of the sample and distorting the prevalence of the smile-line categories: the smile-line groups are not compared with each other. "
+        "The gingival display measurement and its validation are performed only within the high-smile-line group; the low and average images serve the segmentation training (see Methods item 7). "
+        f"We now report the demographic coverage per group rather than claiming balance: age is recorded for {int(dem.loc['all', 'age_recorded'])} of {int(dem.loc['all', 'n'])} participants (mean {f(dem.loc['all', 'age_mean'], 1)} ± {f(dem.loc['all', 'age_sd'], 1)} years) and sex for {int(dem.loc['all', 'sex_recorded'])} "
+        f"({f(dem.loc['all', 'female_pct_of_recorded'], 0)} % female of those recorded; high group {f(dem.loc['high', 'female_pct_of_recorded'], 0)} %, low {f(dem.loc['low', 'female_pct_of_recorded'], 0)} %, average {f(dem.loc['normal', 'female_pct_of_recorded'], 0)} %). "
+        "The sex distribution is unbalanced and differs between groups; because sex is not used by the model and is not an analysis factor, we report it as a characteristic of the sample and as a limitation rather than adjusting the sample."),
+        changes="Methods 2.6 (study population / dataset) — sentence on group composition; [Table — demographic coverage per group, new] `tables/demographics.md`; Limitations", files=["outputs/07_report/tables/demographics.md", "outputs/07_report/tables/dataset_counts.md"], sources=[S["dem"], S["dc"]])
+    A["why_low_normal"] = dict(status="READY", text=(
+        "The reviewer's reading is correct: the low and average smile-line images were used only for the development of the segmentation model, never for gingival display measurement. "
+        "They are needed because the model has to learn where gingiva is *not* exposed as well as where it is: a model trained on high-smile-line images alone would have no negative or borderline examples of the gingival margin and would over-predict gingiva in ordinary smiles. "
+        f"Quantitatively, in the test set the annotated gingiva of low smile lines spans a median of {low6['gingiva_n_columns_gt_median']:.0f} image columns and that of average smile lines {norm6['gingiva_n_columns_gt_median']:.0f}, against {a6['gingiva_n_columns_gt_median']:.0f} in the high group; "
+        f"in {int(c6['n_neither'])} test images neither the annotation nor the prediction contains gingiva (correct absence) and in {int(c6['n_spurious'])} the model predicts gingiva where the annotation has none. "
+        "The measurement module is specified for the high smile line only and returns NO_VISIBLE_GINGIVA when no gingiva is present; the millimetre validation therefore uses exclusively the "
+        f"{int(dc.loc['high', 'kept'])} high-smile-line images with a clinical reference measurement. The revised Methods state this division of roles explicitly."),
+        changes="Methods 2.6 (image dataset) — new sentence on the role of each group; Methods 2.7 (measurement) — applicability restricted to the high smile line", files=["outputs/06_prediction/boundary_by_set.md", "outputs/07_report/tables/dataset_counts.md"], sources=[S["bset"], S["dc"]])
+    A["pigmentation"] = dict(status="CLINICAL", text=(
+        "This is a fair point and we cannot answer it with these data: neither ethnicity nor gingival or skin pigmentation was recorded for the cohort, so no subgroup analysis is possible. We state this as a limitation rather than speculate. "
+        "What we can report is where the segmentation error actually lies, which does not look like a pigmentation effect: the error is a systematic displacement of one boundary rather than a random failure of the mask. "
+        f"On the {int(a6['n'])} reference images the upper, lip-side gingiva edge is accurate (MAE {f(a6['gingiva_top_edge_mae_mm_mean'])} mm, bias {f(a6['gingiva_top_edge_bias_mm_mean'], 2, True)} mm) while the lower, festooned margin is placed consistently too low "
+        f"(bias {f(a6['gingiva_bottom_edge_bias_mm_mean'], 2, True)} mm), and this shift is the same in every cross-validation fold and in the final model. A pigmentation-driven failure would be expected to vary between participants rather than to be constant. "
+        "This is evidence about the nature of the error, not about pigmentation itself; a prospective study recording phenotype would be required to answer the reviewer's question properly, and we say so. [CLINICAL — the limitation sentence is to be finalised by the clinical team.]"),
+        changes="Limitations — new sentence (pigmentation and ethnicity not recorded); Discussion — nature of the segmentation error", files=["outputs/06_prediction/boundary_by_set.md", "outputs/06_prediction/offset_stability.csv"], sources=[S["bset"], S["clin"]])
+    A["metric_meaning"] = dict(status="READY", text=(
+        "We apologise for the ambiguity. 'Performance' in that sentence meant mask mAP@50, a ranking metric for instance segmentation; it is neither sensitivity nor specificity, and the sentence has been rewritten to name the metric explicitly. "
+        "False positives and false negatives were computed but not reported, which we have corrected. On the fixed test set "
+        + (f"({int(tm.get('n_images', 0))} images) the model produced {int(g_tp)} correct gingiva instances, {int(g_fp)} false positives and {int(g_fn)} false negatives for the gingiva class, and {int(l_tp)} correct lip instances with {int(l_fn)} false negatives; " if np.isfinite(g_tp) else "")
+        + f"per class this is precision {f(seg_g['seg_precision'])} / recall {f(seg_g['seg_recall'])} (mask) for gingiva and {f(seg_l['seg_precision'])} / {f(seg_l['seg_recall'])} for lip. "
+        "Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation without a fixed set of candidate regions (there is no denominator of true negatives), which is why we report precision, recall, F1 and the confusion matrix instead, at the stated confidence threshold, and the per-pixel boundary agreement separately (Reviewer 2, item 10)."),
+        changes="Results 3.1 — sentence rewritten to name the metric; [Table — per-class precision, recall, F1, mAP on the test set]; confusion-matrix figure with FP/FN counts", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/05_predictions/confusion_matrix.png"], sources=[S["seg"], S["tm"]])
+    A["separate_evaluations"] = dict(status="READY", text=(
+        "We agree, and the revised manuscript separates them completely. Segmentation performance is reported on the fixed test set "
+        f"(n = {int(tm.get('n_images', 0))}; gingiva mask mAP@50 {f(seg_g['seg_map50'])}, lip {f(seg_l['seg_map50'])}, all classes {f(seg_all['seg_map50'])}) and answers the question whether the structures are found. "
+        f"The ability to calculate gingival display in millimetres is evaluated in its own section against the clinical reference measurements, and in two steps so that the two error sources can be told apart: on the annotated masks (geometry only: {acc_line(G)}) "
+        f"and on the model's own masks (full pipeline, out-of-fold: {acc_line(P)}). The difference between the two is what the segmentation contributes to the measurement error "
+        f"(bias {f(e_seg_bias, 2, True)} mm from the segmentation against {f(e_meas_bias, 2, True)} mm from the measurement geometry). A model can segment well and measure poorly, and the manuscript now shows both numbers rather than letting mAP stand for measurement accuracy."),
+        changes="Results split into 3.1 'Segmentation performance (test set)' and 3.2 'Millimetre measurement accuracy'; Abstract reports both", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/06_prediction/prediction_summary.md", "outputs/06_prediction/error_decomposition.md"], sources=[S["seg"], S["acc"], S["dec"]])
+    A["abstract_scope"] = dict(status="READY", text=(
+        f"The reviewer is right and we have corrected it. The quantitative gingival display analysis applies only to the high smile line subgroup, and the Abstract now says so in the Methods sentence and repeats the denominator in the Results. "
+        f"After cleaning, the quantitative analysis uses {int(dc.loc['high', 'kept'])} high-smile-line images with a clinical reference measurement, i.e. {n_high_pct:.1f} % of the {int(dc.loc['total', 'kept'])} images in the study "
+        f"(of {int(dc.loc['high', 'images_roboflow_export'])} high-smile-line images in the original export, {int(dc.loc['high', 'no_reference_measurement'])} had no reference measurement and were excluded, and {int(dc.loc['high', 'same_patient_duplicate'])} were same-participant duplicates). "
+        f"The remaining {int(dc.loc['low', 'kept']) + int(dc.loc['normal', 'kept'])} low and average smile-line images are used for segmentation training only (Reviewer 3, Methods item 7)."),
+        changes="[Abstract — Methods and Results sentences]; Methods 2.6", files=["outputs/07_report/tables/dataset_counts.md"], sources=[S["dc"]])
+    A["metric_types"] = dict(status="READY", text=(
+        "We thank the reviewer for catching this; mixing the two metric families in one list was misleading. Every metric is now labelled Box or Mask wherever it appears, and both are reported. "
+        f"On the fixed test set the final model gives, for the mask: mAP@50 {f(seg_all['seg_map50'])}, mAP@50–95 {f(seg_all['seg_map50_95'])}, precision {f(seg_all['seg_precision'])}, recall {f(seg_all['seg_recall'])} (all classes); "
+        f"for the box: mAP@50 {f(seg_all['box_map50'])}, mAP@50–95 {f(seg_all['box_map50_95'])}, precision {f(seg_all['box_precision'])}, recall {f(seg_all['box_recall'])}. "
+        f"Per class (mask): gingiva {f(seg_g['seg_map50'])} / lip {f(seg_l['seg_map50'])} mAP@50. Because the measurement is computed from the mask, the mask metrics are the ones that matter for this application, and the Abstract now quotes mask metrics with the label attached."),
+        changes="[Abstract — Results sentence]; Results 3.1; [Table — segmentation metrics, Box and Mask columns] `tables/segmentation_metrics_test.md`", files=["outputs/07_report/tables/segmentation_metrics_test.md"], sources=[S["seg"]])
+    A["yolov8"] = dict(status="READY", text=(
+        "The reviewer is right: the sentence is a leftover and it has been corrected. YOLOv8 was included in an early screening run in which several architectures and model scales were trained briefly under shared settings; it was not part of the architecture comparison reported in the manuscript, "
+        "and it plays no role in the final model. In the revision the main text refers only to the architectures actually compared, and the appendix that describes the screening stage labels it as such and states which runs it contains, so that no result in the paper depends on it."),
+        changes="Methods 2.7 (annotation/labeling) — 'YOLOv8 and YOLOv11' corrected; Appendix D — screening stage labelled and separated from the reported comparison", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["status"]])
+    A["gingiva_map_low"] = dict(status="READY", text=(
+        "We agree, and the number is now in the text, in the Abstract's scope sentence and in the Limitations. It is also lower than the figure the reviewer quotes once it is measured properly: the 0.587 came from the validation set of the earlier pipeline, whereas on the fixed, participant-level test set "
+        f"the final model gives a gingiva mask mAP@50 of {f(seg_g['seg_map50'])} (mAP@50–95 {f(seg_g['seg_map50_95'])}, precision {f(seg_g['seg_precision'])}, recall {f(seg_g['seg_recall'])}) against {f(seg_l['seg_map50'])} for the lip. "
+        "We report the lower number rather than the more favourable one. Its consequence for the measurement is quantified rather than assumed: the boundary analysis (Reviewer 2, item 10) shows that the error is a systematic displacement of the lower gingival margin, "
+        f"so the measurement error it produces is a bias of {f(e_seg_bias, 2, True)} mm rather than a random failure, and the millimetre accuracy of the full pipeline is reported directly ({acc_line(P)}). "
+        "The Limitations state that gingival segmentation is the weakest component of the pipeline and the main target for improvement."),
+        changes="Results 3.1 — gingiva mAP stated explicitly; Limitations — new paragraph; Discussion — link to the boundary analysis", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/06_prediction/boundary_by_set.md"], sources=[S["seg"], S["acc"], S["dec"]])
+    A["no_improvement"] = dict(status="READY", text=(
+        "The reviewer is right that there was no meaningful gain, and the honest explanation is twofold. First, the comparison was not sound: the preliminary figure and the final figure came from different dataset versions and different validation sets, so the near-identical numbers were not evidence of anything. "
+        "All performance figures in the revision come from a single fixed, participant-level test set evaluated once. Second, the dataset is at the plateau of its learning curve, which we now show empirically instead of asserting it: retraining the final architecture on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition "
+        f"({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) raises gingiva mask mAP@50 from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])}, and the gain between the last two points is a small fraction of the gain between the first two ({lc_md.split('→')[0].strip()}). "
+        "Additional data of the same kind, further hyperparameter search and larger model scales are therefore not expected to help; what limits the gingiva class is the annotation of a thin, festooned boundary, which is where we direct the analysis and the remaining error."),
+        changes="Results 3.1 — comparison across dataset versions removed; [Supplementary Figure S1 — learning curve]; Discussion — why performance plateaus", files=["outputs/07_report/figures/learning_curve.png", "outputs/07_report/tables/learning_curve.md", "outputs/07_report/tables/segmentation_metrics_test.md"], sources=[S["lc"], S["lcmd"], S["seg"]])
+    A["validation_vs_test"] = dict(status="READY", text=(
+        "The reviewer is right, and this was a genuine methodological error rather than a presentational one: the figures reported as final results were validation-set metrics of a model whose architecture, scale and hyperparameters had been chosen on that same validation set. "
+        f"In the revision the dataset is partitioned once at participant level into training, validation and test ({int(dc.loc['total', 'train'])} / {int(dc.loc['total', 'valid'])} / {int(dc.loc['total', 'test'])} images), the test set is fixed and untouched during development, and it is evaluated once with the final model. "
+        f"All reported performance is that single test-set evaluation: mask mAP@50 {f(seg_all['seg_map50'])} (gingiva {f(seg_g['seg_map50'])}, lip {f(seg_l['seg_map50'])}), mask mAP@50–95 {f(seg_all['seg_map50_95'])}, box mAP@50 {f(seg_all['box_map50'])}. "
+        f"The millimetre validation is separated in the same way: the measurement method and the pixel-to-millimetre scale were fixed on a development subset of the reference images and then applied unchanged, so that the held-out figures ({acc_line(H)}) are not optimised. "
+        "The validation-set numbers of the original submission are not reported as results."),
+        changes="Methods 2.6 (partition) and 2.9 (evaluation protocol) rewritten; Results 3.1 — all metrics replaced by test-set metrics; Abstract numbers replaced", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/07_report/tables/dataset_counts.md", "outputs/06_prediction/measurement_accuracy.csv"], sources=[S["seg"], S["dc"], S["acc"]])
+    A["architecture_comparison"] = dict(status="READY", text=(
+        "We accept the criticism and have withdrawn the claim rather than defending it. The three architectures were run on the annotation platform with its default training settings and on separate copies of the dataset version, so the comparison does not isolate the architecture and cannot support a statement that one architecture is superior. "
+        "In the revision that stage is described for what it was, a screening step used to choose one architecture to take forward, and the sentence claiming superior performance has been removed; no conclusion in the paper rests on it. "
+        f"The architecture that was taken forward is then evaluated properly: a single participant-level partition, one fixed test set, evaluated once (gingiva mask mAP@50 {f(seg_g['seg_map50'])}, lip {f(seg_l['seg_map50'])}, all {f(seg_all['seg_map50'])}), with the learning curve as evidence on data adequacy. "
+        "A controlled benchmark of the three architectures under identical data and preprocessing would be a separate study; we do not report one and we do not claim its conclusion."),
+        changes="Methods 2.8.1 — relabelled as preliminary screening; Results 3.1 — superiority claim removed; Appendix F — caption and text corrected", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["seg"]])
+    A["mm_accuracy"] = dict(status="READY", text=(
+        "We agree entirely; this is the central omission of the submitted manuscript and the revision addresses it directly. The pixel-to-millimetre accuracy is now reported against the clinical reference measurements, with MAE, RMSE, Pearson r, ICC(2,1) and Bland–Altman limits of agreement, and in two steps so that the segmentation and the geometry can be separated. "
+        f"On the annotated masks (measurement geometry alone, n = {int(G['n'])}): {acc_line(G)}. On the model's own masks, with every image predicted by a model that had not seen it (5-fold cross-validation at participant level, n = {int(P['n'])}): {acc_line(P)}; "
+        f"on the fixed test set with the final model (n = {int(B['n'])}): {acc_line(B)}. "
+        "These are uncorrected, primary results. We also found that the model places the lower gingival margin systematically too low and report a post-hoc correction as a secondary analysis "
+        f"(mask-level, estimated on the development subset and applied unchanged elsewhere): out-of-fold {acc_line(Pc).split(';')[0]}; test set MAE {f(Bc['mae'])} mm, bias {f(Bc['ba_bias'], 2, True)} mm. "
+        f"On the reviewer's point about the thresholds: the decision boundaries are at 3, 4, 6 and 8 mm, so we report the class agreement that the measurement error actually produces rather than the error alone — uncorrected {100 * P['threshold_agreement']:.0f} % agreement with the reference class (linear-weighted κ {f(P['threshold_kappa_linear'], 2)}), "
+        f"corrected {100 * Pc['threshold_agreement']:.0f} % (κ {f(Pc['threshold_kappa_linear'], 2)}), and the proportion of images within 1 mm of the reference ({100 * P['within_1_mm']:.0f} % uncorrected, {100 * Pc['within_1_mm']:.0f} % corrected). "
+        f"The reliability of the reference itself is reported so that the error can be read against its floor: the same observer remeasured 20 images, tooth-level ICC(2,1) {tooth_row[2] if tooth_row else '?'} with SD {tooth_row[6] if tooth_row else '?'} mm. "
+        "We make no assumption that the new architecture preserves the accuracy of the previous study; the numbers above are measured on this model, and they are not better than those of the previous study."),
+        changes="[Results 3.2 — new section: millimetre measurement accuracy]; [Figure 6 — replaced by scatter and Bland–Altman plots]; [Table — measurement accuracy] `tables/measurement_accuracy.md`; Abstract", files=["outputs/06_prediction/prediction_summary.md", "outputs/07_report/tables/measurement_accuracy.md", "outputs/07_report/figures/measurement_predicted_masks.png", "outputs/03_oracle/intra_observer.md"], sources=[S["acc"], S["intra"], S["est3"]])
 
     # ------------------------------------------------------------------ documents
     lines = ["# Response to the reviewers — draft", "",
              "<!-- Generated by scripts/build_rebuttal.py. Every number is read from the file named in the source comment under each response; nothing is typed by hand. "
-             "Reviewer quotes: the reviewer document (docs/Hakem_revizyonları.docx) is not in the repository; paste each item's original text into docs/hakem_maddeleri.yaml. -->", "",
+             "Reviewer quotes are verbatim from docs/Hakem_revizyonları.docx via docs/hakem_maddeleri.yaml. Reviewer 2's numbering (1, 2, 4, 5, 6, 8, 9, 10) is the reviewers' own and is kept as written; "
+             "Reviewer 3 numbers restart within each section; Reviewer 4 wrote one continuous text, split into items here with the corresponding passage quoted. -->", "",
              "Conventions: uncorrected measurement results are the primary analysis; results with the post-hoc mask-level correction are secondary. 'High smile line' is used throughout. "
              "Status: READY = answered from the analysis outputs; PENDING = waits for the expert forms; CLINICAL = wording to be provided by the clinical team.", ""]
     rows = []
@@ -292,12 +391,24 @@ def main() -> int:
                       "Outputs: " + ", ".join(f"`{p}`" for p in a["files"]), "",
                       *a["sources"], ""]
             rows.append({"item": it["id"], "reviewer": rev["name"], "topic": it["topic"], "status": status, "owner": it.get("owner", "technical"), "outputs": "; ".join(a["files"])})
+    unmatched = [k for k in A if k not in {it["answer"] for rev in spec["reviewers"] for it in rev["items"]}]
+    if unmatched:
+        lines += ["## Prepared responses that match no item in the reviewer document", "",
+                  "These two answers were drafted from the team's earlier notes (docs/Guc_analizi_hakem_cevabi_ve_metin.md) for a G*Power / sample-size objection. "
+                  "No such item appears in the reviewer document we received: Reviewer 4 does not raise sample size, and Reviewer 2's numbering skips items 3 and 7, so the objection may be one of those two, "
+                  "or it may come from the editor's letter. The material is kept here so that it is not lost; it should be attached to the correct item, or dropped, once that is established. "
+                  "Note that the G*Power paragraph is removed from the manuscript in any case (MANUSCRIPT_EDITS.md), because the calculation describes a test the study does not perform.", ""]
+        for k in sorted(unmatched):
+            a = A[k]
+            lines += [f"### (unmatched) {k}", "", a["text"], "", f"**Changes in the manuscript:** {a['changes']}", "", f"**Status:** {a['status']}", "",
+                      "Outputs: " + ", ".join(f"`{p}`" for p in a["files"]), "", *a["sources"], ""]
     (o7 / "RESPONSE_TO_REVIEWERS.md").write_text("\n".join(lines), encoding="utf-8")
 
     st = pd.DataFrame(rows)
     durum = ["# Rebuttal durumu — hakem maddeleri (klinik ekibe)", "",
              f"Üretim: `scripts/build_rebuttal.py`; sayılar `outputs/` altındaki dosyalardan okunur. Durum: READY = analiz çıktılarından cevaplandı; PENDING = uzman formlarını bekliyor; CLINICAL = metni klinik ekip yazacak. "
              f"Toplam {len(st)} madde: READY {int((st['status'] == 'READY').sum())}, PENDING {int((st['status'] == 'PENDING').sum())}, CLINICAL {int((st['status'] == 'CLINICAL').sum())}.", "",
+             "Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.md` (gönderilen makale ve Appendix B–F üzerinden, her madde için mevcut cümle / önerilen cümle / gerekçe / hakem maddesi).", "",
              "| madde | hakem | konu | durum | sorumlu | cevaplayan çıktı |", "|---|---|---|---|---|---|"]
     for r in rows:
         durum.append(f"| {r['item']} | {r['reviewer']} | {r['topic']} | **{r['status']}** | {'teknik' if r['owner'] == 'technical' else 'klinik'} | {r['outputs']} |")
@@ -313,8 +424,11 @@ def main() -> int:
             "- Ölçüm doğruluğu her yerde düzeltmesiz birincil, maske düzeyi düzeltme ikincil.",
             "- Açıkça kabul edilen hatalar: eski ölçüm modülünün geometri hatası (eski Figure 6; v3 ve v1 kolonları geçersiz, figür yeniden üretildi), aynı hastanın iki fotoğrafının bölüntüler arasında bulunması (hasta düzeyi yeniden bölünme, yeniden eğitim), gözlemci içi dosyasında 15 vs 20 görüntü (tam dosyayla yeniden hesaplandı).",
             "- Yapamadıklarımız açıkça yazıldı: E4 sınıfı veri setinde yok; dış geçerlilik yok (tek merkez/cihaz); pigmentasyon kaydı yok; demografi kısmi.",
-            "- Eksik: hakemlerin orijinal metni (`docs/Hakem_revizyonları.docx`) depoda yok; alıntı yerlerinde yer tutucu var. Belge gelince `python scripts/build_rebuttal.py --docx <dosya>` paragrafları listeler, alıntılar `docs/hakem_maddeleri.yaml`'a yapıştırılır ve betik yeniden çalıştırılır.",
-            "- Terminoloji: 'high smile line'; 'gummy smile / excessive gingival display' kullanılmadı."]
+            f"- Alıntılar hakem belgesinden birebir alındı (`docs/Hakem_revizyonları.docx`; uzantısı .docx olsa da düz metin). Reviewer 2 numaralandırması belgedeki gibi korundu (1, 2, 4, 5, 6, 8, 9, 10); Reviewer 3'ün numaraları bölüm içinde yeniden başlıyor, madde kimlikleri bölüm adını taşıyor; Reviewer 4 tek parça metin yazdığı için maddelere bölündü ve her maddenin alıntısı ilgili pasajın kendisi.",
+            f"- Önceki 15 maddelik listeyle karşılaştırma: belgede **{len(st)} madde** var, {len(st) - 9} tanesi önceki listede yoktu. Eksik olanlar: Reviewer 3'ün tamamı (9 madde: çalışma tasarımı, abstract iddiaları, grup büyüklükleri ve cinsiyet, low/normal görüntülerin rolü, pigmentasyon, sayı karışıklığı, 'performance' ne demek + FP/FN, segmentasyon ile mm ölçümünün ayrılması, klinik doğrulama iddiası), Reviewer 2'nin 1/2/4/8/9 maddeleri (abstract kapsamı, Box-Mask metrikleri, YOLOv8, dişeti mAP 0.587, iyileşme olmaması) ve Reviewer 4'ün üç maddesi (validasyon yerine test metriği, mimari karşılaştırmanın adil olmaması, mm doğruluğunun ayrı madde oluşu).",
+            "- Fazla olanlar: önceki listedeki **G*Power / örneklem büyüklüğü** maddesi belgede yok. Reviewer 4 örneklem büyüklüğünden söz etmiyor; Reviewer 2'nin 3 ve 7 numaralı maddeleri belgede bulunmuyor, itiraz onlardan biri ya da editör mektubundan olabilir. Hazırlanmış metin `RESPONSE_TO_REVIEWERS.md` sonundaki 'unmatched' bölümünde duruyor. Güç analizi paragrafı yine de makaleden çıkarılıyor (yapılmayan bir testi güçlendiriyor). Gözlemci içi güvenilirlik ve demografi ayrı hakem maddesi değil; R4-4 ve R3-Methods-5 cevaplarının içine alındı.",
+            "- Terminoloji: 'high smile line'; 'gummy smile / excessive gingival display' kullanılmadı.",
+            "- Makale düzeltmeleri: `MANUSCRIPT_EDITS.md` — gönderilen makale ve Appendix B–F taranarak her değişiklik için mevcut cümle, önerilen cümle, gerekçe ve hakem maddesi; sayılar `outputs/` dosyalarından."]
     (o7 / "REBUTTAL_OZET.md").write_text("\n".join(ozet) + "\n", encoding="utf-8")
     print("\n".join(ozet))
     return 0

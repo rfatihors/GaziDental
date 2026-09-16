@@ -1,0 +1,29 @@
+**APPENDIX ****E**
+
+**E****.1 | ****Training configuration and hyperparameter search strategy**
+
+All models were trained using the following baseline parameters:
+
+- *Input resolution:* 640 × 640
+
+- *Optimizer:* AdamW
+
+- *Batch size:* 16 (in advanced experiments increased to 32)
+
+- *Learning rate scheduler:* Cosine learning rate scheduler
+
+- *close_mosaic:* disabled during the final 10 epochs
+
+- *patience:* 20–30
+
+- *cache:* True
+
+During the hyperparameter tuning process, a total of 24 different combinations were evaluated using a grid search strategy. The tested parameter ranges were as follows:
+
+- *Batch size:* 8, 16
+
+- *Epochs:* 50, 100, 150
+
+- *Initial learning rate (lr0):* 1e-4, 5e-4
+
+- *Final learning rate fraction (lrf):* 0.01, 0.02

@@ -1,0 +1,7 @@
+**APPENDIX ****F**
+
+**F****.1 | ****Comparison**** of ****t****hree**** ****s****egmentation**** ****m****odels**** for ****g****ingival ****d****isplay**** ****a****nalysis**
+
+ Figure 1 presents the preliminary Roboflow-based comparison of the three candidate instance segmentation models evaluated for gingival display analysis. The compared models were RF-DETR-Seg (Medium), YOLO26 Instance Segmentation (Fast), and YOLOv11 Instance Segmentation (Fast). According to the valid set results shown in the Roboflow interface, RF-DETR-Seg achieved mAP@50 of 72.0%, precision of 71.0%, and recall of 61.0%; YOLO26 achieved mAP@50 of 76.9%, precision of 79.1%, and recall of 75.6%; and YOLOv11 achieved mAP@50 of 79.3%, precision of 78.7%, and recall of 78.1%. These results indicate that the YOLOv11 family provided the strongest overall balance among the compared models and was therefore selected as the leading candidate for the subsequent Colab-based detailed training and final model development process (Figure 1). 
+
+**Figure**** 1.** Based on the comparative evaluation conducted on the Roboflow platform, the mAP@50 results of the three models RF-DETR-Seg (Medium), YOLO26 (Fast), and YOLOv11 (Fast) are presented.

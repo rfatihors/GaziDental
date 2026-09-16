@@ -1,0 +1,17 @@
+**APPENDIX ****C**
+
+**C****.1 | ****Dataset ****v****ersioning and ****p****reprocessing ****p****ipeline**
+
+The dataset was versioned within the Roboflow platform, and separate versions were created for different experimental stages:
+
+- *v1:** *Initial augmented dataset version created using ±5° rotation and ±5 exposure transformations, increasing the dataset from 1,315 original images to approximately 3,155 images. This version served as the common baseline for the initial Roboflow-based benchmarking experiments. For implementation convenience within the platform, equivalent copies of the same baseline dataset were also referenced as v2 and v3 for the YOLO26 and YOLOv11 runs, respectively (Figure 1).
+
+**Figure 1.** Roboflow interface displaying dataset version v1.
+
+- *v6 (2401_preprocessing):* Dataset version created with auto-orientation and resizing to 640 × 640 resolution, while preserving the original dataset size of 1,315 images (Figure 2). This version retained the original 1,315 images and was created to evaluate the effect of preprocessing alone before additional augmentation was introduced.
+
+**Figure 2**. Roboflow interface displaying dataset version v6 (2401_preprocessing).
+
+- *v7 (2401_Final_Pre+Aug): *Expanded dataset version including auto-orientation, resizing to 640 × 640, horizontal flip, −5° to +5° rotation, hue (−3 to +3), saturation (−5 to +5), brightness (−7 to +7), and bounding-box augmentation, resulting in a dataset of 2,235 images (Figure 3). This version was subsequently used in the detailed Colab-based training and comparative experiments.
+
+	**Figure**** 3.** Roboflow interface showing dataset version v7 (2401_Final_Pre+Aug) with preprocessing and augmentation settings. The v7 dataset was designed after preprocessing-only experiments failed to produce a meaningful performance gain, thereby motivating the introduction of additional augmentation for subsequent model training.

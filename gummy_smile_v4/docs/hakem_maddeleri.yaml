@@ -1,106 +1,283 @@
 # Reviewer items for the rebuttal (scripts/build_rebuttal.py).
-# `quote`: the reviewer's ORIGINAL text, verbatim. The docx (docs/Hakem_revizyonları.docx) is not in
-# the repository; when it arrives, paste each item's text here (or provide the docx and run the
-# builder with --docx: it lists the paragraphs so the quotes can be copied). Until then the
-# builder prints "[verbatim reviewer text — to be pasted from docs/Hakem_revizyonları.docx]" and
-# shows `paraphrase` (from the technical audit and the task document) in its place.
-# `owner`: technical (answered from outputs/) or clinical (text from the clinical team).
+#
+# `quote` is the reviewer's ORIGINAL text, copied verbatim from docs/Hakem_revizyonları.docx
+# (that file is plain UTF-8 text despite the .docx extension; `--docx` lists its paragraphs).
+# Reviewer 2's numbering in the source document skips 3 and 7 — the numbering is kept exactly
+# as the reviewers wrote it. Reviewer 3 numbers restart inside each section (Abstract, Methods,
+# Results, Discussion), so the ids carry the section name. Reviewer 4 wrote one continuous text;
+# its issues are split into items here and the quote of each item is the corresponding passage,
+# verbatim. `owner`: technical (answered from outputs/) or clinical (text from the clinical team).
 reviewers:
   - name: Reviewer 1
     items:
       - id: R1-1
-        topic: System diagram missing
-        quote: null
-        paraphrase: The manuscript does not present an overall diagram of the proposed system.
+        topic: No system block diagram; how Fig. 6 treatment suggestions are reached
         answer: diagram
         owner: technical
+        quote: |
+          The reported works almost solely about the performance of the segmentation models in
+          classifying lips, gingiva and teeth pixels. However, there is almost no description about
+          how to arrive to the final result as shown in Fig.6. The authors should provide more
+          details in how to arrive the treatment suggestions at the last column of Fig.6. A system
+          block diagram of the system will greatly improve the presentation of the paper.
       - id: R1-2
-        topic: Segmentation outputs not shown
-        quote: null
-        paraphrase: Example segmentation outputs of the model should be shown.
+        topic: No segmentation result images
         answer: segmentation_examples
         owner: technical
+        quote: |
+          There is no segmentation result images, it is not possible to justify whether the
+          segmentation module is nicely implemented.
+
   - name: Reviewer 2
     items:
+      - id: R2-1
+        topic: Abstract implies all 1,315 images were used for the quantitative analysis
+        answer: abstract_scope
+        owner: technical
+        quote: |
+          The Abstract may imply that all 1,315 images were used for quantitative gingival display
+          assessment. However, this analysis was performed only in the high smile line subgroup
+          (n=216, 16.4%). This restriction should be stated explicitly to avoid overstating the
+          study scope.
+      - id: R2-2
+        topic: Box metrics vs Mask metrics not identified
+        answer: metric_types
+        owner: technical
+        quote: |
+          The precision (0.85466) and recall (0.81039) reported in the Abstract are "Box metrics",
+          whereas mAP@50 and mAP@50-95 are "Mask metrics". These metric types should be clearly
+          identified to avoid misleading interpretation of segmentation performance.
+      - id: R2-4
+        topic: '"YOLOv8 and YOLOv11" inconsistent with the rest of the manuscript'
+        answer: yolov8
+        owner: technical
+        quote: |
+          The statement referring to "YOLOv8 and YOLOv11" appears inconsistent with the rest of the
+          manuscript, which compares RF-DETR-Seg, YOLOv26, and YOLOv11. Since "YOLOv8" appears only
+          in this sentence, this may be an error from an earlier version and should be verified.
       - id: R2-5
-        topic: Image counts (1,315 → 2,235 / 3,403)
-        quote: null
-        paraphrase: How did 1,315 images become 2,235 and 3,403? The dataset numbers are inconsistent.
+        topic: 1,315 vs 3,403 images and the instance counts in Figure 4
         answer: image_counts
         owner: technical
+        quote: |
+          The manuscript describes 1,315 images as the overall dataset, but Section 2.7 refers to an
+          updated dataset containing 3,403 images, while Figure 4 reports substantially more
+          annotated instances. Please clarify whether these differences resulted from additional
+          images, augmentation, or another processing step, and clearly state the number of original
+          images used for training.
       - id: R2-6
-        topic: Data leakage between splits
-        quote: null
-        paraphrase: Photographs of the same patient may appear in more than one subset (train/validation/test), which would inflate the reported performance.
+        topic: Image- or patient-level split; data leakage; small test set
         answer: leakage
         owner: technical
+        quote: |
+          It is unclear whether the train/validation/test split was performed at the image or patient
+          level. If images from the same patient were included in different subsets, data leakage
+          could occur. In addition, the 92/4/4 split provides a relatively small test set,
+          particularly for the high smile line subgroup, which may reduce the reliability of
+          performance estimates.
+      - id: R2-8
+        topic: Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation
+        answer: gingiva_map_low
+        owner: technical
+        quote: |
+          Importantly, Figure 2(a) shows a gingiva mAP@50 of only 0.587 (58.7%), but this value is
+          not explicitly reported in the text. Because gingival segmentation directly determines the
+          measurement of gingival display, this relatively low accuracy should be explicitly
+          discussed as an important limitation.
+      - id: R2-9
+        topic: No meaningful performance gain despite tuning, expansion and scaling
+        answer: no_improvement
+        owner: technical
+        quote: |
+          The final model achieved a Mask mAP@50 of 0.79369, essentially identical to the preliminary
+          YOLOv11 performance (79.3%). Despite extensive hyperparameter tuning, dataset expansion,
+          and model scaling, there was little improvement. The authors should explain this lack of
+          meaningful performance gain.
       - id: R2-10
-        topic: Boundary accuracy; lip vs gingiva performance gap
-        quote: null
-        paraphrase: The gingiva class performs much worse than the lip class; boundary accuracy of the gingival margin should be reported.
+        topic: Lip vs gingiva mAP gap should be investigated quantitatively
         answer: boundary
         owner: technical
-      - id: R2-power
-        topic: G*Power calculation inappropriate
-        quote: null
-        paraphrase: A chi-square based G*Power calculation is not an appropriate way to determine the training-set size of a segmentation model.
-        answer: power
-        owner: technical
-      - id: R2-fig6
-        topic: Figure 6 inconsistency (measurement vs reference)
-        quote: null
-        paraphrase: The values in Figure 6 are inconsistent / implausible.
-        answer: figure6
-        owner: technical
+        quote: |
+          The marked difference between lip mAP (97-99%) and gingiva mAP (58.7%) should be
+          quantitatively investigated. Metrics such as boundary IoU or edge-distance error could help
+          explain the poorer gingival segmentation performance.
+
   - name: Reviewer 3
     items:
-      - id: R3-1
-        topic: Demographics / sex distribution
-        quote: null
-        paraphrase: Age and sex distribution of the sample are not reported.
-        answer: demographics
+      - id: R3-General-3
+        topic: Narrow the manuscript to a validated segmentation/measurement study, or compare with clinical assessment
+        answer: narrow_or_compare
         owner: technical
+        quote: |
+          Improve study design by narrowing the manuscript to a properly validated
+          segmentation/measurement study or by comparing the AI model with clinical assessments to
+          evaluate its decision making ability.
+      - id: R3-Abstract-1
+        topic: Abstract reports no millimetric accuracy and no validation of the etiological/treatment categories
+        answer: abstract_claims
+        owner: technical
+        quote: |
+          The results do not report millimetric measurement accuracy or any validation of
+          etiological/treatment categories. The conclusions and clinical Significance should
+          therefore be restricted to the technical validity of the AI-model
+      - id: R3-Methods-5
+        topic: Unequal numbers of patients per smile-line group; equal gender distribution requested
+        answer: group_sizes
+        owner: technical
+        quote: |
+          Please clarify why different numbers of patients were included in the low, medium, and high
+          smile-line groups. These groups should contain equal numbers of patients and have an equal
+          gender distribution.
+      - id: R3-Methods-7
+        topic: Why low and average smile-line images were needed
+        answer: why_low_normal
+        owner: technical
+        quote: |
+          Explain why images showing low and average smile lines were needed for the measurement of
+          gingival display. Were they used only for machine learning and the development of the AI
+          model?
+      - id: R3-Results-1
+        topic: Ethnicity and pigmentation of skin and gingiva
+        answer: pigmentation
+        owner: clinical
+        quote: |
+          The ethnicity of the patients may play a role, as some patients have pigmentation of the
+          skin and gingiva. Could this affect the segmentation of the lips and gingiva and,
+          consequently, the performance of the AI model?
+      - id: R3-Results-2
+        topic: Exact number of participants and images for training, validation and testing
+        answer: image_counts
+        owner: technical
+        quote: |
+          It was difficult to understand how many participants/images were used in the study.
+          Different numbers are mentioned (1315 and 3403). Could you please clarify the exact numbers
+          of participants and images used for training, validation, and testing?
+      - id: R3-Results-4
+        topic: What "performance" means; sensitivity/specificity; false positives and false negatives
+        answer: metric_meaning
+        owner: technical
+        quote: |
+          In Section 3.1 (Model selection and segmentation performance), the study states that (the
+          YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3%)....).
+          What is meant by (performance)in this context? Is it sensitivity or specificity? Did you
+          calculate false-positive and false-negative predictions when evaluating the performance of
+          the AI model?
+      - id: R3-Results-5
+        topic: Distinguish segmentation performance from millimetre measurement ability
+        answer: separate_evaluations
+        owner: technical
+        quote: |
+          The study should distinguish between evaluating the segmentation performance of the AI
+          model and evaluating its ability to calculate gingival display in millimetres.
+      - id: R3-Discussion-5
+        topic: Conclusion must not state the model is clinically validated
+        answer: clinical_validation_claim
+        owner: clinical
+        quote: |
+          The conclusion should not that the AI model has been clinically validated or is as this
+          aspect was not evaluated in the study.
+
   - name: Reviewer 4
     items:
       - id: R4-1
-        topic: Sample size and external validity
-        quote: null
-        paraphrase: The sample-size calculation does not support the claim of external validity; the cohort is from a single centre.
-        answer: external_validity
-        owner: technical
-      - id: R4-2
-        topic: Calibration (pixel to mm)
-        quote: null
-        paraphrase: How were pixels converted to millimetres; how was calibration performed and how precise is it?
-        answer: calibration
-        owner: technical
-      - id: R4-3
-        topic: Circular validation of the E/T classification
-        quote: null
-        paraphrase: The E/T class assignment is validated against the same measurements it is derived from; an independent clinical validation is needed.
+        topic: The etiology-treatment module is not validated; no comparison with clinicians
         answer: expert_validation
         owner: technical
-      - id: R4-4
-        topic: Overlap with the earlier (J Dent 2026) cohort
-        quote: null
-        paraphrase: Does the dataset overlap with the authors' earlier publication?
+        quote: |
+          However, a fundamental difference exists between constructing a decision rule and validating
+          a clinical decision tool. The article reasonably demonstrates that it can segment
+          structures; it does not yet demonstrate that it can infer etiologies or recommend
+          treatments in a clinically valid manner. [...] The authors present no patient cohort in
+          which periodontists, orthodontists, or surgeons independently establish the true cause of
+          gingival exposure and a treatment plan to compare with the algorithm's recommendations.
+          Consequently, there are no measures of sensitivity, specificity, concordance, accuracy,
+          Cohen's κ, agreement between the system and experts, or therapeutic error analysis. The only
+          thing demonstrated is that, given a measurement, the software knows how to apply a table.
+          This is a computational implementation of rules, not a validation of clinical
+          decision-making.
+      - id: R4-2
+        topic: Overlap with the authors' J Dent 2026 study; redundant publication
         answer: overlap
         owner: clinical
+        quote: |
+          The previously published article reports 1,748 photographs from the same project. This
+          strongly suggests significant overlap in the study population and possibly in the images
+          between the two studies. This is not necessarily a problem if it is a clearly distinct
+          secondary analysis. Still, the authors must state exactly how many participants/images
+          appear in both articles, which data are new, which training/validation/test sets are
+          reused, and why the present study does not constitute redundant publication. Until this is
+          clarified, it is impossible to assess the actual originality properly.
+      - id: R4-3
+        topic: Figure 6 — v3_yolo vs v1_xgboost give radically different measurements
+        answer: figure6
+        owner: technical
+        quote: |
+          Figure 6 is particularly concerning. In the same patients, two methods—"v3_yolo" and
+          "v1_xgboost"—yield radically different measurements: for example, approximately 8.13 versus
+          4.36 mm in one case and 9.49 versus 4.91 mm in another. These differences also lead to
+          completely different recommendations, ranging from a Le Fort I osteotomy to labial
+          repositioning or orthodontic treatment. The "v1_xgboost" method is not even adequately
+          integrated into the methodology of the submitted manuscript. If the figure truly represents
+          the system's output, it precisely highlights the clinical risk that the article should
+          address before proposing it as a therapeutic aid. This figure must be explained in detail
+          and, above all, the correct measurement must be demonstrated using an independent clinical
+          standard.
+      - id: R4-4
+        topic: Millimetre-level accuracy not demonstrated (MAE, RMSE, Bland-Altman, ICC)
+        answer: mm_accuracy
+        owner: technical
+        quote: |
+          The third key problem is that the article does not demonstrate the accuracy of the new
+          model's millimeter-level measurements. It provides mAP, precision, recall, and
+          F1—segmentation metrics—but not MAE, RMSE, Bland–Altman plots, or ICC compared with
+          clinical measurements. The clinical model relies on thresholds of 3, 4, 6, and 8 mm;
+          therefore, an error of even 1–2 mm can completely alter the etiology and treatment
+          recommendation. It is essential to report the measurement error in millimeters and
+          demonstrate agreement with a clinical standard. The previous article by the same authors
+          did precisely that validation. The present study cannot automatically assume that a
+          different architecture maintains the same level of precision.
       - id: R4-5
-        topic: Data leakage (CLAIM 2024)
-        quote: null
-        paraphrase: Per the CLAIM checklist, the splits must be independent at patient level.
+        topic: Pixel-to-millimetre conversion not described
+        answer: calibration
+        owner: technical
+        quote: |
+          Relatedly, the manuscript states that measurements are calculated geometrically from
+          pixel-level masks, but the main text does not describe how the pixel-to-millimeter
+          conversion is performed. This step is essential. The registry for the same project
+          describes using a periodontal probe shown in the photograph to obtain the
+          pixel-to-millimeter conversion factor. If this is also the procedure used here, the authors
+          must describe it explicitly; if it is different, they must detail and validate it.
+      - id: R4-6
+        topic: Validation-set metrics reported as final results instead of test-set metrics
+        answer: validation_vs_test
+        owner: technical
+        quote: |
+          The fourth serious issue concerns the AI methodology. The authors claim to have maintained a
+          fixed test set, but then report metrics from the validation set—not the test set—as the
+          final results. After selecting the architecture, size, and multiple hyperparameters based
+          on the validation data, the only non-optimistic performance estimate must come from a
+          completely independent test set used only once. Without those results, the key figures in
+          the article may have been indirectly optimized on the validation set.
+      - id: R4-7
+        topic: Unclear splitting scheme (70/15/15 then 92/4/4), 1,315 to 3,403, patient-level partitioning (CLAIM 2024)
         answer: leakage
         owner: technical
-      - id: R4-6
-        topic: Intra-observer reliability of the reference
-        quote: null
-        paraphrase: The reliability of the manual reference measurement should be reported.
-        answer: intra_observer
+        quote: |
+          Added to this is an unclear splitting scheme. First, a 70/15/15 split is used, then a 92/4/4
+          split; the initial set of 1,315 images is transformed during optimization into a dataset of
+          3,403 images. The authors must clearly explain which images are original and which are
+          augmented, how the count increases from 1,315 to 3,403, how many independent patients each
+          dataset contains, and ensure that all images from the same participant remain in a single
+          partition. CLAIM 2024 specifically recommends specifying the partitioning level—patient,
+          study, or image—to prevent leakage.
+      - id: R4-8
+        topic: Architecture comparison is not fair (different dataset versions)
+        answer: architecture_comparison
         owner: technical
-      - id: R4-7
-        topic: Terminology, rare classes and limitations
-        quote: null
-        paraphrase: Rare classes (E4), pigmentation/phenotype and other limitations should be discussed.
-        answer: limitations
-        owner: clinical
+        quote: |
+          The fifth issue is that the architecture comparison is not entirely fair: RF-DETR-Seg is
+          evaluated using dataset v1, YOLO26 using v2, and YOLO11 using v3. Although the authors
+          indicate they start from the same baseline, a comparison intended to conclude that one
+          architecture is superior should use the same training, validation, and test sets, as well
+          as the same preprocessing, so that the architecture is the only variable. Otherwise, part
+          of the difference may be attributable to the dataset or the pipeline.

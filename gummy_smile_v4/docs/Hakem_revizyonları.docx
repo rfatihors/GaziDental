@@ -1,0 +1,89 @@
+**Reviewer**** 3**
+
+General Comments:
+
+3. Improve study design by narrowing the manuscript to a properly validated segmentation/measurement study or by comparing the AI model with clinical assessments to evaluate its decision making ability.
+
+**Abstract****:**
+
+1. The results do not report millimetric measurement accuracy or any validation of etiological/treatment categories. The conclusions and clinical Significance should therefore be restricted to the technical validity of the AI-model
+
+**Methods****:**
+
+5. Please clarify why different numbers of patients were included in the low, medium, and high smile-line groups. These groups should contain equal numbers of patients and have an equal gender distribution.
+
+7. Explain why images showing low and average smile lines were needed for the measurement of gingival display. Were they used only for machine learning and the development of the AI model?
+
+**Results****:**
+
+1. The ethnicity of the patients may play a role, as some patients have pigmentation of the skin and gingiva. Could this affect the segmentation of the lips and gingiva and, consequently, the performance of the AI model?
+
+2. It was difficult to understand how many participants/images were used in the study. Different numbers are mentioned (1315 and 3403). Could you please clarify the exact numbers of participants and images used for training, validation, and testing?
+
+4. In Section 3.1 (Model selection and segmentation performance), the study states that (the YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3%)....).
+
+What is meant by (performance)in this context? Is it sensitivity or specificity? Did you calculate false-positive and false-negative predictions when evaluating the performance of the AI model?
+
+**5. The study ****should**** ****distinguish**** ****between**** ****evaluating**** the ****segmentation**** ****performance**** of the AI model and ****evaluating**** ****its**** ****ability**** to ****calculate**** gingival ****display**** in ****millimetres****.**
+
+**Discussion**** and ****conclusions****:**
+
+5. The conclusion should not that the AI model has been clinically validated or is as this aspect was not evaluated in the study.
+
+**Reviewer**** ****1**
+
+**Specific**** ****comments****:**
+
+- The reported works almost solely about the performance of the segmentation models in classifying lips, gingiva and teeth pixels. However, there is almost no description about how to arrive to the final result as shown in Fig.6. The authors should provide more details in how to arrive the treatment suggestions at the last column of Fig.6. A system block diagram of the system will greatly improve the presentation of the paper.
+
+- There is no segmentation result images, it is not possible to justify whether the segmentation module is nicely implemented.
+
+**Reviewer**** 4**
+
+The study makes two distinct contributions. The first is technical: it compares contemporary segmentation architectures and develops a pipeline that can simultaneously identify the gums and lips in smile photographs. The second, and truly novel, aspect compared to the authors’ previous work is the attempt to convert a quantitative measurement into an interpretable clinical support tool using explicit, traceable rules, thereby avoiding a second “black box” machine learning model.
+
+This latter idea is conceptually appealing. In terms of clinical system design, it is a positive aspect that the model does not attempt to hide uncertainty. When intervals overlap, it reports several possible etiologies rather than forcing a single classification. Furthermore, preserving the segmentation masks allows visual auditing, which improves interpretability.
+
+However, a fundamental difference exists between constructing a decision rule and validating a clinical decision tool. The article reasonably demonstrates that it can segment structures; it does not yet demonstrate that it can infer etiologies or recommend treatments in a clinically valid manner.
+
+Nevertheless, in my opinion, the manuscript in its current form does not meet the scientific priority required for publication because its potentially most important element—etiological and therapeutic interpretation—has not been validated. The section strictly dedicated to quantifying gingival exposure using AI has already been published by the same group in the Journal of Dentistry in 2026. That previous study used 1,748 photographs, 687 cases of high smiles, and a DeepLabV3+ model, and it performed true validation against clinical measurements, yielding an MAE of 0.48–0.64 mm and an RMSE of 0.62–0.90 mm.
+
+Therefore, the key question for this new manuscript is: Does the new etiology-treatment module provide sufficient added value to justify another publication? In its current state, I believe not, because that module merely applies thresholds selected from the literature and does not compare with actual diagnoses or treatment plans established by clinicians.
+
+More importantly, the authors themselves published the aforementioned study on gingival exposure segmentation with clinical validation just a few months ago. They explicitly acknowledge that the novelty of the new manuscript does not lie in improving measurement accuracy, but rather in linking that measurement to a system of clinical interpretation. The previously published article reports 1,748 photographs from the same project. This strongly suggests significant overlap in the study population and possibly in the images between the two studies. This is not necessarily a problem if it is a clearly distinct secondary analysis. Still, the authors must state exactly how many participants/images appear in both articles, which data are new, which training/validation/test sets are reused, and why the present study does not constitute redundant publication. Until this is clarified, it is impossible to assess the actual originality properly.
+
+The originality could be reasonably strong if the authors demonstrated that an AI-based decision layer combined with rules improves diagnosis or treatment planning. However, the authors have not provided such a demonstration.
+
+The authors present no patient cohort in which periodontists, orthodontists, or surgeons independently establish the true cause of gingival exposure and a treatment plan to compare with the algorithm’s recommendations. Consequently, there are no measures of sensitivity, specificity, concordance, accuracy, Cohen’s κ, agreement between the system and experts, or therapeutic error analysis. The only thing demonstrated is that, given a measurement, the software knows how to apply a table. This is a computational implementation of rules, not a validation of clinical decision-making.
+
+Figure 6 is particularly concerning. In the same patients, two methods—“v3_yolo” and “v1_xgboost”—yield radically different measurements: for example, approximately 8.13 versus 4.36 mm in one case and 9.49 versus 4.91 mm in another. These differences also lead to completely different recommendations, ranging from a Le Fort I osteotomy to labial repositioning or orthodontic treatment. The “v1_xgboost” method is not even adequately integrated into the methodology of the submitted manuscript. If the figure truly represents the system’s output, it precisely highlights the clinical risk that the article should address before proposing it as a therapeutic aid. This figure must be explained in detail and, above all, the correct measurement must be demonstrated using an independent clinical standard.
+
+The third key problem is that the article does not demonstrate the accuracy of the new model’s millimeter-level measurements. It provides mAP, precision, recall, and F1—segmentation metrics—but not MAE, RMSE, Bland–Altman plots, or ICC compared with clinical measurements. The clinical model relies on thresholds of 3, 4, 6, and 8 mm; therefore, an error of even 1–2 mm can completely alter the etiology and treatment recommendation. It is essential to report the measurement error in millimeters and demonstrate agreement with a clinical standard. The previous article by the same authors did precisely that validation. The present study cannot automatically assume that a different architecture maintains the same level of precision.
+
+Relatedly, the manuscript states that measurements are calculated geometrically from pixel-level masks, but the main text does not describe how the pixel-to-millimeter conversion is performed. This step is essential. The registry for the same project describes using a periodontal probe shown in the photograph to obtain the pixel-to-millimeter conversion factor. If this is also the procedure used here, the authors must describe it explicitly; if it is different, they must detail and validate it.
+
+The fourth serious issue concerns the AI methodology. The authors claim to have maintained a fixed test set, but then report metrics from the validation set—not the test set—as the final results. After selecting the architecture, size, and multiple hyperparameters based on the validation data, the only non-optimistic performance estimate must come from a completely independent test set used only once. Without those results, the key figures in the article may have been indirectly optimized on the validation set.
+
+Added to this is an unclear splitting scheme. First, a 70/15/15 split is used, then a 92/4/4 split; the initial set of 1,315 images is transformed during optimization into a dataset of 3,403 images. The authors must clearly explain which images are original and which are augmented, how the count increases from 1,315 to 3,403, how many independent patients each dataset contains, and ensure that all images from the same participant remain in a single partition. CLAIM 2024 specifically recommends specifying the partitioning level—patient, study, or image—to prevent leakage.
+
+The fifth issue is that the architecture comparison is not entirely fair: RF-DETR-Seg is evaluated using dataset v1, YOLO26 using v2, and YOLO11 using v3. Although the authors indicate they start from the same baseline, a comparison intended to conclude that one architecture is superior should use the same training, validation, and test sets, as well as the same preprocessing, so that the architecture is the only variable. Otherwise, part of the difference may be attributable to the dataset or the pipeline.
+
+For these reasons, I recommend REJECT, with the possibility of resubmission after conducting true clinical validation of the system.
+
+**Reviewer**** 2**
+
+1. The Abstract may imply that all 1,315 images were used for quantitative gingival display assessment. However, this analysis was performed only in the high smile line subgroup (n=216, 16.4%). This restriction should be stated explicitly to avoid overstating the study scope.
+
+2. The precision (0.85466) and recall (0.81039) reported in the Abstract are "Box metrics", whereas mAP@50 and mAP@50-95 are "Mask metrics". These metric types should be clearly identified to avoid misleading interpretation of segmentation performance.
+
+4. The statement referring to “YOLOv8 and YOLOv11” appears inconsistent with the rest of the manuscript, which compares RF-DETR-Seg, YOLOv26, and YOLOv11. Since “YOLOv8” appears only in this sentence, this may be an error from an earlier version and should be verified.
+
+5. The manuscript describes 1,315 images as the overall dataset, but Section 2.7 refers to an updated dataset containing 3,403 images, while Figure 4 reports substantially more annotated instances. Please clarify whether these differences resulted from additional images, augmentation, or another processing step, and clearly state the number of original images used for training.
+
+6. It is unclear whether the train/validation/test split was performed at the image or patient level. If images from the same patient were included in different subsets, data leakage could occur. In addition, the 92/4/4 split provides a relatively small test set, particularly for the high smile line subgroup, which may reduce the reliability of performance estimates.
+
+8. Importantly, Figure 2(a) shows a gingiva mAP@50 of only 0.587 (58.7%), but this value is not explicitly reported in the text. Because gingival segmentation directly determines the measurement of gingival display, this relatively low accuracy should be explicitly discussed as an important limitation.
+
+9. The final model achieved a Mask mAP@50 of 0.79369, essentially identical to the preliminary YOLOv11 performance (79.3%). Despite extensive hyperparameter tuning, dataset expansion, and model scaling, there was little improvement. The authors should explain this lack of meaningful performance gain.
+
+10. The marked difference between lip mAP (97–99%) and gingiva mAP (58.7%) should be quantitatively investigated. Metrics such as boundary IoU or edge-distance error could help explain the poorer gingival segmentation performance.
