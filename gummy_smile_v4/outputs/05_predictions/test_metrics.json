@@ -1,4 +1,66 @@
 {
+ "weights": "/home/fatihors/Projects/GaziDental/gummy_smile_v4/runs/final/weights/best.pt",
+ "split": "test",
+ "n_images": 192,
+ "per_class": {
+  "diseti": {
+   "box_precision": 0.6666666666666666,
+   "box_recall": 0.684931506849315,
+   "box_f1": 0.6756756756756757,
+   "box_map50": 0.5724084053379436,
+   "box_map50_95": 0.2565326933005132,
+   "seg_precision": 0.53,
+   "seg_recall": 0.5445205479452054,
+   "seg_f1": 0.5371621621621622,
+   "seg_map50": 0.41451204464984426,
+   "seg_map50_95": 0.15881590370916226
+  },
+  "dudak": {
+   "box_precision": 0.9895287958115183,
+   "box_recall": 0.9947368421052631,
+   "box_f1": 0.9921259842519685,
+   "box_map50": 0.9917894736842102,
+   "box_map50_95": 0.731505326504651,
+   "seg_precision": 0.9842931937172775,
+   "seg_recall": 0.9894736842105263,
+   "seg_f1": 0.9868766404199475,
+   "seg_map50": 0.9813002392344495,
+   "seg_map50_95": 0.6919370491922113
+  },
+  "all": {
+   "box_map50": 0.7820989395110769,
+   "box_map50_95": 0.4940190099025822,
+   "box_precision": 0.8280977312390925,
+   "box_recall": 0.839834174477289,
+   "seg_map50": 0.6979061419421468,
+   "seg_map50_95": 0.4253764764506867,
+   "seg_precision": 0.7571465968586388,
+   "seg_recall": 0.7669971160778659
+  }
+ },
+ "speed_ms": {
+  "preprocess": 0.6004869842399785,
+  "inference": 4.349766484513869,
+  "loss": 0.00029252047776632634,
+  "postprocess": 0.439363036245292
+ },
+ "confusion_matrix": [
+  [
+   419.0,
+   0.0,
+   181.0
+  ],
+  [
+   1.0,
+   190.0,
+   0.0
+  ],
+  [
+   164.0,
+   0.0,
+   0.0
+  ]
+ ],
  "boundary_n_images": 192,
  "boundary_summary": {
   "gingiva_mask_iou": {
