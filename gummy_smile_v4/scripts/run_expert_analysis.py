@@ -36,7 +36,7 @@ from gsv4.eval.expert import (  # noqa: E402
     strata_by_threshold, tooth_long, tooth_mixed_models,
 )
 from gsv4.io.forms import form_qc_summary, join_key, read_form, split_repeats  # noqa: E402
-from gsv4.measure.calibration import offset_mm_at, offset_px_from_config  # noqa: E402
+from gsv4.measure.calibration import offset_mm_at  # noqa: E402
 
 
 def md_table(df: pd.DataFrame, fmt: str = "{:.3f}") -> str:
@@ -154,16 +154,17 @@ The protocol originally named the fixed test subset (n = {len(test_images)}) as 
 
     # ---- model side: global scale uncorrected = PRIMARY; corrected (config offset_px, converted with
     # the scale in use) = secondary; expert per-image scale (uncorrected and corrected) = secondary.
-    # the offset corrects *predicted* masks only; a Stage-3 table (ground-truth masks) gets no offset
-    predicted_table = "masks" in per.columns and str(per["masks"].iloc[0]) in ("oof", "final")
-    offset_px = offset_px_from_config(cfg) if predicted_table else 0.0
-    model = model_table(per, expert_scale, offset_px=offset_px)
+    # the mask-level correction lives in the Stage-6 table (<method>_px_corrected columns); a Stage-3
+    # table (ground-truth masks) has none, so corrected = uncorrected there and the note says so
+    model = model_table(per, expert_scale)
+    predicted_table = bool(model["model_has_correction"].iloc[0])
+    offset_px = float(model["model_bottom_edge_offset_px"].iloc[0])
     scales = ["global", "global_corrected"] + (["expert", "expert_corrected"] if model["model_mm_expert"].notna().sum() >= 10 else [])
-    scale_note = (("" if predicted_table else "**Model table comes from ground-truth masks (Stage 3 / synthetic dry run): the post-hoc offset applies to predicted masks only, so offset_px = 0 here and the corrected columns equal the uncorrected ones.** ")
-                  + f"Model scales: `global` = uncorrected, global {cfg['measurement']['px_per_mm']} px/mm (PRIMARY); `global_corrected` = post-hoc pixel offset "
-                  f"{offset_px:+.0f} px of config.yaml at the global scale ({offset_mm_at(float(cfg['measurement']['px_per_mm']), offset_px):+.2f} mm; secondary); "
-                  f"`expert` / `expert_corrected` = the experts' mean per-image scale, the same pixel offset converted with that per-image scale (secondary). "
-                  f"Corrected values below 0 mm are clipped to 0 and flagged (`model_clipped_*`; clipped: global {int(model['model_clipped_global_corrected'].sum())}, expert {int(model['model_clipped_expert_corrected'].sum())}).")
+    scale_note = (("" if predicted_table else "**Model table comes from ground-truth masks (Stage 3 / synthetic dry run): the post-hoc mask-level correction exists only for predicted masks, so the corrected columns equal the uncorrected ones here.** ")
+                  + f"Model scales: `global` = uncorrected, global {cfg['measurement']['px_per_mm']} px/mm (PRIMARY); `global_corrected` = the mask-level lower-edge correction of Stage 6 "
+                  f"(config `bottom_edge_offset_px` = {offset_px:+.0f} px; re-measured pixel values `<method>_px_corrected`, {offset_mm_at(float(cfg['measurement']['px_per_mm']), offset_px):+.2f} mm at the global scale; secondary); "
+                  f"`expert` / `expert_corrected` = the experts' mean per-image scale applied to the uncorrected / corrected pixel values (secondary). "
+                  "Because the correction is in pixels at mask level, no mm constant is involved and the per-image scale applies unchanged.")
     cls, per_class = class_agreement(model, reference, subsets, n_boot, seed, scales=scales)
     cls.to_csv(out_dir / "class_agreement.csv", index=False)
     per_class.to_csv(out_dir / "per_class.csv", index=False)

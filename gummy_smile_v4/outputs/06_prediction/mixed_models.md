@@ -17,12 +17,12 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
 | OOF region i vs GT-mask region i | 4 | 21 | 144 | 0.635 | 0.578 | 0.482 | 0.956 |
 | OOF region i vs GT-mask region i | 5 | 22 | 144 | 0.702 | 0.525 | 0.749 | 0.919 |
 | OOF region i vs GT-mask region i | 6 | 23 | 144 | 0.912 | 0.635 | 1.069 | 0.787 |
-| OOF region i (corrected, secondary) vs reference tooth i | 1 | 13 | 144 | 0.686 | -0.001 | 1.063 | 0.829 |
-| OOF region i (corrected, secondary) vs reference tooth i | 2 | 12 | 144 | 0.633 | 0.033 | 0.925 | 0.874 |
-| OOF region i (corrected, secondary) vs reference tooth i | 3 | 11 | 144 | 0.455 | -0.239 | 0.687 | 0.910 |
-| OOF region i (corrected, secondary) vs reference tooth i | 4 | 21 | 144 | 0.542 | -0.206 | 0.892 | 0.846 |
-| OOF region i (corrected, secondary) vs reference tooth i | 5 | 22 | 144 | 0.673 | -0.115 | 1.159 | 0.798 |
-| OOF region i (corrected, secondary) vs reference tooth i | 6 | 23 | 144 | 0.668 | 0.179 | 1.045 | 0.810 |
+| OOF region i (corrected, secondary) vs reference tooth i | 1 | 13 | 144 | 0.684 | 0.002 | 1.059 | 0.830 |
+| OOF region i (corrected, secondary) vs reference tooth i | 2 | 12 | 144 | 0.624 | 0.034 | 0.916 | 0.877 |
+| OOF region i (corrected, secondary) vs reference tooth i | 3 | 11 | 144 | 0.449 | -0.233 | 0.671 | 0.915 |
+| OOF region i (corrected, secondary) vs reference tooth i | 4 | 21 | 144 | 0.552 | -0.200 | 0.901 | 0.842 |
+| OOF region i (corrected, secondary) vs reference tooth i | 5 | 22 | 144 | 0.680 | -0.125 | 1.161 | 0.798 |
+| OOF region i (corrected, secondary) vs reference tooth i | 6 | 23 | 144 | 0.678 | 0.200 | 1.051 | 0.807 |
 
 ### Pipeline (OOF, uncorrected, PRIMARY) − clinical reference
 - `diff ~ 1 + (1 | patient)` — MixedLM (REML); n = 864 teeth in 144 patients; var(patient) 0.435, var(residual) 0.586, ICC(patient) 0.43
@@ -43,24 +43,24 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
   - C(tooth)[T.23]: +0.442 mm [+0.267, +0.617], p = 7.56e-07
   - alignment_uncertain[T.True]: +0.304 mm [-0.009, +0.616], p = 0.0567
 
-### Pipeline (OOF, corrected: offset_px -13 (-0.77 mm at 16.84 px/mm), secondary) − clinical reference
+### Pipeline (OOF, corrected: lower gingiva edge -13 px at mask level (-0.77 mm at 16.84 px/mm), secondary) − clinical reference
 - `diff ~ 1 + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.448, ICC(patient) 0.00; note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
-  - Intercept: -0.058 mm [-0.176, +0.059], p = 0.331
-- `diff ~ C(tooth) + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.947, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
-  - Intercept: -0.239 mm [-0.351, -0.126], p = 3.18e-05
-  - C(tooth)[T.12]: +0.272 mm [+0.156, +0.387], p = 4.36e-06
-  - C(tooth)[T.13]: +0.237 mm [+0.076, +0.399], p = 0.00399
-  - C(tooth)[T.21]: +0.033 mm [-0.091, +0.156], p = 0.602
-  - C(tooth)[T.22]: +0.123 mm [-0.055, +0.302], p = 0.176
-  - C(tooth)[T.23]: +0.417 mm [+0.249, +0.585], p = 1.13e-06
-- `diff ~ C(tooth) + alignment_uncertain + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.934, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
-  - Intercept: -0.293 mm [-0.423, -0.163], p = 9.68e-06
-  - C(tooth)[T.12]: +0.272 mm [+0.156, +0.387], p = 4.42e-06
-  - C(tooth)[T.13]: +0.237 mm [+0.076, +0.399], p = 0.00401
-  - C(tooth)[T.21]: +0.033 mm [-0.091, +0.156], p = 0.602
-  - C(tooth)[T.22]: +0.123 mm [-0.055, +0.302], p = 0.176
-  - C(tooth)[T.23]: +0.417 mm [+0.249, +0.586], p = 1.14e-06
-  - alignment_uncertain[T.True]: +0.312 mm [+0.011, +0.613], p = 0.0424
+  - Intercept: -0.054 mm [-0.171, +0.064], p = 0.37
+- `diff ~ C(tooth) + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.946, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
+  - Intercept: -0.233 mm [-0.343, -0.124], p = 3.13e-05
+  - C(tooth)[T.12]: +0.268 mm [+0.152, +0.383], p = 5.47e-06
+  - C(tooth)[T.13]: +0.236 mm [+0.074, +0.397], p = 0.0042
+  - C(tooth)[T.21]: +0.033 mm [-0.089, +0.155], p = 0.592
+  - C(tooth)[T.22]: +0.108 mm [-0.068, +0.285], p = 0.23
+  - C(tooth)[T.23]: +0.433 mm [+0.266, +0.600], p = 3.78e-07
+- `diff ~ C(tooth) + alignment_uncertain + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.935, ICC(patient) 0.00; note: mixed model failed (Singular matrix); random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead
+  - Intercept: -0.283 mm [-0.411, -0.156], p = 1.27e-05
+  - C(tooth)[T.12]: +0.268 mm [+0.152, +0.383], p = 5.54e-06
+  - C(tooth)[T.13]: +0.236 mm [+0.074, +0.397], p = 0.00422
+  - C(tooth)[T.21]: +0.033 mm [-0.089, +0.156], p = 0.593
+  - C(tooth)[T.22]: +0.108 mm [-0.069, +0.285], p = 0.23
+  - C(tooth)[T.23]: +0.433 mm [+0.266, +0.600], p = 3.84e-07
+  - alignment_uncertain[T.True]: +0.289 mm [-0.012, +0.589], p = 0.0598
 
 ### Pipeline (OOF) − GT-mask measurement (segmentation part only)
 - `diff ~ 1 + (1 | patient)` — OLS, cluster-robust SE (patient); n = 864 teeth in 144 patients; var(patient) 0.000, var(residual) 0.434, ICC(patient) 0.00; note: random-intercept variance at the boundary (≈ 0): mixed-model CIs undefined, cluster-robust OLS reported instead

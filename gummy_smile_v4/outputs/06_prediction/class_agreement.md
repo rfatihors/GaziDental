@@ -12,14 +12,14 @@ observed agreement 62.5 %, linear-weighted κ 0.594 [0.503, 0.677]
 | E2-E3 | 0 | 1 | 19 | 5 |
 | E3 | 0 | 1 | 2 | 3 |
 
-### (a) corrected (offset_px -13 (-0.77 mm at 16.84 px/mm), secondary)
-observed agreement 79.9 %, linear-weighted κ 0.743 [0.651, 0.818]; clipped to 0: 0
+### (a) corrected (lower gingiva edge -13 px at mask level (-0.77 mm at 16.84 px/mm), secondary)
+observed agreement 80.6 %, linear-weighted κ 0.752 [0.661, 0.829]; images with zeroed columns: 78
 
 | reference | E1 | E1-E2 | E2-E3 | E3 |
 |---|---|---|---|---|
 | E1 | 79 | 10 | 0 | 0 |
 | E1-E2 | 3 | 18 | 3 | 0 |
-| E2-E3 | 1 | 6 | 16 | 2 |
+| E2-E3 | 1 | 5 | 17 | 2 |
 | E3 | 1 | 0 | 3 | 2 |
 
 ## (b) final model, test high images (n = 29) — secondary set
@@ -32,8 +32,8 @@ observed agreement 48.3 %, linear-weighted κ 0.401 [0.205, 0.588]
 | E2-E3 | 0 | 1 | 2 | 2 |
 | E3 | 0 | 1 | 0 | 0 |
 
-### (b) corrected (offset_px -13 (-0.77 mm at 16.84 px/mm), secondary)
-observed agreement 75.9 %, linear-weighted κ 0.640 [0.373, 0.857]; clipped to 0: 0
+### (b) corrected (lower gingiva edge -13 px at mask level (-0.77 mm at 16.84 px/mm), secondary)
+observed agreement 75.9 %, linear-weighted κ 0.640 [0.373, 0.857]; images with zeroed columns: 17
 
 | reference | E1 | E1-E2 | E2-E3 | E3 |
 |---|---|---|---|---|

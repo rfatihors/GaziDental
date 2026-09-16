@@ -66,8 +66,17 @@ def _png_masks(row: pd.Series, mask_dir: Path) -> Tuple[Optional[ClassMasks], Tu
     return from_png(g, lip if lip.exists() else None, expected_shape=shape), shape
 
 
-def measure_images(rows: pd.DataFrame, cfg: Dict[str, Any], coco_root: Path, mask_source: str = "gt") -> pd.DataFrame:
-    """Run the measurement on every row (GT COCO masks or ``<mask_source>/<image>_gingiva.png``)."""
+def measure_images(rows: pd.DataFrame, cfg: Dict[str, Any], coco_root: Path, mask_source: str = "gt",
+                   bottom_edge_offset_px: float = 0.0) -> pd.DataFrame:
+    """Run the measurement on every row (GT COCO masks or ``<mask_source>/<image>_gingiva.png``).
+
+    ``bottom_edge_offset_px`` (< 0) applies the adopted mask-level correction before measuring:
+    the lower gingiva edge is moved up by that many pixels in every column
+    (``gsv4.measure.calibration.apply_bottom_edge_offset``); the number of columns that
+    became empty is returned as ``n_columns_zeroed`` / ``columns_zeroed_frac``.
+    """
+    from gsv4.measure.calibration import apply_bottom_edge_offset
+
     cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
     out = []
     for _, r in rows.iterrows():
@@ -81,7 +90,13 @@ def measure_images(rows: pd.DataFrame, cfg: Dict[str, Any], coco_root: Path, mas
             out.append(rec)
             continue
         masks.check_shape(shape)
-        res = measure_gingival_display(masks.gingiva, masks.lip, px_per_mm=None, cfg=cfg["measurement"])
+        gingiva = masks.gingiva
+        if bottom_edge_offset_px:
+            corr = apply_bottom_edge_offset(gingiva, bottom_edge_offset_px)
+            gingiva = corr["mask"]
+            rec.update({"bottom_edge_offset_px": float(bottom_edge_offset_px), "n_columns_before": corr["n_columns_before"],
+                        "n_columns_zeroed": corr["n_columns_zeroed"], "columns_zeroed_frac": corr["columns_zeroed_frac"]})
+        res = measure_gingival_display(gingiva, masks.lip, px_per_mm=None, cfg=cfg["measurement"])
         rec.update(res.to_row())
         rec["mask_missing"] = False
         rec["n_gingiva_instances"] = masks.n_gingiva_instances

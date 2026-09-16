@@ -26,30 +26,7 @@ SIMPLICITY = ["constant", "regression", "pixel"]   # simplest first
 SELECTION_TOLERANCE_MM = 0.03
 
 
-def shift_lower_edge_up(mask: np.ndarray, d: int) -> np.ndarray:
-    """Remove the lowest ``d`` pixels of the bottom-most vertical run in every column.
-
-    Only contiguous foreground pixels counted upward from the column's lowest foreground
-    pixel are cleared, so a run shorter than ``d`` disappears without touching a run
-    further up. ``d <= 0`` returns a copy.
-    """
-    m = np.asarray(mask).astype(bool).copy()
-    if d <= 0 or not m.any():
-        return m
-    h, w = m.shape
-    any_col = m.any(axis=0)
-    cols = np.nonzero(any_col)[0]
-    bottom = h - 1 - np.argmax(m[::-1, :][:, cols], axis=0)    # lowest foreground row per column
-    alive = np.ones(len(cols), dtype=bool)
-    for j in range(d):
-        rows = bottom - j
-        ok = alive & (rows >= 0)
-        ok[ok] &= m[rows[ok], cols[ok]]
-        m[rows[ok], cols[ok]] = False
-        alive = ok
-        if not alive.any():
-            break
-    return m
+from gsv4.measure.calibration import shift_lower_edge_up  # noqa: E402,F401 — shared with the adopted mask-level correction
 
 
 def fit_constant(pred_mm: Sequence[float], ref_mm: Sequence[float]) -> Dict[str, float]:

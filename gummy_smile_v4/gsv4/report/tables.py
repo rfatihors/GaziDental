@@ -93,7 +93,7 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
         # Stage 6 (scripts/run_prediction_eval.py): method and scale fixed from Stage 3, nothing re-fitted
         pa = pd.read_csv(acc6)
         wanted = [("(a) OOF masks, all reference images [PRIMARY]", f"Predicted masks (OOF, fold models), all reference images, {sel} — uncorrected (PRIMARY)"),
-                  ("(a) OOF masks, all reference images [PRIMARY] — corrected", f"Predicted masks (OOF, fold models), all reference images, {sel} — corrected, offset_px (secondary)"),
+                  ("(a) OOF masks, all reference images [PRIMARY] — corrected", f"Predicted masks (OOF, fold models), all reference images, {sel} — corrected, mask-level lower edge (secondary)"),
                   ("(a) OOF, Stage-3 holdout images only (scale never fitted on these)", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — uncorrected"),
                   ("(a) OOF, Stage-3 holdout images only (scale never fitted on these) — corrected", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — corrected"),
                   ("(b) final model masks, test high images [secondary set]", f"Predicted masks (final model), test-set high images, {sel} — uncorrected"),
@@ -103,7 +103,7 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
             if len(hit) and pd.notna(hit.iloc[0].get("mae", np.nan)):
                 r6 = hit.iloc[0]
                 rows.append(row(label, r6, r6["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"], "correction": r6.get("correction", ""),
-                                                     "kappa_linear": r6.get("threshold_kappa_linear", np.nan), "n_clipped": r6.get("n_clipped", np.nan)}))
+                                                     "kappa_linear": r6.get("threshold_kappa_linear", np.nan), "images_with_zeroed_columns": r6.get("images_with_zeroed_columns", np.nan)}))
         status["prediction_rows"] = "done"
         status["prediction_source"] = str(acc6)
     else:

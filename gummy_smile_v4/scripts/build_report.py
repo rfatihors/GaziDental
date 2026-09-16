@@ -56,7 +56,7 @@ def main() -> int:
         if "selected_mm_corrected" in p6.columns:
             status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF), corrected (secondary)",
                            **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks_corrected.png",
-                                                        f"Full pipeline, out-of-fold masks, corrected by the post-hoc pixel offset ({int(p6['offset_px'].iloc[0]):+d} px) — secondary", value_col="selected_mm_corrected", subset_col=None)})
+                                                        f"Full pipeline, out-of-fold masks, corrected at mask level (lower gingiva edge {int(p6['bottom_edge_offset_px'].iloc[0]):+d} px) — secondary", value_col="selected_mm_corrected", subset_col=None)})
     else:
         F.placeholder(fig_dir / "measurement_predicted_masks.png", "Measurement on predicted masks (OOF)", "Stage 6: scripts/run_prediction_eval.py")
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)", "status": "pending", "needs": "Stage 6 outputs", "path": str(fig_dir / "measurement_predicted_masks.png")})
@@ -102,12 +102,12 @@ def main() -> int:
         a6 = b6.loc["(a) OOF, 145 reference high"]
         tm = json.loads((pred_dir / "test_metrics.json").read_text()) if (pred_dir / "test_metrics.json").exists() else {}
         pc = tm.get("per_class", {})
-        off_px = cfg["measurement"].get("offset_px", 0)
+        off_px = int(cfg["measurement"].get("bottom_edge_offset_px", 0))
         r2_10 = (f"The mAP gap between lip (seg mAP@50 {pc.get('dudak', {}).get('seg_map50', float('nan')):.2f}) and gingiva ({pc.get('diseti', {}).get('seg_map50', float('nan')):.2f}) is decomposed at the boundary: "
                  f"on the 145 reference images (OOF) the upper, lip-side gingiva edge is accurate (MAE {a6['gingiva_top_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_top_edge_bias_mm_mean']:+.2f} mm) while the lower, festooned gingival margin is placed systematically too low "
                  f"(MAE {a6['gingiva_bottom_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm; gingiva mask IoU {a6['gingiva_mask_iou_mean']:.2f}, lip IoU {a6['lip_mask_iou_mean']:.2f}). "
                  f"The gap is therefore not model incapacity but a constant over-inclusion of the thin lower margin — the same shift in every fold and in the final model — which the pipeline reports as such and corrects post hoc as a secondary result "
-                 f"(pixel offset {off_px:+d} px, `06_prediction/offset_correction.md`, `offset_checks.md`). Low/normal smile lines lower the pooled test IoU further because their annotated gingiva is thin or absent (`06_prediction/boundary_by_set.md`)")
+                 f"(mask-level correction: lower gingiva edge moved up {abs(off_px)} px before measurement, `06_prediction/offset_correction.md`, `offset_checks.md`). Low/normal smile lines lower the pooled test IoU further because their annotated gingiva is thin or absent (`06_prediction/boundary_by_set.md`)")
     rev = f"""# REVIZYON_OZETI — reviewer items and the outputs that answer them
 
 Legend: ✅ available now, ⏳ pending (what is needed is written in `report_status.md`). Paths are relative to `outputs/07_report/` unless absolute.

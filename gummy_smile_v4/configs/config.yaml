@@ -85,12 +85,16 @@ thresholds:
 
 measurement:
   px_per_mm: 16.8397          # global scale, fitted on the oracle dev subset (Stage 3)
-  # Post-hoc calibration (adopted 16 Sep 2026, Stage 6 addendum): the model includes a fixed
-  # number of pixels too many at the LOWER gingiva edge; estimated on the Stage-3 dev subset of
-  # the out-of-fold predictions, validated on holdout and on the test set (offset_checks.md).
-  # corrected_mm = max(0, (px + offset_px) / px_per_mm_of_the_image); a clipped value is flagged.
+  # Post-hoc calibration (adopted 16 Sep 2026, Stage 6 addendum, MASK LEVEL): the model includes
+  # a fixed number of pixels too many at the LOWER gingiva edge. The lower edge of the predicted
+  # gingiva mask is moved up by |bottom_edge_offset_px| in every column before the thickness
+  # profile is built (a column whose run is shorter becomes 0, never negative; count reported).
+  # Estimated on the Stage-3 dev subset of the out-of-fold predictions (mask-level grid), validated
+  # on holdout and on the test set (06_prediction/offset_correction.md, offset_checks.md).
+  # mm conversion uses the px_per_mm valid for the image (global here, expert scale in Stage 4).
   # Uncorrected values are PRIMARY, corrected values SECONDARY in every table.
-  offset_px: -13
+  # (The value-level key `offset_px` is removed; the loader rejects it.)
+  bottom_edge_offset_px: -13
   method: {regioning: C, estimator: p25, anchored: false}  # selected in Stage 3 on dev MAE
   regions: 6
   median_filter_frac: 0.01        # of the measurement-window width, forced odd

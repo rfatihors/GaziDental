@@ -33,49 +33,47 @@ def _label_columns(m: pd.DataFrame, scale: str) -> None:
     m[f"model_strict_{scale}"] = m[f"model_candidates_{scale}"].map(lambda c: c[0] if c else None)
 
 
-def model_table(per_image: pd.DataFrame, expert_scale: Optional[pd.Series] = None, offset_px: float = 0.0) -> pd.DataFrame:
+def model_table(per_image: pd.DataFrame, expert_scale: Optional[pd.Series] = None) -> pd.DataFrame:
     """Model class/mm per image from the selected method under four "scales":
     ``global`` (primary; uncorrected, global px/mm), ``global_corrected`` (secondary; the
-    pixel offset of config.yaml applied at the global scale), and when ``expert_scale``
-    (image -> px/mm) is given ``expert`` / ``expert_corrected`` with the experts' mean
-    per-image scale. The corrected columns are ``model_mm_<scale>`` with a
-    ``model_clipped_<scale>`` flag; region columns ``model_region_<i>_mm_<scale>``."""
-    from gsv4.measure.calibration import corrected_mm
-
+    mask-level lower-edge correction of Stage 6 — pixel columns ``<method>_px_corrected`` and
+    ``<method>_region_<i>_px_corrected`` of per_image_results.csv — at the global scale), and
+    when ``expert_scale`` (image -> px/mm) is given ``expert`` / ``expert_corrected`` with the
+    experts' mean per-image scale (the same corrected pixel values divided by that scale).
+    A table without corrected pixel columns (Stage 3, GT masks) gets corrected = uncorrected
+    and ``model_has_correction = False``."""
     m = per_image.copy()
     method = m["selected_method"].iloc[0]
     px_col = f"{method}_px"
+    pxc_col = f"{method}_px_corrected"
+    has_corr = pxc_col in m.columns
+    m["model_has_correction"] = has_corr
+    m["model_bottom_edge_offset_px"] = float(m["bottom_edge_offset_px"].iloc[0]) if has_corr and "bottom_edge_offset_px" in m.columns else 0.0
     k_global = m["selected_px_per_mm"].astype(float) if "selected_px_per_mm" in m.columns else np.nan
     m["model_mm_global"] = m["selected_mm"]
-    m["model_offset_px"] = float(offset_px)
     if px_col in m.columns:
-        c = corrected_mm(m[px_col], k_global, offset_px)
-        m["model_mm_global_corrected"] = c["mm"]
-        m["model_clipped_global_corrected"] = c["clipped"]
+        pxc = m[pxc_col] if has_corr else m[px_col]
+        m["model_mm_global_corrected"] = pxc / k_global
         for i in range(1, 7):
-            rc = f"{method}_region_{i}_px"
+            rc, rcc = f"{method}_region_{i}_px", f"{method}_region_{i}_px_corrected"
             if rc in m.columns:
                 m[f"model_region_{i}_mm_global"] = m[rc] / k_global
-                m[f"model_region_{i}_mm_global_corrected"] = corrected_mm(m[rc], k_global, offset_px)["mm"]
+                m[f"model_region_{i}_mm_global_corrected"] = (m[rcc] if has_corr and rcc in m.columns else m[rc]) / k_global
     else:
         m["model_mm_global_corrected"] = np.nan
-        m["model_clipped_global_corrected"] = False
     if expert_scale is not None and px_col in m.columns:
         m["expert_px_per_mm"] = m["image"].map(expert_scale)
         m["model_mm_expert"] = m[px_col] / m["expert_px_per_mm"]
-        c = corrected_mm(m[px_col], m["expert_px_per_mm"], offset_px)
-        m["model_mm_expert_corrected"] = c["mm"]
-        m["model_clipped_expert_corrected"] = c["clipped"]
+        m["model_mm_expert_corrected"] = (m[pxc_col] if has_corr else m[px_col]) / m["expert_px_per_mm"]
         for i in range(1, 7):
-            rc = f"{method}_region_{i}_px"
+            rc, rcc = f"{method}_region_{i}_px", f"{method}_region_{i}_px_corrected"
             if rc in m.columns:
                 m[f"model_region_{i}_mm_expert"] = m[rc] / m["expert_px_per_mm"]
-                m[f"model_region_{i}_mm_expert_corrected"] = corrected_mm(m[rc], m["expert_px_per_mm"], offset_px)["mm"]
+                m[f"model_region_{i}_mm_expert_corrected"] = (m[rcc] if has_corr and rcc in m.columns else m[rc]) / m["expert_px_per_mm"]
     else:
         m["expert_px_per_mm"] = np.nan
         m["model_mm_expert"] = np.nan
         m["model_mm_expert_corrected"] = np.nan
-        m["model_clipped_expert_corrected"] = False
     for scale in ("global", "global_corrected", "expert", "expert_corrected"):
         _label_columns(m, scale)
     m["dist_to_threshold_mm"] = m["model_mm_global"].map(lambda v: min(abs(v - b) for b in BOUNDARIES) if pd.notna(v) else np.nan)

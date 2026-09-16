@@ -34,7 +34,7 @@ from gsv4.eval.offset import (  # noqa: E402
 )
 from gsv4.eval.oracle import combo_name  # noqa: E402
 from gsv4.eval.prediction import agreement_metrics, label_confusion, md_table  # noqa: E402
-from gsv4.measure.calibration import corrected_mm, offset_mm_at, offset_px_from_config  # noqa: E402
+from gsv4.measure.calibration import apply_bottom_edge_offset, bottom_edge_offset_from_config, offset_mm_at, value_level_mm  # noqa: E402
 from gsv4.masks.extract import from_png  # noqa: E402
 from gsv4.measure.gingival_display import measure_gingival_display  # noqa: E402
 from gsv4.report.figures import PLOT_DPI  # noqa: E402
@@ -192,30 +192,63 @@ Effect of the recommended correction on holdout: MAE {h_none['mae']:.3f} → {t.
 * If the correction is adopted, the same offset must be applied to the test-set (final model) predictions and to the expert-agreement analysis *before* those are looked at again.
 * The segmentation failure category (n = {len(failed)}) is unaffected by any calibration; it needs a manual-review path.
 """
-    # ---- adopted correction (config.yaml: measurement.offset_px), value level, and the verification
-    off_px = offset_px_from_config(cfg)
+    # ---- adopted correction (config.yaml: measurement.bottom_edge_offset_px) = MASK LEVEL, and the three
+    # variants side by side: value-level mm constant (a), value-level px constant, mask-level px (adopted)
+    off_px = bottom_edge_offset_from_config(cfg)
     off_mm_global = offset_mm_at(k, off_px)
+    d_adopt = int(round(abs(off_px)))
     per_t = pd.read_csv(out_dir / "per_image_results_test.csv")
-    per_t = per_t[~per_t["empty_prediction"].astype(bool)]
-    adopted = {}
-    for name, d in (("dev", dev), ("holdout", hold), ("test high, final model", per_t)):
-        c = corrected_mm(d[f"{combo}_px"], k, off_px)
-        m = agreement_metrics(c["mm"], d["ref_mm"], n_boot=args.n_boot, seed=seed)
-        m["n_clipped"] = c["n_clipped"]
-        adopted[name] = m
-    unc_test = agreement_metrics(per_t["selected_mm"], per_t["ref_mm"], n_boot=args.n_boot, seed=seed)
+    per_t = per_t[~per_t["empty_prediction"].astype(bool)].copy()
+    test_dir = resolve(cfg, cfg["paths"]["predictions"]) / "test"
+    # mask-level re-measurement of the final model's test masks at the adopted shift
+    t_mask_mm, t_zero = [], []
+    for r in per_t.itertuples(index=False):
+        m_ = from_png(test_dir / f"{r.image}_gingiva.png", test_dir / f"{r.image}_lip.png", expected_shape=(int(r.height), int(r.width)))
+        cor = apply_bottom_edge_offset(m_.gingiva, off_px)
+        res = measure_gingival_display(cor["mask"], m_.lip, px_per_mm=None, cfg=mcfg, method=method)
+        t_mask_mm.append(res.image_values.get((method["regioning"], method["estimator"], bool(method["anchored"])), np.nan) / k)
+        t_zero.append(cor["n_columns_zeroed"])
+    per_t["mask_level"] = t_mask_mm
+    per_t["n_columns_zeroed"] = t_zero
+    col_adopt = f"d{d_adopt}"
+    dev["mask_level"] = shifts.loc[dev["uid"], col_adopt].to_numpy()
+    hold["mask_level"] = shifts.loc[hold["uid"], col_adopt].to_numpy()
+    for d in (dev, hold, per_t):
+        d["value_px"] = value_level_mm(d[f"{combo}_px"], k, off_px)["mm"]
+        d["value_mm"] = apply_constant(d["selected_mm"], fit_a)
+    per_t["regression"] = apply_regression(per_t["selected_mm"], fit_c)
+    per_t["none"] = per_t["selected_mm"]
+    variants = [("none", "uncorrected (PRIMARY)"), ("value_mm", f"(a) value level, constant {fit_a['offset_mm']:.3f} mm"),
+                ("value_px", f"value level, constant {off_px:+.0f} px ({off_mm_global:+.3f} mm at the global scale)"),
+                ("mask_level", f"**(b) mask level, lower edge {off_px:+.0f} px — ADOPTED**"), ("regression", "(c) value level, linear recalibration")]
+    var_rows = []
+    for sub_name, d in (("dev", dev), ("holdout", hold), ("test high, final model", per_t)):
+        for key, label in variants:
+            m = agreement_metrics(d[key], d["ref_mm"], n_boot=args.n_boot, seed=seed)
+            var_rows.append({"subset": sub_name, "variant": label, "key": key, **m})
+    var = pd.DataFrame(var_rows)
+    var.to_csv(out_dir / "offset_variants.csv", index=False)
+    vt = var.set_index(["subset", "key"])
+    adopted = {name: vt.loc[(name, "mask_level")] for name in ("dev", "holdout", "test high, final model")}
+    unc_test = vt.loc[("test high, final model", "none")]
     _oof = per.set_index("uid").loc[per_t["uid"], "selected_mm"].to_numpy(float)
     paired = bland_altman(per_t["selected_mm"].to_numpy(float), _oof)   # final − fold models, same 29 images
-    d_adopt = int(round(-off_px))
-    mask_row = curve.set_index("d").loc[d_adopt] if d_adopt in set(curve["d"]) else None
     const_px = fit_a["offset_mm"] * k   # the constant-mm row expressed in pixels (magnitude)
-    ver = (f"At the single global scale the adopted offset equals {off_mm_global:+.3f} mm. Holdout MAE with the value-level offset: {adopted['holdout']['mae']:.3f} mm"
-           + (f"; mask-level shift of the same {d_adopt} px (row (b) of the table, re-measured): {mask_row['mae_holdout']:.3f} mm" if mask_row is not None else "")
-           + f"; constant mm offset (row (a), {fit_a['offset_mm']:.3f} mm = {const_px:.1f} px): {h_a['mae']:.3f} mm. "
-           + ("Value-level and mask-level results agree to within 0.01 mm, so the pixel definition reproduces the pixel row of the comparison table. " if mask_row is not None and abs(adopted['holdout']['mae'] - mask_row['mae_holdout']) < 0.01 else "")
-           + (f"Note that {off_px:+.0f} px is the dev optimum of the mask-level shift (d*), not the pixel equivalent of the constant-mm row ({-const_px:.1f} px); the two differ by {abs(off_mm_global) - fit_a['offset_mm']:+.3f} mm in the corrected value and by {adopted['holdout']['mae'] - h_a['mae']:+.3f} mm in holdout MAE." if abs(abs(off_px) - const_px) > 0.5 else "The pixel value is the rounded equivalent of the constant-mm offset; results are identical to the constant-mm row."))
-    adopted_rows = "\n".join(f"| {name} | {int(m['n'])} | {m['mae']:.3f} | {m['rmse']:.3f} | {m['icc2_1']:.3f} [{m['icc2_1_ci_low']:.3f}, {m['icc2_1_ci_high']:.3f}] | {m['ba_bias']:+.3f} [{m['ba_bias_ci_low']:+.3f}, {m['ba_bias_ci_high']:+.3f}] | {m['ba_loa_low']:.2f} to {m['ba_loa_high']:.2f} | {100 * m['threshold_agreement']:.1f} % | {m['threshold_kappa_linear']:.3f} [{m['threshold_kappa_linear_ci_low']:.3f}, {m['threshold_kappa_linear_ci_high']:.3f}] | {int(m['n_clipped'])} |"
+    hm = vt.loc[("holdout", "mask_level")]; hvp = vt.loc[("holdout", "value_px")]; hvm = vt.loc[("holdout", "value_mm")]
+    ver = (f"Adopted: the lower gingiva edge of the predicted mask is moved up {d_adopt} px in every column and the profile and all estimators are re-measured "
+           f"(config `measurement.bottom_edge_offset_px = {off_px:+.0f}`; {d_adopt} px is d*, the dev optimum of the mask-level grid above). "
+           f"Holdout MAE: mask level {hm['mae']:.3f} mm vs value level {off_px:+.0f} px {hvp['mae']:.3f} mm vs constant {fit_a['offset_mm']:.3f} mm ({const_px:.1f} px) {hvm['mae']:.3f} mm. "
+           f"The mask-level row is identical to row (b) of the comparison table (same re-measurement). The value-level px constant is *not* equivalent: subtracting a constant after the "
+           f"measurement equals the mask-level shift only when every column of every region loses the same {d_adopt} px, which fails where a column is thinner than the shift or where the "
+           f"zenith regioning changes on the corrected profile.")
+    n_zero_oof = int(((shifts[col_adopt] <= 0) | shifts[col_adopt].isna()).sum())
+    adopted_rows = "\n".join(f"| {name} | {int(m['n'])} | {m['mae']:.3f} | {m['rmse']:.3f} | {m['icc2_1']:.3f} [{m['icc2_1_ci_low']:.3f}, {m['icc2_1_ci_high']:.3f}] | {m['ba_bias']:+.3f} [{m['ba_bias_ci_low']:+.3f}, {m['ba_bias_ci_high']:+.3f}] | {m['ba_loa_low']:.2f} to {m['ba_loa_high']:.2f} | {100 * m['threshold_agreement']:.1f} % | {m['threshold_kappa_linear']:.3f} [{m['threshold_kappa_linear_ci_low']:.3f}, {m['threshold_kappa_linear_ci_high']:.3f}] |"
                              for name, m in adopted.items())
+    def vrow(sub, key):
+        r = vt.loc[(sub, key)]
+        return f"{r['mae']:.3f} / {r['ba_bias']:+.3f} / {r['icc2_1']:.3f} / {100 * r['threshold_agreement']:.0f} % / {r['threshold_kappa_linear']:.3f}"
+    variant_table = "| variant | dev (n = %d) | holdout (n = %d) | test high, final model (n = %d) |\n|---|---|---|---|\n" % (len(dev), len(hold), len(per_t)) + "\n".join(
+        f"| {label} | {vrow('dev', key)} | {vrow('holdout', key)} | {vrow('test high, final model', key)} |" for key, label in variants)
     # numbers from the other Stage-6 files for the manuscript paragraph (fallbacks when absent)
     def _read(name):
         p = out_dir / name
@@ -243,15 +276,27 @@ Effect of the recommended correction on holdout: MAE {h_none['mae']:.3f} → {t.
         ha = altdf[(altdf["subset"] == "holdout") & (altdf["correction"] == "none")].sort_values("mae")
         alt_txt = f"lower percentiles of the column profile (p10, p5, minimum) and lip-anchored variants did not remove the bias (best alternative {ha.iloc[0]['candidate']}: holdout MAE {ha.iloc[0]['mae']:.2f} mm, residual bias {ha.iloc[0]['ba_bias']:+.2f} mm)"
     ho_u, ho_c, te_u, te_c = h_none, adopted["holdout"], unc_test, adopted["test high, final model"]
-    paragraph = f"""## Adopted correction (config.yaml `measurement.offset_px = {off_px:+.0f}`) — value level, verification
-The correction is defined in pixels because the physical finding is a fixed number of pixels at the lower edge; it is converted to mm with the scale valid for each image (global scale here; the experts' per-image scale in Stage 4). {ver}
+    paragraph = f"""## Adopted correction: mask level (config.yaml `measurement.bottom_edge_offset_px = {off_px:+.0f}`)
+{ver}
 
-| subset | n | MAE, mm | RMSE, mm | ICC(2,1) [CI] | bias, mm [CI] | 95 % LoA | label agreement | κ linear [CI] | clipped |
-|---|---|---|---|---|---|---|---|---|---|
+| subset | n | MAE, mm | RMSE, mm | ICC(2,1) [CI] | bias, mm [CI] | 95 % LoA | label agreement | κ linear [CI] |
+|---|---|---|---|---|---|---|---|---|
 {adopted_rows}
 
+Columns zeroed by the shift (bottom run shorter than {d_adopt} px; never negative): test-set images with at least one such column {int((per_t['n_columns_zeroed'] > 0).sum())} of {len(per_t)}; OOF images whose whole measurement fell to 0: {n_zero_oof}. Per-image counts are in `per_image_results*.csv` (`n_columns_zeroed`, `columns_zeroed_frac`).
+
+### The three variants side by side (MAE / bias / ICC(2,1) / label agreement / κ; mm)
+{variant_table}
+
+### Why the mask-level variant was chosen
+1. **It acts where the error is.** The boundary analysis locates the bias at the lower gingiva edge (`boundary_by_set.md`, `error_decomposition.md`); moving that edge corrects the mask itself, so the thickness profile, the zenith regioning, the estimators and any downstream use of the mask (overlays, expert review) all see the corrected geometry. A constant subtracted from the final number corrects only the number.
+2. **It is the best on holdout** ({hm['mae']:.3f} mm vs {hvm['mae']:.3f} mm for the constant and {hvp['mae']:.3f} mm for the value-level pixel constant) and it was the dev optimum of a pre-stated grid (d* = {d_adopt} px), not a tuned constant.
+3. **It is scale-free.** Defined in pixels at mask level, it converts to mm with whatever px/mm is valid for the image — the global scale here, the experts' per-image scale in Stage 4 — whereas a mm constant would be wrong under a per-image scale.
+4. **It cannot produce negative values.** A column thinner than the shift becomes 0 and is counted, instead of being clipped after the fact.
+5. **Equivalence with a constant is not guaranteed.** Subtracting {d_adopt} px after the measurement equals the mask-level shift only if all columns of all regions lose the same amount; the dev/holdout numbers above show the two are close but not identical.
+
 ## Manuscript paragraph (Methods / Results, post-hoc calibration)
-The segmentation error was concentrated at the lower gingival margin. Against the annotated masks of the 145 reference images (out-of-fold predictions), the upper, lip-side edge of the gingiva was accurate (mean absolute error {top_txt}) whereas the lower edge was placed systematically too low (mean absolute error {bot_txt}), i.e. the model consistently included a thin strip of the festooned margin. The resulting over-measurement was constant rather than proportional: the mean error was {fold_txt} (one-way ANOVA p = {fold_p:.2f}), did not differ between image frame groups, and {fin_txt or 'was reproduced by the final model on the independent test images'} (paired difference final − fold models {paired['bias']:+.2f} mm [{paired['bias_ci_low']:+.2f}, {paired['bias_ci_high']:+.2f}]). A constant pixel offset of {off_px:+.0f} px ({off_mm_global:+.2f} mm at the global scale of {k:.2f} px/mm) was therefore estimated post hoc on the development subset of the out-of-fold predictions (n = {len(dev)}) and applied unchanged to the held-out subset (n = {len(hold)}) and to the final model's test-set images (n = {int(te_u['n'])}). Alternative estimators were examined first: {alt_txt or 'lower percentiles and lip-anchored variants did not remove the bias'}; the bias is a shift of the edge, not a spread within the profile, so a percentile cannot absorb it. On the held-out subset the correction reduced the mean absolute error from {ho_u['mae']:.2f} to {ho_c['mae']:.2f} mm and the bias from {ho_u['ba_bias']:+.2f} to {ho_c['ba_bias']:+.2f} mm (ICC(2,1) {ho_u['icc2_1']:.2f} → {ho_c['icc2_1']:.2f}; agreement with the Table 1 class {100 * ho_u['threshold_agreement']:.0f} % → {100 * ho_c['threshold_agreement']:.0f} %, linear-weighted κ {ho_u['threshold_kappa_linear']:.2f} → {ho_c['threshold_kappa_linear']:.2f}); on the independent test images from {te_u['mae']:.2f} to {te_c['mae']:.2f} mm (bias {te_u['ba_bias']:+.2f} → {te_c['ba_bias']:+.2f} mm). Because the offset was derived after inspecting the out-of-fold error, it is a post-hoc calibration: uncorrected results are reported as the primary analysis throughout, corrected results as a secondary analysis, and the offset is stated explicitly so that it can be re-estimated for any retrained model.
+The segmentation error was concentrated at the lower gingival margin. Against the annotated masks of the 145 reference images (out-of-fold predictions), the upper, lip-side edge of the gingiva was accurate (mean absolute error {top_txt}) whereas the lower edge was placed systematically too low (mean absolute error {bot_txt}), i.e. the model consistently included a thin strip of the festooned margin. The resulting over-measurement was constant rather than proportional: the mean error was {fold_txt} (one-way ANOVA p = {fold_p:.2f}), did not differ between image frame groups, and {fin_txt or 'was reproduced by the final model on the independent test images'} (paired difference final − fold models {paired['bias']:+.2f} mm [{paired['bias_ci_low']:+.2f}, {paired['bias_ci_high']:+.2f}]). The lower edge of the predicted gingiva mask was therefore moved up by {d_adopt} px ({abs(off_mm_global):.2f} mm at the global scale of {k:.2f} px/mm) in every image column before measurement; this mask-level offset was estimated post hoc on the development subset of the out-of-fold predictions (n = {len(dev)}) and applied unchanged to the held-out subset (n = {len(hold)}) and to the final model's test-set images (n = {int(te_u['n'])}). Alternative estimators were examined first: {alt_txt or 'lower percentiles and lip-anchored variants did not remove the bias'}; the bias is a shift of the edge, not a spread within the profile, so a percentile cannot absorb it. On the held-out subset the correction reduced the mean absolute error from {ho_u['mae']:.2f} to {ho_c['mae']:.2f} mm and the bias from {ho_u['ba_bias']:+.2f} to {ho_c['ba_bias']:+.2f} mm (ICC(2,1) {ho_u['icc2_1']:.2f} → {ho_c['icc2_1']:.2f}; agreement with the Table 1 class {100 * ho_u['threshold_agreement']:.0f} % → {100 * ho_c['threshold_agreement']:.0f} %, linear-weighted κ {ho_u['threshold_kappa_linear']:.2f} → {ho_c['threshold_kappa_linear']:.2f}); on the independent test images from {te_u['mae']:.2f} to {te_c['mae']:.2f} mm (bias {te_u['ba_bias']:+.2f} → {te_c['ba_bias']:+.2f} mm). Because the offset was derived after inspecting the out-of-fold error, it is a post-hoc calibration: uncorrected results are reported as the primary analysis throughout, corrected results as a secondary analysis, and the offset is stated explicitly so that it can be re-estimated for any retrained model.
 """
     md += "\n" + paragraph
     (out_dir / "offset_correction.md").write_text(md, encoding="utf-8")
