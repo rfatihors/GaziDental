@@ -36,9 +36,26 @@ sys.path.insert(0, str(ROOT))
 
 # Shared budget (PROTOCOL.md §2); everything architecture-internal stays at the published default.
 EPOCHS = 100
+PATIENCE = 20             # same as the YOLO runs; see the early-stopping note below
 RESOLUTION = 624          # multiple of 24 closest to the 640 the YOLO runs use
 VARIANT = "RFDETRSegLarge"
 CONF = 0.25               # the pipeline's operating point, as for the YOLO masks
+
+# Early stopping (PROTOCOL.md §2 holds the rule identical across architectures; amendment of
+# 17 Sep 2026 records what "identical" can and cannot mean here).
+#
+# rfdetr supports it through TrainConfig: early_stopping, early_stopping_patience,
+# early_stopping_min_delta, early_stopping_use_ema. For a segmentation model the monitored key is
+# ``val/segm_mAP_50_95`` (and ``val/ema_segm_mAP_50_95``), selected by best_model_metric="map".
+# With use_ema left at its default the callback watches max(regular, EMA); when EMA is on and
+# eval_base_model is off, the regular key already mirrors the EMA score, so this is the EMA metric.
+#
+# Ultralytics stops on its own fitness, which for a segmentation model is
+# SegmentMetrics.fitness() = mask mAP@50-95 + box mAP@50-95 (Metric.fitness weights [0, 0, 0, 1]),
+# with no minimum improvement. So: same patience, same "no improvement for N validation epochs"
+# rule, and a monitored quantity that is mask mAP@50-95 in both, plus a box term in the YOLO case.
+# min_delta is therefore set to 0.0 to match ultralytics, which requires no minimum improvement.
+EARLY_STOPPING = {"early_stopping": True, "early_stopping_patience": PATIENCE, "early_stopping_min_delta": 0.0}
 
 
 def load_split(ds: Path, split: str) -> dict:
@@ -53,6 +70,7 @@ def main() -> int:
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--resolution", type=int, default=RESOLUTION)
     ap.add_argument("--variant", default=VARIANT)
+    ap.add_argument("--patience", type=int, default=PATIENCE, help="early-stopping patience (0 disables it)")
     ap.add_argument("--probe", action="store_true", help="2 epochs; report seconds per epoch and peak memory, then stop")
     args = ap.parse_args()
     ds, out = ROOT / args.dataset, ROOT / args.out
@@ -72,14 +90,22 @@ def main() -> int:
     print(f"[rfdetr] {args.variant}, resolution {args.resolution}, {epochs} epochs, seed {args.seed}")
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
+    # the probe measures the cost of an epoch, so it must not stop early
+    stopping = {} if args.probe or args.patience <= 0 else {**EARLY_STOPPING, "early_stopping_patience": args.patience}
+    print(f"[rfdetr] early stopping: {stopping or 'disabled (probe)'}")
     t0 = time.time()
-    model.train(dataset_dir=str(ds), epochs=epochs, resolution=args.resolution, output_dir=str(run_dir))
+    model.train(dataset_dir=str(ds), epochs=epochs, resolution=args.resolution, output_dir=str(run_dir), **stopping)
     elapsed = time.time() - t0
     peak_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else float("nan")
-    record = {"variant": args.variant, "resolution": args.resolution, "epochs": epochs, "seed": args.seed,
+    record = {"variant": args.variant, "resolution": args.resolution, "epochs_budget": epochs, "seed": args.seed,
+              "early_stopping": stopping or None, "monitored_metric": "val/segm_mAP_50_95 (max of regular and EMA)",
               "seconds_total": round(elapsed, 1), "seconds_per_epoch": round(elapsed / max(1, epochs), 1),
               "peak_gpu_gb": round(peak_gb, 2), "probe": bool(args.probe),
               "projected_full_run_hours": round(elapsed / max(1, epochs) * args.epochs / 3600, 2)}
+    for line in (run_dir / "log.txt"), (run_dir / "results.json"):   # whatever the trainer left, for the epoch count
+        if line.exists():
+            record["trainer_log"] = str(line)
+            break
     (out / ("rfdetr_probe.json" if args.probe else f"rfdetr_train_{tag}.json")).write_text(json.dumps(record, indent=1), encoding="utf-8")
     print(json.dumps(record, indent=1))
     if args.probe:

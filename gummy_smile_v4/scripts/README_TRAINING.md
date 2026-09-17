@@ -208,6 +208,11 @@ the full run. If the install or the probe fails, that is a result: record it as 
 `PROTOCOL.md` and report the architecture as not evaluable under controlled conditions. If it
 succeeds and the projected cost is acceptable:
 
+Measured on the probe: 331 s per epoch, 9.2 h for the full 100-epoch budget, peak 15 GB, mask
+mAP@50 of 0.756 after two epochs. Early stopping is on by default with the same patience as the YOLO
+runs (`--patience 20`, monitoring `val/segm_mAP_50_95`), so a run normally stops well short of that
+budget; see PROTOCOL.md Amendment 1.
+
 ```bash
 for s in 42 43 44; do .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed $s; done
 python scripts/run_architecture_comparison.py --measure-only   # measures the RF-DETR masks

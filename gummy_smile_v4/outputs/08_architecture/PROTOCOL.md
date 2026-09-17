@@ -166,3 +166,79 @@ If RF-DETR cannot be installed or trained under conditions comparable to the oth
 is written into this file as an amendment and reported as "could not be evaluated under controlled
 conditions for reasons of installation or compatibility", with the specific failure named. That is
 an honest result and it will not be presented as anything else.
+
+---
+
+## Amendment 1 — 17 September 2026, after the RF-DETR probe, before any comparison run
+
+The protocol above stands unchanged. This amendment records what the probe established and, where
+the protocol's "identical" could not be met exactly, says so rather than quietly relaxing it.
+
+### A1.1 Probe result
+
+| quantity | value |
+|---|---|
+| seconds per epoch (RF-DETR-Seg Large, resolution 624) | 331 |
+| projected 100 epochs | 9.2 h |
+| peak GPU memory | 15 GB |
+| mask mAP@50 after 2 epochs | 0.756 |
+
+The architecture converges quickly on this dataset and is not a weak candidate. Three seeds at the
+full budget is about 28 hours; early stopping (A1.2) is expected to shorten it.
+
+### A1.2 Early stopping is available and is now used
+
+The first version of the runner passed only `epochs`, which would have given RF-DETR the whole
+100-epoch budget while the YOLO runs stopped at epochs 41 to 61 under `patience=20`. That would
+have broken §2 and favoured RF-DETR. `rfdetr` does support early stopping through its training
+configuration (`early_stopping`, `early_stopping_patience`, `early_stopping_min_delta`,
+`early_stopping_use_ema`), and it is now enabled with the same patience as the YOLO runs.
+
+| | YOLO (ultralytics) | RF-DETR |
+|---|---|---|
+| rule | stop after N validation epochs without improvement | the same |
+| patience | 20 | 20 |
+| minimum improvement | none | set to 0.0 to match |
+| monitored quantity | `SegmentMetrics.fitness()` = mask mAP@50-95 **+** box mAP@50-95 | `val/segm_mAP_50_95` = mask mAP@50-95 |
+| weights evaluated | EMA model | EMA model (the regular key mirrors the EMA score when EMA is on) |
+
+**The monitored quantity is not identical.** Ultralytics adds a box term to the mask term; RF-DETR
+monitors the mask term alone. Both are dominated by the mask metric here, because the box metric of
+the lip class saturates early and contributes an almost constant offset, but the two criteria are
+not the same function and a run could in principle stop an epoch or two apart for that reason. This
+is stated rather than hidden, and it is the closest correspondence the two frameworks allow.
+
+`skip_best_epochs` is left at its default of 0. Its purpose is to delay the patience counter while a
+fine-tuned model adapts to a new dataset; with a mask mAP@50 of 0.756 after two epochs there is
+nothing to protect against, and setting it would have given RF-DETR extra epochs that YOLO did not get.
+
+### A1.3 Limitations recorded before the runs
+
+These come from the probe log and are reported with the results, whichever way the comparison goes.
+
+**(a) The pretrained starting point is not equivalent to the YOLO one.** Loading the RF-DETR-Seg
+weights warned that the checkpoint lacks `args.num_queries` and `args.group_detr` and fell back to a
+flat slice, and that the DINOv2 backbone weights were not loaded because the patch size differs
+(12 against 14). The library treats this as acceptable for fine-tuning, and the probe result
+supports that, but it means the two families do not start from an equally well-matched pretrained
+initialisation: the YOLO models start from complete COCO-pretrained segmentation weights, RF-DETR
+from a partially loaded one. The comparison holds the data and the budget identical, not the quality
+of the pretrained checkpoint, and no attempt is made to correct for this.
+
+**(b) CUDA memory warnings during validation.** The probe logged allocation warnings in the
+validation loop. They were recovered from, no run crashed, and the peak allocation was 15 GB of the
+32 GB available. Reported for completeness; if a full run does crash there, the run is repeated with
+a smaller evaluation batch and that change is recorded here.
+
+**(c) The augmentation backend was switched to torchvision.** `rfdetr` reported that it fell back to
+its torchvision augmentation backend. Its published benchmark numbers were not necessarily produced
+with that backend, so the absolute mAP of RF-DETR here may sit slightly off its published figures.
+This does not affect the comparison, which reports our own numbers on our own data for every
+architecture under one protocol, but it does mean the RF-DETR column should not be read against
+published RF-DETR benchmarks.
+
+### A1.4 What did not change
+
+The decision rule of §8, its 0.15 mm threshold, the primary and secondary outcomes, the seeds, the
+paired analysis and the declared mask-resolution bias are all unchanged. This amendment was written
+before any comparison run.
