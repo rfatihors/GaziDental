@@ -52,7 +52,6 @@ probe("torchvision", lambda: __import__("torchvision").__version__)
 probe("transformers", lambda: __import__("transformers").__version__)
 probe("numpy", lambda: __import__("numpy").__version__)
 probe("pytorch_lightning", lambda: __import__("pytorch_lightning").__version__)
-probe("torch_hungarian", lambda: __import__("torch_hungarian").__version__ if hasattr(__import__("torch_hungarian"), "__version__") else "imported")
 probe("rfdetr", lambda: __import__("rfdetr").__version__ if hasattr(__import__("rfdetr"), "__version__") else "imported")
 probe("segmentation_variants", lambda: [n for n in dir(__import__("rfdetr")) if n.startswith("RFDETRSeg")])
 def build():
@@ -61,8 +60,18 @@ def build():
     return {"resolution": getattr(m, "resolution", None), "built": True}
 probe("build_RFDETRSegLarge", build)
 
-ok = all(not (isinstance(v, str) and v.startswith("FAILED")) for v in info.values())
+# torch-hungarian is declared by rfdetr[train] but is never imported by rfdetr itself (a grep over
+# the package finds no reference), and its import name differs from the distribution name. It is
+# reported for the record and never gates `usable`, which a hard check on it did incorrectly.
+soft = {"torch_hungarian_distribution"}
+def _dist(name):
+    from importlib.metadata import version
+    return version(name)
+probe("torch_hungarian_distribution", lambda: _dist("torch-hungarian"))
+
+ok = all(not (isinstance(v, str) and v.startswith("FAILED")) for k, v in info.items() if k not in soft)
 info["usable"] = ok
+info["soft_checks"] = sorted(soft)
 out = Path("outputs/08_architecture/rfdetr_environment.json")
 out.write_text(json.dumps(info, indent=1, default=str), encoding="utf-8")
 print(json.dumps(info, indent=1, default=str))

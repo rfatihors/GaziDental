@@ -192,10 +192,16 @@ record.
 
 ```bash
 python scripts/build_rfdetr_dataset.py --dry-run     # counts must match the manifest
-python scripts/build_rfdetr_dataset.py               # symlinks + _annotations.coco.json per split
 bash scripts/rfdetr_setup.sh                         # .venv-rfdetr, install, compatibility report
+python scripts/build_rfdetr_dataset.py --verify-with .venv-rfdetr/bin/python
 .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --probe    # 2 epochs, cost projection
 ```
+
+The builder converts every numeric field explicitly: the v3 export writes the width and height of
+each bbox as a formatted string (`[655, 525, '1300.0000', '170.0000']`), which our own pipeline never
+sees because it rasterises `segmentation` and ignores `bbox`. `--verify-with` re-opens the written
+files with the RF-DETR interpreter, through `pycocotools` and through the exact tensor step that
+failed before, so the same fault cannot reach a training run again.
 
 Check `outputs/08_architecture/rfdetr_environment.json` and `rfdetr_probe.json` before committing to
 the full run. If the install or the probe fails, that is a result: record it as an amendment in
