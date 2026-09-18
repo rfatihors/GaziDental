@@ -125,8 +125,16 @@ def main() -> int:
     cm = np.array(tm.get("confusion_matrix", []))
     g_tp, g_fp, g_fn = (cm[0, 0], cm[0, 2], cm[2, 0] + cm[1, 0]) if cm.shape == (3, 3) else (np.nan,) * 3
     lc25, lc100 = lc[lc.fraction == 0.25].iloc[0], lc[lc.fraction == 1.0].iloc[0]
-    t_row = re.search(r"\| tooth \| (\d+) \| ([\d.]+) \[([\d.]+), ([\d.]+)\].*?\| ([-\d.]+) \[.*?\| ([\d.]+) \|", intra)
-    i_row = re.search(r"\| image mean \| (\d+) \| ([\d.]+) \[", intra)
+    def intra_row(label: str):
+        """Cells of one row of the intra-observer table: level, n, ICC(2,1), ICC(3,1), ICC(2,k),
+        mean difference, SD, limits of agreement. Parsed by splitting the row, because the columns
+        share a number-plus-interval shape that a regular expression silently mis-aligns."""
+        for line in intra.splitlines():
+            if line.startswith("|") and line.split("|")[1].strip() == label:
+                return [c.strip() for c in line.strip().strip("|").split("|")]
+        return None
+
+    t_row, i_row = intra_row("tooth site"), intra_row("image mean")
     n_high_pct = 100 * int(dc.loc["high", "kept"]) / int(dc.loc["total", "kept"])
     S = {"dc": sfile(tab / "dataset_counts.csv"), "dem": sfile(tab / "demographics.csv"), "seg": sfile(tab / "segmentation_metrics_test.csv"),
          "tm": sfile(o5 / "test_metrics.json"), "lc": sfile(tab / "learning_curve.csv"), "acc": sfile(o6 / "measurement_accuracy.csv"),
@@ -224,10 +232,12 @@ def main() -> int:
          "The reviewer is right that the comparison does not isolate the architecture; the honest fix is to relabel the stage and withdraw the claim.",
          "R4-8", [])
     edit("manuscript", "2.9 Intra-observer calibration", "Intra-observer reliability was assessed on 20 randomly selected images",
-         f"Intra-observer reliability of the clinical reference was assessed on 20 images remeasured by the same examiner at a separate session: tooth-level ICC(2,1) {t_row.group(2) if t_row else '?'} "
-         f"[{t_row.group(3) if t_row else '?'}, {t_row.group(4) if t_row else '?'}] (n = {t_row.group(1) if t_row else '?'} tooth pairs), image-mean ICC(2,1) {i_row.group(2) if i_row else '?'} (n = {i_row.group(1) if i_row else '?'}), "
-         f"mean difference {t_row.group(5) if t_row else '?'} mm with a standard deviation of {t_row.group(6) if t_row else '?'} mm. The paired t-test is not used as evidence of agreement; the limits of agreement and the ICC are reported instead.",
-         "The submitted sentence gives no numbers and cites a paired t-test as evidence of agreement. The calibration files used for the original submission contained 15 images per session, not 20; the complete 20-image file was supplied by the clinical team and the statistics were recomputed from it.",
+         f"Intra-observer reliability of the clinical reference was assessed by remeasuring the gingival display of 20 images at six tooth sites each, by the same examiner at a separate session: "
+         f"tooth-site level ICC(2,1) {t_row[2] if t_row else '?'} (n = {t_row[1] if t_row else '?'} tooth-site pairs), "
+         f"image-mean level ICC(2,1) {i_row[2] if i_row else '?'} (n = {i_row[1] if i_row else '?'} images), "
+         f"mean difference {t_row[5] if t_row else '?'} mm, standard deviation {t_row[6] if t_row else '?'} mm, 95 % limits of agreement {t_row[7] if t_row else '?'} mm at tooth-site level. "
+         "The paired t-test is not used as evidence of agreement; the limits of agreement and the ICC are reported instead.",
+         "The submitted sentence gives no numbers, cites a paired t-test as evidence of agreement, and calls the repeated measurements 'tooth measurements' although the quantity measured is the gingival display at a tooth site, not a dimension of the tooth. The calibration files used for the original submission contained 15 images per session, not 20; the complete 20-image file was supplied by the clinical team and the statistics were recomputed from it.",
          "R4-4 (reference reliability)", [S["intra"]], span=2)
     edit("manuscript", "3.1 Model selection and segmentation performance", "the YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3 %)",
          "In a preliminary screening on the annotation platform, the YOLOv11 family gave the most balanced mask mAP@50 among the three candidate architectures and was selected for the subsequent training and optimisation stages. "

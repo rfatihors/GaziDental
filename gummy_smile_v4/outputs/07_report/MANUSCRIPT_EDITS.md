@@ -214,9 +214,9 @@ This stage was a screening step run with the annotation platform's default train
 
 **Proposed:**
 
-Intra-observer reliability of the clinical reference was assessed on 20 images remeasured by the same examiner at a separate session: tooth-level ICC(2,1) 0.995 [0.994, 0.997] (n = 120 tooth pairs), image-mean ICC(2,1) 0.998 (n = 20), mean difference 0.995 mm with a standard deviation of 0.998 mm. The paired t-test is not used as evidence of agreement; the limits of agreement and the ICC are reported instead.
+Intra-observer reliability of the clinical reference was assessed by remeasuring the gingival display of 20 images at six tooth sites each, by the same examiner at a separate session: tooth-site level ICC(2,1) 0.995 [0.994, 0.997] (n = 120 tooth-site pairs), image-mean level ICC(2,1) 0.998 [0.995, 0.999] (n = 20 images), mean difference 0.012 [-0.019, 0.042] mm, standard deviation 0.167 mm, 95 % limits of agreement -0.32 to 0.34 mm at tooth-site level. The paired t-test is not used as evidence of agreement; the limits of agreement and the ICC are reported instead.
 
-**Why:** The submitted sentence gives no numbers and cites a paired t-test as evidence of agreement. The calibration files used for the original submission contained 15 images per session, not 20; the complete 20-image file was supplied by the clinical team and the statistics were recomputed from it.
+**Why:** The submitted sentence gives no numbers, cites a paired t-test as evidence of agreement, and calls the repeated measurements 'tooth measurements' although the quantity measured is the gingival display at a tooth site, not a dimension of the tooth. The calibration files used for the original submission contained 15 images per session, not 20; the complete 20-image file was supplied by the clinical team and the statistics were recomputed from it.
 
 **Reviewer item:** R4-4 (reference reliability)
 

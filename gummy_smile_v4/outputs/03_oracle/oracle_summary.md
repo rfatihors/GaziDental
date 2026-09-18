@@ -4,7 +4,7 @@
 Reference images (kept high with clinical measurement): 145; excluded `label_inconsistent` rows: 0 (—); measured: 145; dev 87 / holdout 58 (seed 42, lists in `dev_holdout_split.json`).
 
 ## Protocol
-selection on dev MAE (n = 87); best dev MAE = 0.557 mm; 1 combination(s) within 0.02 mm of it (C_p25); the simplest of those is chosen (A > B > C, gingiva thickness > lip-anchored, p25 > median > p10 > min > max).
+selection on dev MAE (n = 87); best dev MAE = 0.557 mm; 1 combination(s) within 0.02 mm of it (C_p25); the simplest of those is chosen (A > B > C, gingiva thickness > lip-anchored, p25 > median > p10 > p05 > min > max).
 Scale of every combination fitted on dev only and applied unchanged to holdout; holdout metrics are reported for all combinations but were not used for selection.
 
 ## Selected method: **C_p25**, global scale **16.84 px/mm**
@@ -19,7 +19,7 @@ Fallback distribution (28 images): zenith candidates found left+right of the mid
 
 **Stage 6 note:** on predicted masks the fallback rate of `C_p25` will be re-measured; if it exceeds 30 % the selection is re-evaluated against `A_p25`.
 
-**Against the reference's own repeatability:** intra-observer SD is 0.17 mm per tooth and 0.09 mm per image mean (`intra_observer.md`); pure observer noise would produce an expected absolute difference of ≈ 0.07 mm at image level. The holdout MAE of 0.52 mm therefore leaves ≈ 0.45 mm above the observer-noise floor, attributable to the estimator, the single global scale (per-image calibration was not recorded) and region alignment.
+**Against the reference's own repeatability:** intra-observer SD is 0.17 mm per tooth site and 0.09 mm per image mean (`intra_observer.md`); pure observer noise would produce an expected absolute difference of ≈ 0.07 mm at image level. The holdout MAE of 0.52 mm therefore leaves ≈ 0.45 mm above the observer-noise floor, attributable to the estimator, the single global scale (per-image calibration was not recorded) and region alignment.
 
 Pre-analysis plausibility check (audit §6, A/p25, same-data scale, n = 148): r ≈ 0.83, MAE ≈ 0.63 mm, ≈ 17 px/mm — consistent.
 
@@ -29,20 +29,26 @@ Pre-analysis plausibility check (audit §6, A/p25, same-data scale, n = 148): r 
 | C_p25 | 16.840 | 0.557 | 0.518 | 0.718 | 0.861 | 0.858 | 0.773 | 0.914 | 0.116 | -1.284 | 1.516 | 0.054 | 0.465 | 0.793 |
 | C_p10 | 16.040 | 0.578 | 0.533 | 0.752 | 0.853 | 0.851 | 0.760 | 0.909 | 0.042 | -1.443 | 1.527 | 0.101 | 0.186 | 0.776 |
 | C_median | 17.993 | 0.593 | 0.560 | 0.796 | 0.827 | 0.819 | 0.708 | 0.890 | 0.213 | -1.304 | 1.730 | 0.005 | 0.954 | 0.707 |
+| C_p05 | 15.704 | 0.599 | 0.561 | 0.804 | 0.838 | 0.835 | 0.735 | 0.899 | 0.008 | -1.581 | 1.597 | 0.131 | 0.104 | 0.759 |
 | C_p25_lipanchored | 19.015 | 0.605 | 0.508 | 0.729 | 0.870 | 0.854 | 0.746 | 0.915 | 0.263 | -1.081 | 1.608 | 0.042 | 0.555 | 0.793 |
 | C_p10_lipanchored | 18.183 | 0.608 | 0.523 | 0.749 | 0.864 | 0.852 | 0.756 | 0.911 | 0.217 | -1.201 | 1.635 | 0.088 | 0.230 | 0.776 |
+| C_p05_lipanchored | 17.857 | 0.620 | 0.546 | 0.782 | 0.854 | 0.843 | 0.746 | 0.904 | 0.194 | -1.303 | 1.691 | 0.114 | 0.132 | 0.776 |
 | B_min | 10.732 | 0.624 | 0.687 | 0.894 | 0.819 | 0.808 | 0.696 | 0.881 | 0.092 | -1.666 | 1.851 | 0.190 | 0.027 | 0.741 |
 | B_p10 | 14.217 | 0.624 | 0.589 | 0.771 | 0.843 | 0.840 | 0.744 | 0.902 | 0.132 | -1.370 | 1.634 | 0.073 | 0.351 | 0.707 |
 | A_p25 | 17.036 | 0.627 | 0.537 | 0.744 | 0.849 | 0.843 | 0.746 | 0.905 | 0.187 | -1.236 | 1.610 | 0.016 | 0.836 | 0.793 |
+| B_p05 | 12.999 | 0.629 | 0.634 | 0.815 | 0.832 | 0.827 | 0.725 | 0.894 | 0.108 | -1.489 | 1.705 | 0.112 | 0.169 | 0.724 |
 | A_p10 | 14.642 | 0.630 | 0.562 | 0.769 | 0.844 | 0.842 | 0.747 | 0.903 | 0.091 | -1.418 | 1.601 | 0.084 | 0.283 | 0.759 |
+| A_p05 | 13.393 | 0.637 | 0.607 | 0.817 | 0.830 | 0.827 | 0.724 | 0.894 | 0.037 | -1.577 | 1.652 | 0.119 | 0.147 | 0.793 |
 | B_p25 | 16.661 | 0.644 | 0.542 | 0.723 | 0.859 | 0.851 | 0.756 | 0.910 | 0.199 | -1.175 | 1.572 | 0.008 | 0.919 | 0.759 |
 | C_min | 15.160 | 0.646 | 0.653 | 0.909 | 0.813 | 0.803 | 0.688 | 0.879 | -0.028 | -1.824 | 1.768 | 0.199 | 0.022 | 0.741 |
 | B_min_lipanchored | 13.476 | 0.646 | 0.637 | 0.853 | 0.840 | 0.820 | 0.702 | 0.892 | 0.273 | -1.324 | 1.871 | 0.143 | 0.074 | 0.690 |
 | C_median_lipanchored | 20.210 | 0.651 | 0.573 | 0.807 | 0.839 | 0.815 | 0.667 | 0.895 | 0.332 | -1.122 | 1.786 | -0.008 | 0.924 | 0.690 |
 | C_min_lipanchored | 17.372 | 0.653 | 0.602 | 0.851 | 0.836 | 0.823 | 0.718 | 0.891 | 0.170 | -1.478 | 1.818 | 0.166 | 0.041 | 0.741 |
+| B_p05_lipanchored | 15.315 | 0.653 | 0.577 | 0.795 | 0.853 | 0.835 | 0.715 | 0.903 | 0.286 | -1.179 | 1.752 | 0.085 | 0.259 | 0.707 |
 | B_p10_lipanchored | 16.446 | 0.658 | 0.566 | 0.775 | 0.860 | 0.839 | 0.711 | 0.909 | 0.308 | -1.099 | 1.715 | 0.060 | 0.414 | 0.741 |
 | A_min | 10.898 | 0.663 | 0.757 | 0.990 | 0.784 | 0.771 | 0.641 | 0.858 | -0.040 | -1.995 | 1.915 | 0.223 | 0.019 | 0.741 |
 | A_p10_lipanchored | 16.846 | 0.665 | 0.548 | 0.760 | 0.860 | 0.845 | 0.735 | 0.909 | 0.262 | -1.149 | 1.673 | 0.061 | 0.407 | 0.776 |
+| A_p05_lipanchored | 15.634 | 0.672 | 0.590 | 0.788 | 0.850 | 0.837 | 0.733 | 0.902 | 0.233 | -1.254 | 1.721 | 0.091 | 0.234 | 0.793 |
 | A_p25_lipanchored | 19.252 | 0.674 | 0.534 | 0.750 | 0.864 | 0.841 | 0.701 | 0.912 | 0.320 | -1.023 | 1.662 | 0.001 | 0.991 | 0.759 |
 | A_min_lipanchored | 13.625 | 0.680 | 0.677 | 0.880 | 0.819 | 0.808 | 0.696 | 0.881 | 0.160 | -1.550 | 1.871 | 0.156 | 0.068 | 0.707 |
 | B_p25_lipanchored | 18.891 | 0.682 | 0.558 | 0.752 | 0.868 | 0.842 | 0.693 | 0.914 | 0.335 | -0.996 | 1.665 | 0.009 | 0.900 | 0.741 |
@@ -95,5 +101,5 @@ Frame outside 2698×1799 ±2 px: 22 images (`frame_uncertain`; sensitivity rows 
 ## Assumptions
 - COCO frame = ImageJ frame (clinical team, screenshot); for other frame sizes the reference frame is uncertain.
 - `-` cells are 0 mm (clinical decision); the sensitivity row without dash-zero rows shows the effect.
-- Reference per tooth is compared to the left-to-right region of the same index; the image-level mean is the primary endpoint.
+- The reference gingival display recorded at tooth site i is compared to the left-to-right region of the same index; the image-level mean is the primary endpoint.
 - v1 (XGBoost) column of the original Figure 6 is not reproduced: the regressor was trained on 512×512 gingiva-only DeepLab masks and fed lip+gingiva masks at 1024 px in v3, i.e. inputs outside its training distribution (audit §3).

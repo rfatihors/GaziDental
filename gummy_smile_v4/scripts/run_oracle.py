@@ -233,14 +233,14 @@ def main() -> int:
     n_cal_in_coco = int(data["calibration"]["key"].drop_duplicates().isin(set(manifest["key"])).sum())
     intra_md = f"""# Intra-observer reliability of the clinical reference (calibration.xlsx)
 
-20 images × 6 teeth measured twice by the same observer (sheets `İlk Ölçümler` / `İkinci Ölçümler`, same ×1000 coding). {n_cal_in_coco} of the 20 images are in the current COCO set.
+Gingival display was measured twice by the same observer on 20 images, at six tooth sites per image (sheets `İlk Ölçümler` / `İkinci Ölçümler`, same ×1000 coding). The measured quantity is the gingival display at a tooth site, not a dimension of the tooth. {n_cal_in_coco} of the 20 images are in the current COCO set.
 
 | level | n | ICC(2,1) [95 % CI] | ICC(3,1) [95 % CI] | ICC(2,k) | mean diff (2−1), mm | SD, mm | 95 % LoA, mm |
 |---|---|---|---|---|---|---|---|
-| tooth | {io['tooth']['n_targets']} | {io['tooth']['icc2_1']:.3f} [{io['tooth']['icc2_1_ci_low']:.3f}, {io['tooth']['icc2_1_ci_high']:.3f}] | {io['tooth']['icc3_1']:.3f} [{io['tooth']['icc3_1_ci_low']:.3f}, {io['tooth']['icc3_1_ci_high']:.3f}] | {io['tooth']['icc2_k']:.3f} | {io['ba_tooth']['bias']:.3f} [{io['ba_tooth']['bias_ci_low']:.3f}, {io['ba_tooth']['bias_ci_high']:.3f}] | {io['ba_tooth']['sd']:.3f} | {io['ba_tooth']['loa_low']:.2f} to {io['ba_tooth']['loa_high']:.2f} |
+| tooth site | {io['tooth']['n_targets']} | {io['tooth']['icc2_1']:.3f} [{io['tooth']['icc2_1_ci_low']:.3f}, {io['tooth']['icc2_1_ci_high']:.3f}] | {io['tooth']['icc3_1']:.3f} [{io['tooth']['icc3_1_ci_low']:.3f}, {io['tooth']['icc3_1_ci_high']:.3f}] | {io['tooth']['icc2_k']:.3f} | {io['ba_tooth']['bias']:.3f} [{io['ba_tooth']['bias_ci_low']:.3f}, {io['ba_tooth']['bias_ci_high']:.3f}] | {io['ba_tooth']['sd']:.3f} | {io['ba_tooth']['loa_low']:.2f} to {io['ba_tooth']['loa_high']:.2f} |
 | image mean | {io['image']['n_targets']} | {io['image']['icc2_1']:.3f} [{io['image']['icc2_1_ci_low']:.3f}, {io['image']['icc2_1_ci_high']:.3f}] | {io['image']['icc3_1']:.3f} [{io['image']['icc3_1_ci_low']:.3f}, {io['image']['icc3_1_ci_high']:.3f}] | {io['image']['icc2_k']:.3f} | {io['ba_image']['bias']:.3f} [{io['ba_image']['bias_ci_low']:.3f}, {io['ba_image']['bias_ci_high']:.3f}] | {io['ba_image']['sd']:.3f} | {io['ba_image']['loa_low']:.2f} to {io['ba_image']['loa_high']:.2f} |
 
-The tooth-level SD of {io['ba_tooth']['sd']:.2f} mm is the observer's own repeatability floor; the paired t-test is not used as evidence of agreement (ICC and limits of agreement are).
+The tooth-site-level SD of {io['ba_tooth']['sd']:.2f} mm is the observer's own repeatability floor; the paired t-test is not used as evidence of agreement (ICC and limits of agreement are).
 Expected orders of magnitude (audit §B): ICC ≈ 0.995 / 0.998, SD ≈ 0.17 mm.
 """
     (out_dir / "intra_observer.md").write_text(intra_md, encoding="utf-8")
@@ -287,7 +287,7 @@ Dev (n = {len(dev_df)}): MAE {sel_row['mae_dev']:.3f} mm, r {sel_row['r_dev']:.3
 
 **Fallback transparency.** {fb_text or 'Regioning A has no fallback.'}
 
-**Against the reference's own repeatability:** intra-observer SD is {noise_sd:.2f} mm per tooth and {noise_sd_img:.2f} mm per image mean (`intra_observer.md`); pure observer noise would produce an expected absolute difference of ≈ {noise_sd_img * np.sqrt(2 / np.pi):.2f} mm at image level. The holdout MAE of {sel_row['mae_holdout']:.2f} mm therefore leaves ≈ {above_noise:.2f} mm above the observer-noise floor, attributable to the estimator, the single global scale (per-image calibration was not recorded) and region alignment.
+**Against the reference's own repeatability:** intra-observer SD is {noise_sd:.2f} mm per tooth site and {noise_sd_img:.2f} mm per image mean (`intra_observer.md`); pure observer noise would produce an expected absolute difference of ≈ {noise_sd_img * np.sqrt(2 / np.pi):.2f} mm at image level. The holdout MAE of {sel_row['mae_holdout']:.2f} mm therefore leaves ≈ {above_noise:.2f} mm above the observer-noise floor, attributable to the estimator, the single global scale (per-image calibration was not recorded) and region alignment.
 
 Pre-analysis plausibility check (audit §6, A/p25, same-data scale, n = 148): r ≈ 0.83, MAE ≈ 0.63 mm, ≈ 17 px/mm — {'consistent' if abs(sel_row['mae_holdout'] - EXPECT['mae_reasonable']) < 0.25 and 15 <= k <= 20 else 'DIFFERENT — see OZET'}.
 
@@ -314,7 +314,7 @@ Frame outside 2698×1799 ±2 px: {n_out} images (`frame_uncertain`; sensitivity 
 ## Assumptions
 - COCO frame = ImageJ frame (clinical team, screenshot); for other frame sizes the reference frame is uncertain.
 - `-` cells are 0 mm (clinical decision); the sensitivity row without dash-zero rows shows the effect.
-- Reference per tooth is compared to the left-to-right region of the same index; the image-level mean is the primary endpoint.
+- The reference gingival display recorded at tooth site i is compared to the left-to-right region of the same index; the image-level mean is the primary endpoint.
 - v1 (XGBoost) column of the original Figure 6 is not reproduced: the regressor was trained on 512×512 gingiva-only DeepLab masks and fed lip+gingiva masks at 1024 px in v3, i.e. inputs outside its training distribution (audit §3).
 """
     (out_dir / "oracle_summary.md").write_text(summary, encoding="utf-8")
@@ -323,7 +323,7 @@ Frame outside 2698×1799 ±2 px: {n_out} images (`frame_uncertain`; sensitivity 
 - {len(df)} ölçümlü high görüntü (GT maske), dev {len(dev_df)} / holdout {len(hold)}; `label_inconsistent` dışlanan: {len(excluded_li)}.
 - Seçilen yöntem **{combo}** (dev MAE {sel_row['mae_dev']:.3f} mm; basitlik kuralı ±{args.tolerance_mm} mm). Global ölçek **{k:.2f} px/mm** (yalnız dev'de kestirildi).
 - Holdout: MAE {sel_row['mae_holdout']:.2f} mm, RMSE {sel_row['rmse_holdout']:.2f}, r {sel_row['r_holdout']:.3f}, ICC(2,1) {sel_row['icc2_1_holdout']:.3f}; sapma {sel_row['ba_bias_holdout']:+.2f} mm, orantısal eğim {sel_row['ba_prop_slope_holdout']:+.3f} (p {sel_row['ba_prop_p_holdout']:.3f}).
-- Gözlemci içi: ICC(2,1) diş {io['tooth']['icc2_1']:.3f}, görüntü {io['image']['icc2_1']:.3f}; SD {noise_sd:.2f} mm. Holdout MAE'nin gözlemci gürültüsü üstünde kalan kısmı ≈ {above_noise:.2f} mm.
+- Gözlemci içi (dişeti görünürlüğünün tekrar ölçümü): ICC(2,1) diş bölgesi düzeyi {io['tooth']['icc2_1']:.3f}, görüntü ortalaması {io['image']['icc2_1']:.3f}; SD {noise_sd:.2f} mm. Holdout MAE'nin gözlemci gürültüsü üstünde kalan kısmı ≈ {above_noise:.2f} mm.
 - Dudak-altı ↔ dişeti-üstü boşluk medyanı {gap_stats['median']:.1f} px (IQR {gap_stats['q1']:.0f}–{gap_stats['q3']:.0f}); beklenti ≈ 9 px → {'uyumlu' if abs(gap_stats['median'] - 9) <= 6 else 'BEKLENTİDEN UZAK'}.
 - Çerçeve: {n_out}/{n_in + n_out} görüntü 2698×1799 dışında; görüntü bazlı oran farkı {scale_diff_pct:+.1f} %, dev regresyon ölçeği farkı {k_diff_pct:+.1f} % → {'ikili ölçek önerilir (uygulanmadı)' if 'proposed for' in dual_text else 'ikili ölçek önerilmez (yönler zıt / grup küçük ve gürültülü); tek ölçek + duyarlılık satırı'}.
 - Seçilen bölgeleme {chosen['regioning']}: {n_fb} görüntüde başarısız → A'ya düşer (raporda açık).
