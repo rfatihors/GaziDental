@@ -1,0 +1,11 @@
+{
+ "variant": "RFDETRSegLarge",
+ "resolution": 624,
+ "epochs": 2,
+ "seed": 42,
+ "seconds_total": 662.4,
+ "seconds_per_epoch": 331.2,
+ "peak_gpu_gb": 15.02,
+ "probe": true,
+ "projected_full_run_hours": 9.2
+}

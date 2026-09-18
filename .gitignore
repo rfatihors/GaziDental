@@ -1,0 +1,4 @@
+gummy_smile_v4/.venv-rfdetr/
+gummy_smile_v4/data/rfdetr_dataset/
+gummy_smile_v4/runs/
+gummy_smile_v4/outputs/08_architecture/masks/
