@@ -4,7 +4,7 @@
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: 29 high-smile-line
 test images with a clinical reference measurement. Measurement method **C_p25** at **16.84 px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [np.int64(42), np.int64(43), np.int64(44)].
+{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [42, 43, 44].
 
 ## Primary outcome: millimetre error against the clinical reference
 
@@ -53,6 +53,26 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 | yolo26x-seg | 43 | 29 | 0.260 | 0.119 | 0.721 | 0.618 |
 | yolo26x-seg | 44 | 29 | 0.264 | 0.035 | 0.748 | 0.657 |
 
+## Is the difference a shift or is it scatter?
+
+A lead in mean absolute error can be a constant offset, which calibration removes, or scatter, which
+it does not. The seed-averaged per-image error is split below; `removable_by_calibration_mm` is the
+most any post-hoc bias correction could take off that model's MAE.
+
+| model | n | mae_mm | bias_mm | sd_of_error_mm | mae_without_own_bias_mm | removable_by_calibration_mm | within_0_5_mm | within_1_mm |
+|---|---|---|---|---|---|---|---|---|
+| rfdetr-seg-large | 29 | 0.662 | 0.273 | 0.915 | 0.517 | 0.145 | 0.414 | 0.862 |
+| yolo11x-seg | 29 | 0.955 | 0.668 | 0.894 | 0.502 | 0.453 | 0.138 | 0.655 |
+| yolo26x-seg | 29 | 1.001 | 0.715 | 0.888 | 0.487 | 0.514 | 0.069 | 0.552 |
+
+Correlation of the per-image error between architectures (seed-averaged):
+
+| model | rfdetr-seg-large | yolo11x-seg | yolo26x-seg |
+|---|---|---|---|
+| rfdetr-seg-large | 1.000 | 0.947 | 0.969 |
+| yolo11x-seg | 0.947 | 1.000 | 0.987 |
+| yolo26x-seg | 0.969 | 0.987 | 1.000 |
+
 ## Secondary: per-class segmentation metrics on the fixed test set, standard settings
 
 | model | seed | settings | conf | max_det | class | box_precision | box_recall | box_f1 | box_map50 | box_map50_95 | seg_precision | seg_recall | seg_f1 | seg_map50 | seg_map50_95 |
@@ -69,6 +89,11 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 | yolo26x-seg | 43 | standard | 0.001 | 300 | dudak | 0.965 | 0.995 | 0.980 | 0.991 | 0.732 | 0.962 | 0.984 | 0.973 | 0.981 | 0.685 |
 | yolo26x-seg | 44 | standard | 0.001 | 300 | diseti | 0.629 | 0.626 | 0.627 | 0.609 | 0.258 | 0.640 | 0.496 | 0.559 | 0.543 | 0.215 |
 | yolo26x-seg | 44 | standard | 0.001 | 300 | dudak | 0.943 | 0.995 | 0.968 | 0.992 | 0.724 | 0.967 | 0.995 | 0.981 | 0.993 | 0.698 |
+
+Models evaluated here: yolo11x-seg, yolo26x-seg. A
+predictor outside the Ultralytics framework is not evaluated through `model.val()` and therefore has
+no row; its own trainer's mask AP is reported in its run record instead, and the two are not
+interchangeable.
 
 ## Pre-registered decision (PROTOCOL.md §8)
 

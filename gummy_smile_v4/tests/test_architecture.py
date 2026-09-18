@@ -94,3 +94,26 @@ def test_integrity_check_flags_a_wrongly_read_label_space():
     assert t.loc["B", "instances_ignored"] == 30 and bool(t.loc["B", "edge_error_fully_systematic"])
     for phrase in ("no lip mask on any image", "dropped for having no role", "entirely systematic"):
         assert phrase in t.loc["B", "problems"]
+
+
+def test_bias_scatter_table_separates_a_shift_from_scatter():
+    from gsv4.eval.architecture import bias_scatter_table, error_correlation
+
+    rng = np.random.default_rng(7)
+    ref = rng.uniform(1, 7, 30)
+    noise = rng.normal(0, 0.30, 30)
+    rows = []
+    for model, off in (("shifted", 0.60), ("centred", 0.00)):
+        for s in (42, 43):
+            for i in range(30):                       # same noise, different constant
+                rows.append({"model": model, "seed": s, "uid": f"u{i}", "ref_mm": ref[i], "selected_mm": ref[i] + off + noise[i]})
+    d = pd.DataFrame(rows)
+    t = bias_scatter_table(d).set_index("model")
+    assert t.loc["shifted", "bias_mm"] == pytest.approx(0.60, abs=0.08) and abs(t.loc["centred", "bias_mm"]) < 0.08
+    assert t.loc["shifted", "mae_mm"] > t.loc["centred", "mae_mm"]
+    # once each model's own bias is removed the two are the same data, so the residual MAE matches
+    assert t.loc["shifted", "mae_without_own_bias_mm"] == pytest.approx(t.loc["centred", "mae_without_own_bias_mm"], abs=1e-9)
+    assert t.loc["shifted", "removable_by_calibration_mm"] > t.loc["centred", "removable_by_calibration_mm"]
+    assert t.loc["shifted", "sd_of_error_mm"] == pytest.approx(t.loc["centred", "sd_of_error_mm"], abs=1e-9)
+    c = error_correlation(d)
+    assert c.loc["shifted", "centred"] == pytest.approx(1.0, abs=1e-9)   # identical scatter, differing only by a shift

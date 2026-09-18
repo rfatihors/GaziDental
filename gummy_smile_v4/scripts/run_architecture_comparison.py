@@ -37,7 +37,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from gsv4.config import load_config, resolve  # noqa: E402
-from gsv4.eval.architecture import decision, edge_table, integrity_check, model_table, paired_difference, per_image_errors, seed_averaged, seed_table  # noqa: E402
+from gsv4.eval.architecture import (  # noqa: E402
+    bias_scatter_table, decision, edge_table, error_correlation, integrity_check, model_table, paired_difference,
+    per_image_errors, seed_averaged, seed_table,
+)
 from gsv4.eval.oracle import combo_name, measure_images  # noqa: E402
 from gsv4.eval.prediction import md_table  # noqa: E402
 from gsv4.train.common import per_class_metrics  # noqa: E402
@@ -241,6 +244,10 @@ def main() -> int:
     comp_t = pd.DataFrame(comparisons)
     if len(comp_t):
         comp_t.to_csv(out_dir / "paired_comparisons.csv", index=False)
+    bias_scatter = bias_scatter_table(long)
+    bias_scatter.to_csv(out_dir / "bias_scatter.csv", index=False)
+    corr = error_correlation(long)
+    corr.to_csv(out_dir / "error_correlation.csv")
     sm = sorted((out_dir / "segmentation_metrics").glob("*.csv"))
     seg = pd.concat([pd.read_csv(p) for p in sm], ignore_index=True) if sm else pd.DataFrame()
     if len(seg):
@@ -281,9 +288,26 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 
 {md_table(edges)}
 
+## Is the difference a shift or is it scatter?
+
+A lead in mean absolute error can be a constant offset, which calibration removes, or scatter, which
+it does not. The seed-averaged per-image error is split below; `removable_by_calibration_mm` is the
+most any post-hoc bias correction could take off that model's MAE.
+
+{md_table(bias_scatter)}
+
+Correlation of the per-image error between architectures (seed-averaged):
+
+{md_table(corr.reset_index())}
+
 ## Secondary: per-class segmentation metrics on the fixed test set, standard settings
 
 {md_table(std_seg) if len(std_seg) else '(pending)'}
+
+Models evaluated here: {', '.join(sorted(std_seg['model'].unique())) if len(std_seg) else 'none'}. A
+predictor outside the Ultralytics framework is not evaluated through `model.val()` and therefore has
+no row; its own trainer's mask AP is reported in its run record instead, and the two are not
+interchangeable.
 
 ## Pre-registered decision (PROTOCOL.md §8)
 

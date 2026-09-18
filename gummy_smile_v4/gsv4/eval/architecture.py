@@ -148,3 +148,38 @@ def integrity_check(df: pd.DataFrame) -> pd.DataFrame:
                      "edge_error_fully_systematic": fully_systematic, "suspect": bool(problems),
                      "problems": "; ".join(problems)})
     return pd.DataFrame(rows)
+
+
+def bias_scatter_table(df: pd.DataFrame, value_col: str = "selected_mm", key: str = "uid") -> pd.DataFrame:
+    """How much of each model's error is a systematic shift and how much is scatter.
+
+    A lead in mean absolute error can come from either, and the two have very different
+    consequences: a constant shift is removable by calibration (the pipeline already applies one at
+    mask level), scatter is not. The seed-averaged per-image error is split into its mean (bias) and
+    what is left once that mean is removed.
+    """
+    rows = []
+    for model, part in df.groupby("model", sort=True):
+        g = part.groupby(key).agg(pred=(value_col, "mean"), ref=("ref_mm", "mean"))
+        e = (g["pred"] - g["ref"]).to_numpy(float)
+        e = e[np.isfinite(e)]
+        if not len(e):
+            continue
+        rows.append({"model": model, "n": int(len(e)), "mae_mm": float(np.abs(e).mean()), "bias_mm": float(e.mean()),
+                     "sd_of_error_mm": float(e.std(ddof=1)) if len(e) > 1 else math.nan,
+                     "mae_without_own_bias_mm": float(np.abs(e - e.mean()).mean()),
+                     "removable_by_calibration_mm": float(np.abs(e).mean() - np.abs(e - e.mean()).mean()),
+                     "within_0_5_mm": float((np.abs(e) <= 0.5).mean()), "within_1_mm": float((np.abs(e) <= 1.0).mean())})
+    return pd.DataFrame(rows)
+
+
+def error_correlation(df: pd.DataFrame, value_col: str = "selected_mm", key: str = "uid") -> pd.DataFrame:
+    """Correlation of the per-image error between architectures (seed-averaged).
+
+    A high correlation means the architectures fail on the same images and differ by little more
+    than a shift; a low one means they fail differently and the comparison is about more than a
+    constant.
+    """
+    g = df.groupby(["model", key]).agg(pred=(value_col, "mean"), ref=("ref_mm", "mean")).reset_index()
+    g["err"] = g["pred"] - g["ref"]
+    return g.pivot(index=key, columns="model", values="err").corr()
