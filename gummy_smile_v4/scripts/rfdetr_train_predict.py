@@ -2,7 +2,8 @@
 """RF-DETR-Seg: probe, train and predict — runs in .venv-rfdetr, not in the training venv.
 
     .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --probe          # 2 epochs, timing only
-    .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed 42        # full run
+    .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed 42        # train, then predict
+    .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed 42 --predict-only   # from the checkpoint
 
 Reads the COCO dataset built by scripts/build_rfdetr_dataset.py, trains RF-DETR-Seg at its
 published defaults with the shared budget of the protocol, then predicts the high-smile-line test
@@ -40,6 +41,18 @@ PATIENCE = 20             # same as the YOLO runs; see the early-stopping note b
 RESOLUTION = 624          # multiple of 24 closest to the 640 the YOLO runs use
 VARIANT = "RFDETRSegLarge"
 CONF = 0.25               # the pipeline's operating point, as for the YOLO masks
+BEST_CHECKPOINT = "checkpoint_best_total.pth"   # the winner of regular vs EMA, written by BestModelCallback
+
+# Class ids in an RF-DETR prediction are indices into the MODEL's own class list, never the category
+# ids of the dataset: `_class_id_to_name = dict(enumerate(model_class_names))` in rfdetr/detr.py.
+# The model's list comes from the dataset's categories after `filter_parent_categories` drops the
+# unannotated Roboflow grouping category, and the survivors are renumbered contiguously
+# (rfdetr/datasets/coco.py: `cat2label = {id: label for label, category in enumerate(kept)}`).
+# Our export is 0 = dudak-diseti (grouping, never annotated), 1 = diseti, 2 = dudak, so the trained
+# model emits 0 for gingiva and 1 for lip. Reading those ids through the dataset's own table maps
+# gingiva onto the grouping name (dropped) and lip onto gingiva, which is exactly the fault that
+# produced a 6 mm edge bias in the first comparison run. The model's own names are the only correct
+# source, and the two label spaces are cross-checked below before a single mask is written.
 
 # Early stopping (PROTOCOL.md §2 holds the rule identical across architectures; amendment of
 # 17 Sep 2026 records what "identical" can and cannot mean here).
@@ -62,6 +75,95 @@ def load_split(ds: Path, split: str) -> dict:
     return json.loads((ds / split / "_annotations.coco.json").read_text(encoding="utf-8"))
 
 
+def expected_label_space(ds: Path) -> list:
+    """The class names the model should carry, derived the way rfdetr derives them.
+
+    Uses rfdetr's own filter when it can be imported, so this check cannot drift from the library;
+    falls back to the documented rule (drop a category that is named as another category's
+    supercategory and carries no annotation) and says which path it took.
+    """
+    train = load_split(ds, "train")
+    annotated = {int(a["category_id"]) for a in train["annotations"]}
+    try:
+        from rfdetr.datasets.coco import filter_parent_categories
+
+        kept = filter_parent_categories(list(train["categories"]), annotated)
+        return [str(c["name"]) for c in kept]
+    except ImportError:
+        parents = {str(c.get("supercategory")) for c in train["categories"]}
+        kept = [c for c in sorted(train["categories"], key=lambda c: int(c["id"]))
+                if not (str(c["name"]) in parents and int(c["id"]) not in annotated)]
+        print("[rfdetr] note: rfdetr.datasets.coco.filter_parent_categories not importable; used the documented rule")
+        return [str(c["name"]) for c in kept]
+
+
+def check_label_space(model_names: list, ds: Path, class_names: dict) -> dict:
+    """Refuse to predict unless the model's label space is the one this dataset implies.
+
+    Returns the id -> name map to hand the adapter. Raises when the model's names differ from the
+    dataset's filtered categories, or when a configured role is missing from them.
+    """
+    expected = expected_label_space(ds)
+    if list(model_names) != expected:
+        raise SystemExit(
+            f"the model's class list {list(model_names)} is not the one this dataset implies {expected}. "
+            "Predicting would assign the wrong class to every mask; check the dataset the checkpoint was trained on.")
+    missing = [n for n in class_names.values() if n not in model_names]
+    if missing:
+        raise SystemExit(f"the model's class list {list(model_names)} does not contain {missing}")
+    id_to_name = dict(enumerate(model_names))
+    print(f"[rfdetr] label space: {id_to_name} (from the model; the dataset's category ids are NOT used)")
+    return id_to_name
+
+
+def predict(model, ds: Path, out: Path, tag: str, seed: int) -> None:
+    """Masks and a prediction table for the high-smile-line test images, in the YOLO runs' format.
+
+    The class ids come from the model's own label space, checked against the dataset's
+    (``check_label_space``), and the adapter runs in strict mode: an instance whose id maps to no
+    role aborts instead of being dropped, because a dropped instance is how the first run's
+    label-space fault stayed invisible.
+    """
+    import cv2  # noqa: F401  (required by gsv4.masks.extract)
+    import pandas as pd
+
+    from gsv4.masks.extract import from_detections, save_masks
+
+    class_names = {"gingiva": "diseti", "lip": "dudak"}
+    id_to_name = check_label_space(model.class_names, ds, class_names)
+    test = load_split(ds, "test")
+    wanted = None
+    uid_file = out / "arch_test_high_uids.csv"
+    if uid_file.exists():
+        wanted = {r.uid for r in pd.read_csv(uid_file).itertuples()}
+    mask_dir = out / "masks" / tag
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for im in test["images"]:
+        if wanted is not None and im.get("uid") not in wanted:
+            continue
+        det = model.predict(str(ds / "test" / im["file_name"]), threshold=CONF)
+        cm = from_detections(det, id_to_name, class_names, (int(im["height"]), int(im["width"])),
+                             source="rfdetr:masks", strict=True)
+        save_masks(cm, mask_dir, im["image"])
+        conf = getattr(det, "confidence", None)
+        rows.append({"uid": im.get("uid"), "image": im["image"], "yolo_name": im["file_name"],
+                     "n_gingiva": cm.n_gingiva_instances, "n_lip": cm.n_lip_instances,
+                     "n_ignored": cm.n_ignored_instances,
+                     "max_conf": float(np.max(conf)) if conf is not None and len(conf) else None,
+                     "mask_source": cm.source, "width": int(im["width"]), "height": int(im["height"]),
+                     "model": "rfdetr-seg-large", "seed": seed})
+    df = pd.DataFrame(rows)
+    (out / "predictions").mkdir(parents=True, exist_ok=True)
+    df.to_csv(out / "predictions" / f"{tag}.csv", index=False)
+    empty_lip = int((df["n_lip"] == 0).sum()) if len(df) else 0
+    print(f"[rfdetr] {len(df)} images predicted -> {mask_dir}")
+    print(f"[rfdetr] instances per image: gingiva {df['n_gingiva'].mean():.2f}, lip {df['n_lip'].mean():.2f}; "
+          f"images without a lip mask: {empty_lip}")
+    if empty_lip:
+        print("[rfdetr] WARNING: an image with no lip instance is unusual for this dataset; check the masks before measuring")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dataset", default="data/rfdetr_dataset")
@@ -72,6 +174,9 @@ def main() -> int:
     ap.add_argument("--variant", default=VARIANT)
     ap.add_argument("--patience", type=int, default=PATIENCE, help="early-stopping patience (0 disables it)")
     ap.add_argument("--probe", action="store_true", help="2 epochs; report seconds per epoch and peak memory, then stop")
+    ap.add_argument("--predict-only", action="store_true",
+                    help="skip training and predict from the run's best checkpoint; use this to redo the masks "
+                         "without retraining (the weights are unaffected by a label-space fault)")
     args = ap.parse_args()
     ds, out = ROOT / args.dataset, ROOT / args.out
     if not (ds / "train" / "_annotations.coco.json").exists():
@@ -83,6 +188,17 @@ def main() -> int:
 
     import torch
     from rfdetr import __dict__ as rf
+
+    if args.predict_only:
+        ckpt = run_dir / BEST_CHECKPOINT
+        if not ckpt.exists():
+            raise SystemExit(f"no checkpoint to predict from: {ckpt}")
+        print(f"[rfdetr] loading {ckpt} (training skipped)")
+        model = rf["from_checkpoint"](str(ckpt), trust_checkpoint=True)   # our own file, from our own run
+        record = {"variant": args.variant, "seed": args.seed, "predict_only": True, "checkpoint": str(ckpt)}
+        predict(model, ds, out, tag, args.seed)
+        (out / f"rfdetr_predict_{tag}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+        return 0
 
     if args.variant not in rf:
         raise SystemExit(f"unknown variant {args.variant}; available: {[n for n in rf if n.startswith('RFDETRSeg')]}")
@@ -112,35 +228,7 @@ def main() -> int:
         print("[rfdetr] probe finished. Compare projected_full_run_hours with the budget before the full run.")
         return 0
 
-    # ---- predict the high-smile-line test images at the operating point
-    import cv2  # noqa: F401  (required by gsv4.masks.extract)
-    import pandas as pd
-
-    from gsv4.masks.extract import from_detections, save_masks
-
-    test = load_split(ds, "test")
-    id_to_name = {int(c["id"]): str(c["name"]) for c in test["categories"]}
-    class_names = {"gingiva": "diseti", "lip": "dudak"}
-    wanted = {r.uid for r in pd.read_csv(out / "arch_test_high_uids.csv").itertuples()} if (out / "arch_test_high_uids.csv").exists() else None
-    mask_dir = out / "masks" / tag
-    mask_dir.mkdir(parents=True, exist_ok=True)
-    rows = []
-    for im in test["images"]:
-        if wanted is not None and im.get("uid") not in wanted:
-            continue
-        path = ds / "test" / im["file_name"]
-        det = model.predict(str(path), threshold=CONF)
-        cm = from_detections(det, id_to_name, class_names, (int(im["height"]), int(im["width"])), source="rfdetr:masks")
-        save_masks(cm, mask_dir, im["image"])
-        conf = getattr(det, "confidence", None)
-        rows.append({"uid": im.get("uid"), "image": im["image"], "yolo_name": im["file_name"],
-                     "n_gingiva": cm.n_gingiva_instances, "n_lip": cm.n_lip_instances,
-                     "max_conf": float(np.max(conf)) if conf is not None and len(conf) else None,
-                     "mask_source": cm.source, "width": int(im["width"]), "height": int(im["height"]),
-                     "model": "rfdetr-seg-large", "seed": args.seed})
-    (out / "predictions").mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(rows).to_csv(out / "predictions" / f"{tag}.csv", index=False)
-    print(f"[rfdetr] {len(rows)} images predicted -> {mask_dir}")
+    predict(model, ds, out, tag, args.seed)
     print("[rfdetr] now run, in the training venv: python scripts/run_architecture_comparison.py --measure-only")
     return 0
 

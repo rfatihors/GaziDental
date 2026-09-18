@@ -112,6 +112,7 @@ def predict_list(cfg, weights: Path, list_file: Path, out_dir: Path, tag: str, e
                     save_masks(masks, out_dir, stem)  # to disk immediately; the result object is dropped below
                     confs = res.boxes.conf.cpu().numpy().tolist() if res.boxes is not None and len(res.boxes) else []
                     rows.append({"image": stem, "yolo_name": n, "n_gingiva": masks.n_gingiva_instances, "n_lip": masks.n_lip_instances,
+                                 "n_ignored": masks.n_ignored_instances,
                                  "max_conf": max(confs) if confs else None, "mask_source": masks.source, "width": w, "height": h, **extra})
                     del res, masks
             except Exception as exc:  # noqa: BLE001

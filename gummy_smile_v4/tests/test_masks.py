@@ -195,3 +195,35 @@ def test_from_detections_without_any_instance_gives_empty_masks():
 
     cm = from_detections(_Detections(None, []), {1: "diseti", 2: "dudak"}, CLASS_NAMES, (40, 60))
     assert cm.gingiva.sum() == 0 and cm.lip is None and cm.n_gingiva_instances == 0 and cm.source.endswith(":none")
+
+
+def test_from_instances_counts_ignored_instances_and_strict_refuses_them():
+    """The RF-DETR label-space fault: a predictor renumbers its classes, the caller passes the
+    dataset's category table instead, gingiva is silently dropped and lip is stored as gingiva."""
+    from gsv4.masks.extract import from_instances
+
+    dataset_names = {0: "dudak-diseti", 1: "diseti", 2: "dudak"}      # our COCO export
+    model_names = {0: "diseti", 1: "dudak"}                           # what RF-DETR actually emits
+    gingiva = np.zeros((40, 60), dtype=bool); gingiva[25:30, 10:50] = True
+    lip = np.zeros((40, 60), dtype=bool); lip[8:20, 5:55] = True
+    stack, ids = np.stack([gingiva, lip]), [0, 1]                     # model ids: 0 gingiva, 1 lip
+
+    wrong = from_instances(stack, ids, dataset_names, CLASS_NAMES, (40, 60))
+    assert wrong.n_gingiva_instances == 1 and wrong.n_lip_instances == 0 and wrong.n_ignored_instances == 1
+    assert np.array_equal(wrong.gingiva, lip) and wrong.lip is None    # the lip band stored as gingiva
+    with pytest.raises(ValueError, match="maps to no role"):
+        from_instances(stack, ids, dataset_names, CLASS_NAMES, (40, 60), strict=True)
+
+    right = from_instances(stack, ids, model_names, CLASS_NAMES, (40, 60), strict=True)
+    assert right.n_gingiva_instances == 1 and right.n_lip_instances == 1 and right.n_ignored_instances == 0
+    assert np.array_equal(right.gingiva, gingiva) and np.array_equal(right.lip, lip)
+
+
+def test_from_yolo_and_from_detections_report_no_ignored_instances_on_a_matching_label_space():
+    from gsv4.masks.extract import from_detections
+
+    r = _fake()
+    cm = from_yolo(r, class_names=CLASS_NAMES, image_shape=(40, 60), strict=True)
+    assert cm.n_ignored_instances == 0
+    det = _Detections(np.asarray(r.masks.data.numpy()) > 0.5, [1, 1, 2])
+    assert from_detections(det, r.names, CLASS_NAMES, (40, 60), strict=True).n_ignored_instances == 0

@@ -218,6 +218,47 @@ for s in 42 43 44; do .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --
 python scripts/run_architecture_comparison.py --measure-only   # measures the RF-DETR masks
 ```
 
+Always check the classes before measuring, whichever predictor produced the masks:
+
+```bash
+python scripts/check_mask_classes.py --masks outputs/08_architecture/masks/rfdetr-seg-large_s42     --figure outputs/08_architecture/rfdetr_class_check.png
+```
+
+It cross-matches each predicted class against both annotated classes. A predicted gingiva that
+matches the annotated **lip** better means the label space was read wrongly, and the exit code is
+non-zero.
+
+### 6.5 If the classes were read wrongly
+
+This happened in the first comparison run and is worth knowing by shape. RF-DETR renumbers its label
+space: `filter_parent_categories` drops the unannotated Roboflow grouping category and the survivors
+get contiguous indices, so our export (`0 dudak-diseti`, `1 diseti`, `2 dudak`) trains a model that
+emits **0 for gingiva and 1 for lip**. Reading those ids through the dataset's own category table
+mapped gingiva onto the grouping name, which has no role and was dropped, and mapped lip onto
+gingiva. The saved gingiva mask was the lip band, no lip mask was written at all, and the measurement
+showed a 6 mm gingival edge bias while RF-DETR's own mask mAP stayed at 0.80, because the model was
+never wrong — only our reading of it was.
+
+The prediction step now takes the class list from the model (`dict(enumerate(model.class_names))`),
+cross-checks it against the categories the dataset implies, and runs the adapter in strict mode, so
+an instance that maps to no role aborts instead of disappearing. Every prediction table also carries
+an `n_ignored` column.
+
+**Recovery does not need retraining.** The weights are unaffected; only the masks are wrong, and the
+gingiva instance was dropped before anything was written, so the masks must be produced again rather
+than relabelled on disk:
+
+```bash
+rm -rf outputs/08_architecture/masks/rfdetr-seg-large_s*        outputs/08_architecture/predictions/rfdetr-seg-large_s*        outputs/08_architecture/per_image/rfdetr-seg-large_s*
+for s in 42 43 44; do .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed $s --predict-only; done
+python scripts/check_mask_classes.py --masks outputs/08_architecture/masks/rfdetr-seg-large_s42     --figure outputs/08_architecture/rfdetr_class_check.png
+python scripts/run_architecture_comparison.py --measure-only
+python scripts/run_architecture_comparison.py --aggregate-only
+```
+
+`--predict-only` loads `checkpoint_best_total.pth` from the run directory, so this is minutes rather
+than the 9 hours a retraining would cost.
+
 ### 6.4 Aggregate and report
 
 ```bash

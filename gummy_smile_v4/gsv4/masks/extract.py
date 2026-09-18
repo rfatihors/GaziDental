@@ -26,6 +26,10 @@ class ClassMasks:
     n_gingiva_instances: int
     n_lip_instances: int
     source: str = ""
+    # Predicted instances whose class id mapped to neither role and were therefore left out of both
+    # masks. A silently dropped instance is how a mismatched label space hides itself, so the count
+    # is carried out of the extractor and written into every prediction table.
+    n_ignored_instances: int = 0
 
     @property
     def shape(self) -> Tuple[int, int]:
@@ -136,23 +140,30 @@ def role_by_class_id(id_to_name: Dict[int, str], class_names: Dict[str, str]) ->
 
 
 def from_instances(instance_masks: Any, class_ids: Sequence[int], id_to_name: Dict[int, str],
-                   class_names: Dict[str, str], image_shape: Tuple[int, int], source: str = "instances") -> ClassMasks:
+                   class_names: Dict[str, str], image_shape: Tuple[int, int], source: str = "instances",
+                   strict: bool = False) -> ClassMasks:
     """Union the per-instance masks of one image into one mask per class.
 
     This is the shared core of every predictor adapter: any model that can produce a stack of
     instance masks at the original image resolution plus a class id per instance can be measured
     by this pipeline. ``instance_masks`` is indexable per instance and each element must be, or
     convert to, an ``(H, W)`` array matching ``image_shape``; values above 0.5 are foreground.
-    Instances of a class that is neither role are ignored.
+
+    An instance whose class id maps to neither role is left out of both masks and counted in
+    ``n_ignored_instances``. With ``strict=True`` it raises instead. Pass ``strict=True`` whenever
+    the predictor is known to emit only the two roles: a dropped instance then means the class ids
+    do not mean what the caller thinks, which is otherwise invisible in the output.
     """
     h, w = int(image_shape[0]), int(image_shape[1])
     role_by_id = role_by_class_id(id_to_name, class_names)
     gingiva = np.zeros((h, w), dtype=bool)
     lip = np.zeros((h, w), dtype=bool)
     n_g = n_l = 0
+    ignored: List[int] = []
     for i, cid in enumerate(np.asarray(class_ids).astype(int)):
         role = role_by_id.get(int(cid))
         if role is None:
+            ignored.append(int(cid))
             continue
         inst = _to_numpy(instance_masks[i])
         if inst.shape != (h, w):
@@ -164,12 +175,18 @@ def from_instances(instance_masks: Any, class_ids: Sequence[int], id_to_name: Di
         else:
             lip |= inst
             n_l += 1
-    cm = ClassMasks(gingiva, lip if n_l else None, n_g, n_l, source=source)
+    if ignored and strict:
+        raise ValueError(
+            f"{len(ignored)} predicted instance(s) have a class id that maps to no role: ids {sorted(set(ignored))}. "
+            f"The map given was {dict(sorted((int(k), str(v)) for k, v in dict(id_to_name).items()))} and the roles "
+            f"wanted are {class_names}. This is what a label space mismatched with the predictor's own looks like; "
+            "pass the predictor's own class names, not the dataset's category list.")
+    cm = ClassMasks(gingiva, lip if n_l else None, n_g, n_l, source=source, n_ignored_instances=len(ignored))
     cm.check_shape((h, w))
     return cm
 
 
-def from_yolo(result: Any, class_names: Dict[str, str], image_shape: Tuple[int, int]) -> ClassMasks:
+def from_yolo(result: Any, class_names: Dict[str, str], image_shape: Tuple[int, int], strict: bool = False) -> ClassMasks:
     """Class-aware masks from one Ultralytics ``Results`` object.
 
     Class ids come from ``result.boxes.cls`` and are resolved through ``result.names``;
@@ -196,11 +213,11 @@ def from_yolo(result: Any, class_names: Dict[str, str], image_shape: Tuple[int, 
     else:
         instances = [rasterize_polygons([np.asarray(result.masks.xy[i])], (h, w)) for i in range(len(cls))]
     return from_instances(instances, cls, result.names, class_names, (h, w),
-                          source="yolo:masks.data" if use_data else "yolo:masks.xy")
+                          source="yolo:masks.data" if use_data else "yolo:masks.xy", strict=strict)
 
 
 def from_detections(detections: Any, id_to_name: Dict[int, str], class_names: Dict[str, str],
-                    image_shape: Tuple[int, int], source: str = "detections") -> ClassMasks:
+                    image_shape: Tuple[int, int], source: str = "detections", strict: bool = False) -> ClassMasks:
     """Class masks from a ``supervision.Detections``-shaped object (RF-DETR and anything else
     that follows that convention): ``.mask`` is an ``(K, H, W)`` boolean array at the original
     image resolution and ``.class_id`` holds one class id per instance.
@@ -208,6 +225,13 @@ def from_detections(detections: Any, id_to_name: Dict[int, str], class_names: Di
     RF-DETR upsamples its masks to the image size by default
     (``PostProcess.upsample_masks_to_image_size``); a predictor left at mask-head resolution
     would fail the shape check in ``from_instances`` rather than be silently resized here.
+
+    ``id_to_name`` must be the predictor's OWN class list, not the category list of the dataset it
+    was trained on. RF-DETR renumbers its label space: it drops unannotated grouping categories and
+    assigns contiguous indices to the rest, so a Roboflow export whose categories are
+    ``0 grouping, 1 diseti, 2 dudak`` yields a model that emits ``0`` for gingiva and ``1`` for lip.
+    Reading those ids through the dataset's own table maps gingiva onto the grouping name (dropped)
+    and lip onto gingiva. Use ``dict(enumerate(model.class_names))`` and pass ``strict=True``.
     """
     h, w = int(image_shape[0]), int(image_shape[1])
     masks = getattr(detections, "mask", None)
@@ -216,4 +240,4 @@ def from_detections(detections: Any, id_to_name: Dict[int, str], class_names: Di
         cm = ClassMasks(np.zeros((h, w), dtype=bool), None, 0, 0, source=f"{source}:none")
         cm.check_shape((h, w))
         return cm
-    return from_instances(masks, class_ids, id_to_name, class_names, (h, w), source=source)
+    return from_instances(masks, class_ids, id_to_name, class_names, (h, w), source=source, strict=strict)
