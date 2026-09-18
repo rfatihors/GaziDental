@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from gsv4.config import load_config, resolve  # noqa: E402
-from gsv4.eval.architecture import decision, edge_table, model_table, paired_difference, per_image_errors, seed_averaged, seed_table  # noqa: E402
+from gsv4.eval.architecture import decision, edge_table, integrity_check, model_table, paired_difference, per_image_errors, seed_averaged, seed_table  # noqa: E402
 from gsv4.eval.oracle import combo_name, measure_images  # noqa: E402
 from gsv4.eval.prediction import md_table  # noqa: E402
 from gsv4.train.common import per_class_metrics  # noqa: E402
@@ -125,6 +125,15 @@ def measure_one(cfg, model: str, seed: int, rows: pd.DataFrame, pred_df: pd.Data
     per["selected_mm"] = meas[f"{combo}_px"] / k
     per["qc_flags"] = meas["qc_flags"].fillna("")
     per["n_gingiva_instances"] = meas["n_gingiva_instances"]
+    per["n_lip_instances"] = meas["n_lip_instances"]
+    # instances the extractor dropped for having no role; recorded by the predictor, carried here so
+    # that integrity_check sees it without opening a second file
+    if "n_ignored" in pred_df.columns and "uid" in pred_df.columns:
+        per["n_ignored"] = pred_df.set_index("uid")["n_ignored"].reindex(per.index)
+    elif "n_ignored" in pred_df.columns and "image" in pred_df.columns:
+        per["n_ignored"] = per["image"].map(pred_df.set_index("image")["n_ignored"])
+    else:
+        per["n_ignored"] = 0
     for c in ("gingiva_mask_iou", "gingiva_boundary_iou", "gingiva_top_edge_mae_px", "gingiva_top_edge_bias_px",
               "gingiva_bottom_edge_mae_px", "gingiva_bottom_edge_bias_px", "lip_mask_iou"):
         per[c] = b[c] if c in b.columns else float("nan")
@@ -209,6 +218,11 @@ def main() -> int:
         raise SystemExit("no per-image tables to aggregate")
     long = per_image_errors(pd.concat([pd.read_csv(p) for p in parts], ignore_index=True))
     long.to_csv(out_dir / "per_image_all.csv", index=False)
+    integrity = integrity_check(long)
+    integrity.to_csv(out_dir / "integrity_check.csv", index=False)
+    suspect = integrity[integrity["suspect"]]
+    for r in suspect.itertuples():
+        print(f"[arch] SUSPECT {r.model}: {r.problems}")
     seeds_t = seed_table(long)
     models_t = model_table(seeds_t)
     edges = edge_table(long, k)
@@ -233,8 +247,15 @@ def main() -> int:
         seg.to_csv(out_dir / "segmentation_metrics_all.csv", index=False)
     std_seg = seg[(seg["settings"] == "standard") & (seg["class"] != "all")] if len(seg) else pd.DataFrame()
 
+    banner = "" if not len(suspect) else (
+        "> **These results are not final.** The integrity check below flags "
+        + ", ".join(f"`{r.model}` ({r.problems})" for r in suspect.itertuples())
+        + ". A run flagged here is not measuring what it claims to; its rows must be withdrawn, the masks produced again "
+          "and the tables rebuilt before anything is reported. See `scripts/check_mask_classes.py` and "
+          "README_TRAINING.md §6.5.\n\n")
     md = f"""# Architecture comparison — results
 
+{banner}
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: {len(rows)} high-smile-line
 test images with a clinical reference measurement. Measurement method **{combo}** at **{k:.2f} px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
@@ -269,6 +290,13 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 Rule: {dec['rule']}.
 
 **Outcome: {dec['outcome']}.**
+
+## Integrity check
+
+A run that produced no lip mask anywhere, dropped instances for having no role, or whose gingival
+edge error is entirely systematic is flagged here and must not be reported until it is repeated.
+
+{md_table(integrity)}
 
 ## Declared limits
 

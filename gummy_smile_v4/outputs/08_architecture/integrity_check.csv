@@ -1,0 +1,4 @@
+model,n_rows,images_without_lip,instances_ignored,edge_error_fully_systematic,suspect,problems
+rfdetr-seg-large,87,0,0,True,True,the gingival edge error is entirely systematic (MAE equals |bias|)
+yolo11x-seg,87,0,0,False,False,
+yolo26x-seg,87,0,0,False,False,

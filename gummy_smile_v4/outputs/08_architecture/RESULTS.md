@@ -1,9 +1,12 @@
 # Architecture comparison — results
 
+> **These results are not final.** The integrity check below flags `rfdetr-seg-large` (the gingival edge error is entirely systematic (MAE equals |bias|)). A run flagged here is not measuring what it claims to; its rows must be withdrawn, the masks produced again and the tables rebuilt before anything is reported. See `scripts/check_mask_classes.py` and README_TRAINING.md §6.5.
+
+
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: 29 high-smile-line
 test images with a clinical reference measurement. Measurement method **C_p25** at **16.84 px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [np.int64(42), np.int64(43), np.int64(44)].
+{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [42, 43, 44].
 
 ## Primary outcome: millimetre error against the clinical reference
 
@@ -74,6 +77,17 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 Rule: a challenger replaces yolo11x-seg only when it leads by more than 0.15 mm in mean absolute error and the paired 95 % bootstrap interval of that lead excludes zero (both conditions).
 
 **Outcome: no challenger meets both conditions: the final model stays yolo11x-seg.**
+
+## Integrity check
+
+A run that produced no lip mask anywhere, dropped instances for having no role, or whose gingival
+edge error is entirely systematic is flagged here and must not be reported until it is repeated.
+
+| model | n_rows | images_without_lip | instances_ignored | edge_error_fully_systematic | suspect | problems |
+|---|---|---|---|---|---|---|
+| rfdetr-seg-large | 87 | 0 | 0 | True | True | the gingival edge error is entirely systematic (MAE equals |bias|) |
+| yolo11x-seg | 87 | 0 | 0 | False | False |  |
+| yolo26x-seg | 87 | 0 | 0 | False | False |  |
 
 ## Declared limits
 

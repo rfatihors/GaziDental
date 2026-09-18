@@ -69,3 +69,28 @@ def test_edge_table_converts_pixels_to_mm():
     t = edge_table(per_image_errors(_long()), 16.84).set_index(["model", "seed"])
     assert t.loc[("A", 42), "gingiva_top_edge_mae_mm"] == pytest.approx(5.20 / 16.84, abs=1e-6)
     assert t.loc[("B", 44), "gingiva_bottom_edge_bias_mm"] == pytest.approx(11.50 / 16.84, abs=1e-6)
+
+
+def test_integrity_check_flags_a_wrongly_read_label_space():
+    """The RF-DETR fault leaves three traces at once: no lip mask anywhere, dropped instances, and
+    an edge error that is entirely systematic because every image was shifted the same way."""
+    from gsv4.eval.architecture import integrity_check
+
+    good = _long(n=10)
+    good["n_lip_instances"], good["n_ignored"] = 1, 0
+    good["gingiva_top_edge_mae_px"] = [5.0, 3.0] * (len(good) // 2)      # MAE above |bias|
+    good["gingiva_top_edge_bias_px"] = [1.0, -1.0] * (len(good) // 2)
+    t = integrity_check(good).set_index("model")
+    assert not t["suspect"].any() and (t["problems"] == "").all()
+
+    bad = good.copy()
+    bad.loc[bad.model == "B", "n_lip_instances"] = 0
+    bad.loc[bad.model == "B", "n_ignored"] = 1
+    bad.loc[bad.model == "B", "gingiva_top_edge_mae_px"] = 6.15
+    bad.loc[bad.model == "B", "gingiva_top_edge_bias_px"] = -6.15
+    t = integrity_check(bad).set_index("model")
+    assert not t.loc["A", "suspect"] and t.loc["B", "suspect"]
+    assert t.loc["B", "images_without_lip"] == t.loc["B", "n_rows"]
+    assert t.loc["B", "instances_ignored"] == 30 and bool(t.loc["B", "edge_error_fully_systematic"])
+    for phrase in ("no lip mask on any image", "dropped for having no role", "entirely systematic"):
+        assert phrase in t.loc["B", "problems"]

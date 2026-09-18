@@ -117,3 +117,34 @@ def edge_table(df: pd.DataFrame, px_per_mm: float,
             rec[c.replace("_px", "_mm")] = float(v.mean()) if len(v) else math.nan
         rows.append(rec)
     return pd.DataFrame(rows)
+
+
+def integrity_check(df: pd.DataFrame) -> pd.DataFrame:
+    """Per model: signs that the predictor's classes were read wrongly.
+
+    A run that produced no lip mask on any image, or that dropped instances for having no role, or
+    whose gingival edge error is entirely systematic (mean absolute error equal to the absolute
+    bias, i.e. every image shifted the same way), is not measuring what it claims to. The first
+    architecture-comparison run showed all three at once, because RF-DETR's renumbered label space
+    was read through the dataset's category table and the lip band was stored as the gingiva mask.
+    """
+    rows = []
+    for model, part in df.groupby("model", sort=True):
+        n = len(part)
+        lip_col = next((c for c in ("n_lip_instances", "n_lip") if c in part.columns), None)
+        no_lip = int((part[lip_col] == 0).sum()) if lip_col else 0
+        ignored = int(part["n_ignored"].fillna(0).sum()) if "n_ignored" in part.columns else 0
+        top = part["gingiva_top_edge_mae_px"].mean() if "gingiva_top_edge_mae_px" in part.columns else math.nan
+        top_bias = part["gingiva_top_edge_bias_px"].mean() if "gingiva_top_edge_bias_px" in part.columns else math.nan
+        fully_systematic = bool(np.isfinite(top) and np.isfinite(top_bias) and top > 0 and abs(abs(top_bias) - top) < 1e-6)
+        problems = []
+        if n and no_lip == n:
+            problems.append("no lip mask on any image")
+        if ignored:
+            problems.append(f"{ignored} instance(s) dropped for having no role")
+        if fully_systematic:
+            problems.append("the gingival edge error is entirely systematic (MAE equals |bias|)")
+        rows.append({"model": model, "n_rows": n, "images_without_lip": no_lip, "instances_ignored": ignored,
+                     "edge_error_fully_systematic": fully_systematic, "suspect": bool(problems),
+                     "problems": "; ".join(problems)})
+    return pd.DataFrame(rows)
