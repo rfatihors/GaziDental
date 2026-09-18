@@ -1,12 +1,10 @@
 # Architecture comparison — results
 
-> **These results are not final.** The integrity check below flags `rfdetr-seg-large` (the gingival edge error is entirely systematic (MAE equals |bias|)). A run flagged here is not measuring what it claims to; its rows must be withdrawn, the masks produced again and the tables rebuilt before anything is reported. See `scripts/check_mask_classes.py` and README_TRAINING.md §6.5.
-
 
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: 29 high-smile-line
 test images with a clinical reference measurement. Measurement method **C_p25** at **16.84 px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [42, 43, 44].
+{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [np.int64(42), np.int64(43), np.int64(44)].
 
 ## Primary outcome: millimetre error against the clinical reference
 
@@ -14,9 +12,9 @@ Per seed:
 
 | model | seed | n | mae_mm | bias_mm | rmse_mm |
 |---|---|---|---|---|---|
-| rfdetr-seg-large | 42 | 29 | 2.282 | 1.822 | 2.761 |
-| rfdetr-seg-large | 43 | 29 | 2.280 | 1.784 | 2.785 |
-| rfdetr-seg-large | 44 | 29 | 2.291 | 1.759 | 2.785 |
+| rfdetr-seg-large | 42 | 29 | 0.671 | 0.284 | 0.941 |
+| rfdetr-seg-large | 43 | 29 | 0.651 | 0.255 | 0.926 |
+| rfdetr-seg-large | 44 | 29 | 0.671 | 0.279 | 0.961 |
 | yolo11x-seg | 42 | 29 | 0.857 | 0.571 | 1.036 |
 | yolo11x-seg | 43 | 29 | 1.026 | 0.731 | 1.180 |
 | yolo11x-seg | 44 | 29 | 0.989 | 0.702 | 1.132 |
@@ -28,7 +26,7 @@ Per model (mean ± SD over seeds):
 
 | model | n_seeds | mae_mm_mean | mae_mm_sd | bias_mm_mean | bias_mm_sd | rmse_mm_mean | rmse_mm_sd |
 |---|---|---|---|---|---|---|---|
-| rfdetr-seg-large | 3 | 2.284 | 0.006 | 1.788 | 0.032 | 2.777 | 0.014 |
+| rfdetr-seg-large | 3 | 0.664 | 0.011 | 0.273 | 0.016 | 0.943 | 0.017 |
 | yolo11x-seg | 3 | 0.957 | 0.089 | 0.668 | 0.085 | 1.116 | 0.073 |
 | yolo26x-seg | 3 | 1.001 | 0.016 | 0.715 | 0.018 | 1.134 | 0.017 |
 
@@ -38,16 +36,16 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 
 | n | mae_a | mae_b | diff_mae_mm | ci_low | ci_high | sd_paired_mm | excludes_zero | model_a | model_b |
 |---|---|---|---|---|---|---|---|---|---|
-| 29 | 0.955 | 2.282 | -1.326 | -1.916 | -0.739 | 1.717 | True | yolo11x-seg | rfdetr-seg-large |
+| 29 | 0.955 | 0.662 | 0.293 | 0.150 | 0.439 | 0.391 | True | yolo11x-seg | rfdetr-seg-large |
 | 29 | 0.955 | 1.001 | -0.046 | -0.097 | 0.005 | 0.144 | False | yolo11x-seg | yolo26x-seg |
 
 ## Gingival edge errors, mm at the global scale
 
 | model | seed | n | gingiva_top_edge_mae_mm | gingiva_top_edge_bias_mm | gingiva_bottom_edge_mae_mm | gingiva_bottom_edge_bias_mm |
 |---|---|---|---|---|---|---|
-| rfdetr-seg-large | 42 | 29 | 6.183 | -6.183 | 4.595 | -4.595 |
-| rfdetr-seg-large | 43 | 29 | 6.137 | -6.137 | 4.578 | -4.578 |
-| rfdetr-seg-large | 44 | 29 | 6.139 | -6.139 | 4.597 | -4.596 |
+| rfdetr-seg-large | 42 | 29 | 0.255 | 0.021 | 0.482 | 0.036 |
+| rfdetr-seg-large | 43 | 29 | 0.259 | 0.027 | 0.473 | 0.039 |
+| rfdetr-seg-large | 44 | 29 | 0.251 | -0.010 | 0.474 | 0.056 |
 | yolo11x-seg | 42 | 29 | 0.277 | 0.097 | 0.728 | 0.619 |
 | yolo11x-seg | 43 | 29 | 0.315 | 0.133 | 0.776 | 0.693 |
 | yolo11x-seg | 44 | 29 | 0.273 | 0.123 | 0.729 | 0.617 |
@@ -76,7 +74,7 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 
 Rule: a challenger replaces yolo11x-seg only when it leads by more than 0.15 mm in mean absolute error and the paired 95 % bootstrap interval of that lead excludes zero (both conditions).
 
-**Outcome: no challenger meets both conditions: the final model stays yolo11x-seg.**
+**Outcome: rfdetr-seg-large leads yolo11x-seg by 0.293 mm [0.150, 0.439]: Stage 6 is repeated with it (PROTOCOL.md §8).**
 
 ## Integrity check
 
@@ -85,7 +83,7 @@ edge error is entirely systematic is flagged here and must not be reported until
 
 | model | n_rows | images_without_lip | instances_ignored | edge_error_fully_systematic | suspect | problems |
 |---|---|---|---|---|---|---|
-| rfdetr-seg-large | 87 | 0 | 0 | True | True | the gingival edge error is entirely systematic (MAE equals |bias|) |
+| rfdetr-seg-large | 87 | 0 | 0 | False | False |  |
 | yolo11x-seg | 87 | 0 | 0 | False | False |  |
 | yolo26x-seg | 87 | 0 | 0 | False | False |  |
 

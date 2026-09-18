@@ -1,0 +1,6 @@
+{
+ "variant": "RFDETRSegLarge",
+ "seed": 42,
+ "predict_only": true,
+ "checkpoint": "/home/fatihors/Projects/GaziDental/gummy_smile_v4/runs/arch/rfdetr-seg-large_s42/checkpoint_best_total.pth"
+}
