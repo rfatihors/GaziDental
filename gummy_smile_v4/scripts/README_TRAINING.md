@@ -268,3 +268,55 @@ python scripts/run_architecture_comparison.py --aggregate-only
 Writes `by_seed.csv`, `by_model.csv`, `edges_by_seed.csv`, `paired_comparisons.csv`,
 `segmentation_metrics_all.csv` and `RESULTS.md`, including the pre-registered decision. Commit the
 tables and the results; the masks are git-ignored and are rebuilt by re-running the comparison.
+
+
+## 7. Resolution controls (Addendum 2)
+
+Read `outputs/08_architecture/PROTOCOL_ADDENDUM_resolution.md` first. It was committed before either
+control ran and fixes how the results are to be read, including which configuration becomes the final
+model in each case. The controls are sensitivity analyses, not members of the comparison: §2 of the
+protocol held the input resolution fixed and these runs deliberately break it, so their rows are
+labelled `<model>@<size>` and kept in their own section.
+
+The measured quantity is a vertical thickness, so vertical mask-pixel size is what matters:
+
+| configuration | mask grid | one mask pixel, vertically |
+|---|---|---|
+| yolo11x-seg at 640 (comparison) | 160 | 1.00 mm |
+| yolo11x-seg at 1024 (control A) | 256 | 0.63 mm |
+| rfdetr-seg-large at 624 (comparison) | 156 | 0.68 mm |
+| rfdetr-seg-large at 432 (control B) | 108 | 0.99 mm |
+
+### 7.1 Control A — YOLOv11x at imgsz 1024
+
+```bash
+python scripts/run_architecture_comparison.py --models yolo11x-seg --imgsz 1024 --dry-run
+nohup python scripts/run_architecture_comparison.py --models yolo11x-seg --imgsz 1024 > logs/ctlA.out 2>&1 &
+```
+
+Three seeds, roughly 40 to 60 minutes each on the RTX 5090 (compute scales with the pixel count, so
+about 2.6 times the 640 runs). If batch 16 does not fit at 1024, lower it once and record the value:
+a changed batch size is a deviation and belongs in the addendum.
+
+### 7.2 Control B — RF-DETR at resolution 432
+
+Same variant, same weights, only the input resolution changes.
+
+```bash
+for s in 42 43 44; do .venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --seed $s --resolution 432; done
+python scripts/check_mask_classes.py --masks outputs/08_architecture/masks/rfdetr-seg-large@432_s42     --figure outputs/08_architecture/rfdetr432_class_check.png
+python scripts/run_architecture_comparison.py --measure-only
+```
+
+Roughly half the cost of the 624 runs (about 100 s per epoch there, and compute scales with the pixel
+count). Check the classes before measuring, as always.
+
+### 7.3 Aggregate
+
+```bash
+python scripts/run_architecture_comparison.py --aggregate-only
+```
+
+`RESULTS.md` gains a Resolution controls section with the mask-pixel geometry, both paired
+comparisons and the verdict under the pre-registered rules of the addendum. The comparison tables and
+the §8 decision are computed from the members only and do not change.

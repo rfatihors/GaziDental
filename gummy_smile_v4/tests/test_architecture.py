@@ -117,3 +117,41 @@ def test_bias_scatter_table_separates_a_shift_from_scatter():
     assert t.loc["shifted", "sd_of_error_mm"] == pytest.approx(t.loc["centred", "sd_of_error_mm"], abs=1e-9)
     c = error_correlation(d)
     assert c.loc["shifted", "centred"] == pytest.approx(1.0, abs=1e-9)   # identical scatter, differing only by a shift
+
+
+def test_mask_pixel_mm_matches_the_geometry_in_the_addendum():
+    from gsv4.eval.architecture import mask_pixel_mm
+
+    y640 = mask_pixel_mm(640, 16.8397)                       # ultralytics letterboxes
+    y1024 = mask_pixel_mm(1024, 16.8397)
+    r624 = mask_pixel_mm(624, 16.8397, letterbox=False)      # rfdetr resizes to a square
+    r432 = mask_pixel_mm(432, 16.8397, letterbox=False)
+    assert (y640["grid"], y1024["grid"], r624["grid"], r432["grid"]) == (160, 256, 156, 108)
+    assert y640["vertical_mm"] == pytest.approx(1.00, abs=0.01) and y640["horizontal_mm"] == pytest.approx(y640["vertical_mm"])
+    assert y1024["vertical_mm"] == pytest.approx(0.63, abs=0.01)
+    assert r624["vertical_mm"] == pytest.approx(0.68, abs=0.01) and r624["horizontal_mm"] == pytest.approx(1.03, abs=0.01)
+    assert r432["vertical_mm"] == pytest.approx(0.99, abs=0.01)   # matched to YOLO at 640
+
+
+def _cmp(diff, lo, hi):
+    return {"n": 29, "diff_mae_mm": diff, "ci_low": lo, "ci_high": hi, "excludes_zero": lo > 0 or hi < 0}
+
+
+def test_resolution_verdict_follows_the_pre_registered_rules():
+    from gsv4.eval.architecture import resolution_verdict
+
+    mae = {"yolo11x-seg@1024": 0.70, "rfdetr-seg-large": 0.66, "yolo11x-seg": 0.96}
+    # rule 3: B shrinks the lead below the threshold and A's interval contains zero
+    v = resolution_verdict(_cmp(0.05, 0.01, 0.10), _cmp(0.03, -0.09, 0.15), mae)
+    assert v["rule"] == 3 and v["final_model"] == "yolo11x-seg@1024"
+    # rule 4: the lead survives both ways
+    v = resolution_verdict(_cmp(0.31, 0.16, 0.45), _cmp(0.28, 0.12, 0.44), mae)
+    assert v["rule"] == 4 and v["final_model"] == "rfdetr-seg-large"
+    # rule 2's second branch: A favours YOLO outright
+    v = resolution_verdict(_cmp(0.05, 0.01, 0.10), _cmp(-0.20, -0.35, -0.06), mae)
+    assert v["rule"] == 3
+    # rule 5: they disagree, the lowest uncorrected MAE wins
+    v = resolution_verdict(_cmp(0.31, 0.16, 0.45), _cmp(0.02, -0.10, 0.14), mae)
+    assert v["rule"] == 5 and v["final_model"] == "rfdetr-seg-large" and "disagree" in v["outcome"]
+    # a missing control draws no conclusion
+    assert resolution_verdict({"n": 0}, _cmp(0.02, -0.1, 0.1), mae)["rule"] == "incomplete"

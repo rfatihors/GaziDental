@@ -183,3 +183,53 @@ def error_correlation(df: pd.DataFrame, value_col: str = "selected_mm", key: str
     g = df.groupby(["model", key]).agg(pred=(value_col, "mean"), ref=("ref_mm", "mean")).reset_index()
     g["err"] = g["pred"] - g["ref"]
     return g.pivot(index=key, columns="model", values="err").corr()
+
+
+# Mask-pixel geometry of one configuration, in millimetres on the original image. Ultralytics
+# letterboxes, so both axes share a scale; RF-DETR resizes to a square, so a 3:2 photograph gets a
+# finer vertical grid than horizontal. The measured quantity is a vertical thickness, so the
+# vertical figure is the one that matters (PROTOCOL_ADDENDUM_resolution.md §1).
+def mask_pixel_mm(input_size: int, px_per_mm: float, image_wh: Sequence[int] = (2698, 1799),
+                  downsample: int = 4, letterbox: bool = True) -> Dict[str, float]:
+    w, h = float(image_wh[0]), float(image_wh[1])
+    if letterbox:
+        scale = input_size / max(w, h)
+        sx = sy = scale
+    else:
+        sx, sy = input_size / w, input_size / h
+    return {"grid": input_size // downsample,
+            "horizontal_mm": (downsample / sx) / px_per_mm,
+            "vertical_mm": (downsample / sy) / px_per_mm}
+
+
+def resolution_verdict(control_b: Dict[str, Any], control_a: Dict[str, Any], mae_by_config: Dict[str, float],
+                       threshold_mm: float = DECISION_THRESHOLD_MM) -> Dict[str, Any]:
+    """Apply the pre-registered reading of PROTOCOL_ADDENDUM_resolution.md §4.
+
+    ``control_b`` compares YOLOv11x at 640 (a) with RF-DETR at 432 (b), ``control_a`` compares
+    YOLOv11x at 1024 (a) with RF-DETR at 624 (b); both come from :func:`paired_difference`, whose
+    ``diff_mae_mm`` is positive when ``a`` has the larger error. ``mae_by_config`` is the uncorrected
+    mean absolute error of every configuration, used only by rule 5.
+    """
+    def ok(c):
+        return bool(c) and c.get("n")
+
+    b_says = ok(control_b) and (control_b["diff_mae_mm"] < threshold_mm or not control_b["excludes_zero"])
+    a_says = ok(control_a) and (not control_a["excludes_zero"] or control_a["diff_mae_mm"] < 0)
+    if not (ok(control_a) and ok(control_b)):
+        return {"rule": "incomplete", "resolution_explains_b": b_says, "resolution_explains_a": a_says,
+                "outcome": "a control is missing; no conclusion may be drawn yet", "final_model": None}
+    if b_says and a_says:
+        return {"rule": 3, "resolution_explains_b": True, "resolution_explains_a": True, "final_model": "yolo11x-seg@1024",
+                "outcome": ("both controls point to resolution: the lead is explained by the finer vertical mask grid, "
+                            "the final model becomes YOLOv11x-seg at imgsz 1024 and Stage 6 is repeated with it")}
+    if not b_says and not a_says:
+        return {"rule": 4, "resolution_explains_b": False, "resolution_explains_a": False, "final_model": "rfdetr-seg-large",
+                "outcome": ("the lead survives at matched resolution: PROTOCOL.md §8 applies as written, the final model "
+                            "becomes RF-DETR-Seg Large and Stage 6 is repeated with it")}
+    best = min(mae_by_config, key=mae_by_config.get) if mae_by_config else None
+    return {"rule": 5, "resolution_explains_b": b_says, "resolution_explains_a": a_says, "final_model": best,
+            "outcome": (f"the controls disagree (B says {'resolution' if b_says else 'architecture'}, A says "
+                        f"{'resolution' if a_says else 'architecture'}); both are reported, the configuration with the "
+                        f"lowest uncorrected mean absolute error is chosen ({best}), and the disagreement is stated in "
+                        "the manuscript as an unresolved uncertainty")}

@@ -116,7 +116,7 @@ def check_label_space(model_names: list, ds: Path, class_names: dict) -> dict:
     return id_to_name
 
 
-def predict(model, ds: Path, out: Path, tag: str, seed: int) -> None:
+def predict(model, ds: Path, out: Path, tag: str, seed: int, model_label: str = "rfdetr-seg-large") -> None:
     """Masks and a prediction table for the high-smile-line test images, in the YOLO runs' format.
 
     The class ids come from the model's own label space, checked against the dataset's
@@ -152,7 +152,7 @@ def predict(model, ds: Path, out: Path, tag: str, seed: int) -> None:
                      "n_ignored": cm.n_ignored_instances,
                      "max_conf": float(np.max(conf)) if conf is not None and len(conf) else None,
                      "mask_source": cm.source, "width": int(im["width"]), "height": int(im["height"]),
-                     "model": "rfdetr-seg-large", "seed": seed})
+                     "model": model_label, "seed": seed})
     df = pd.DataFrame(rows)
     (out / "predictions").mkdir(parents=True, exist_ok=True)
     df.to_csv(out / "predictions" / f"{tag}.csv", index=False)
@@ -181,7 +181,10 @@ def main() -> int:
     ds, out = ROOT / args.dataset, ROOT / args.out
     if not (ds / "train" / "_annotations.coco.json").exists():
         raise SystemExit(f"dataset not found: {ds} — run scripts/build_rfdetr_dataset.py first")
-    tag = f"rfdetr-seg-large_s{args.seed}"
+    # a resolution other than the protocol's is a control (PROTOCOL_ADDENDUM_resolution.md); the
+    # label carries it so the aggregation keeps it out of the comparison
+    model_label = "rfdetr-seg-large" if args.resolution == RESOLUTION else f"rfdetr-seg-large@{args.resolution}"
+    tag = f"{model_label}_s{args.seed}"
     epochs = 2 if args.probe else args.epochs
     run_dir = ROOT / "runs" / "arch" / (tag + ("_probe" if args.probe else ""))
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -196,7 +199,7 @@ def main() -> int:
         print(f"[rfdetr] loading {ckpt} (training skipped)")
         model = rf["from_checkpoint"](str(ckpt), trust_checkpoint=True)   # our own file, from our own run
         record = {"variant": args.variant, "seed": args.seed, "predict_only": True, "checkpoint": str(ckpt)}
-        predict(model, ds, out, tag, args.seed)
+        predict(model, ds, out, tag, args.seed, model_label)
         (out / f"rfdetr_predict_{tag}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         return 0
 
@@ -213,7 +216,7 @@ def main() -> int:
     model.train(dataset_dir=str(ds), epochs=epochs, resolution=args.resolution, output_dir=str(run_dir), **stopping)
     elapsed = time.time() - t0
     peak_gb = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else float("nan")
-    record = {"variant": args.variant, "resolution": args.resolution, "epochs_budget": epochs, "seed": args.seed,
+    record = {"variant": args.variant, "model_label": model_label, "resolution": args.resolution, "epochs_budget": epochs, "seed": args.seed,
               "early_stopping": stopping or None, "monitored_metric": "val/segm_mAP_50_95 (max of regular and EMA)",
               "seconds_total": round(elapsed, 1), "seconds_per_epoch": round(elapsed / max(1, epochs), 1),
               "peak_gpu_gb": round(peak_gb, 2), "probe": bool(args.probe),
@@ -228,7 +231,7 @@ def main() -> int:
         print("[rfdetr] probe finished. Compare projected_full_run_hours with the budget before the full run.")
         return 0
 
-    predict(model, ds, out, tag, args.seed)
+    predict(model, ds, out, tag, args.seed, model_label)
     print("[rfdetr] now run, in the training venv: python scripts/run_architecture_comparison.py --measure-only")
     return 0
 

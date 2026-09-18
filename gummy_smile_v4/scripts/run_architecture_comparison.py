@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,8 +39,8 @@ sys.path.insert(0, str(ROOT))
 
 from gsv4.config import load_config, resolve  # noqa: E402
 from gsv4.eval.architecture import (  # noqa: E402
-    bias_scatter_table, decision, edge_table, error_correlation, integrity_check, model_table, paired_difference,
-    per_image_errors, seed_averaged, seed_table,
+    bias_scatter_table, decision, edge_table, error_correlation, integrity_check, mask_pixel_mm, model_table,
+    paired_difference, per_image_errors, resolution_verdict, seed_averaged, seed_table,
 )
 from gsv4.eval.oracle import combo_name, measure_images  # noqa: E402
 from gsv4.eval.prediction import md_table  # noqa: E402
@@ -53,55 +54,74 @@ SEEDS = (42, 43, 44)
 # rate, the schedule and the augmentation policy are each architecture's own published defaults.
 SHARED = {"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": True}
 BASELINE = "yolo11x-seg"
+PROTOCOL_IMGSZ = 640
+# Resolution controls (PROTOCOL_ADDENDUM_resolution.md). A run at any other input size is labelled
+# "<model>@<imgsz>" and is a sensitivity analysis, never a member of the comparison: §2 of the
+# protocol held the input resolution fixed, and these runs deliberately break that.
+CONTROL_A = "yolo11x-seg@1024"           # finer vertical mask grid than RF-DETR at 624
+CONTROL_B = "rfdetr-seg-large@432"       # vertical mask grid matched to YOLOv11x at 640
+RFDETR_PROTOCOL = "rfdetr-seg-large"
 
 
-def run_dir_for(cfg, model: str, seed: int) -> Path:
-    return resolve(cfg, cfg["paths"]["runs"]) / "arch" / f"{model}_s{seed}"
+def label_for(model: str, imgsz: int) -> str:
+    return model if imgsz == PROTOCOL_IMGSZ else f"{model}@{imgsz}"
 
 
-def train_one(cfg, model: str, seed: int, data_yaml: Path, dry_run: bool) -> Path:
-    """Train one architecture at its published defaults; returns best.pt."""
-    d = run_dir_for(cfg, model, seed)
+def is_control(label: str) -> bool:
+    return "@" in label
+
+
+def run_dir_for(cfg, label: str, seed: int) -> Path:
+    return resolve(cfg, cfg["paths"]["runs"]) / "arch" / f"{label}_s{seed}"
+
+
+def train_one(cfg, model: str, seed: int, data_yaml: Path, dry_run: bool, imgsz: int = PROTOCOL_IMGSZ) -> Path:
+    """Train one architecture at its published defaults; returns best.pt.
+
+    ``imgsz`` other than the protocol's 640 makes this a resolution control, labelled accordingly.
+    """
+    label = label_for(model, imgsz)
+    d = run_dir_for(cfg, label, seed)
     best = d / "weights" / "best.pt"
     args = {"data": str(data_yaml), "seed": seed, "project": str(d.parent), "name": d.name,
-            "exist_ok": True, "plots": False, "verbose": True, **SHARED}
+            "exist_ok": True, "plots": False, "verbose": True, **{**SHARED, "imgsz": imgsz}}
     if dry_run:
-        print(f"[{model} s{seed}] DRY RUN — weights {MODELS[model]}; args {json.dumps(args)}")
+        print(f"[{label} s{seed}] DRY RUN — weights {MODELS[model]}; args {json.dumps(args)}")
         return best
     if (d / "DONE").exists():
-        print(f"[{model} s{seed}] already DONE")
+        print(f"[{label} s{seed}] already DONE")
         return best
     from ultralytics import YOLO
 
     last = d / "weights" / "last.pt"
     if last.exists():
-        print(f"[{model} s{seed}] resuming from {last}")
+        print(f"[{label} s{seed}] resuming from {last}")
         YOLO(str(last)).train(resume=True)
     else:
         YOLO(MODELS[model]).train(**args)
     if not best.exists():
-        raise SystemExit(f"[{model} s{seed}] training ended without weights/best.pt")
-    (d / "DONE").write_text(json.dumps({"args": args, "published_defaults": True}, indent=1), encoding="utf-8")
+        raise SystemExit(f"[{label} s{seed}] training ended without weights/best.pt")
+    (d / "DONE").write_text(json.dumps({"args": args, "published_defaults": True, "control": is_control(label)}, indent=1), encoding="utf-8")
     return best
 
 
-def evaluate_one(cfg, model: str, seed: int, best: Path, ds: Path, out_dir: Path, batch: int) -> pd.DataFrame:
+def evaluate_one(cfg, label: str, seed: int, best: Path, ds: Path, out_dir: Path, batch: int, imgsz: int = PROTOCOL_IMGSZ) -> pd.DataFrame:
     """Test-set metrics at both settings, masks for the high test images, measurement and edges."""
     from ultralytics import YOLO
 
     from gsv4.train.cv_predict import predict_list
     from gsv4.train.common import release_cuda
 
-    tag = f"{model}_s{seed}"
+    tag = f"{label}_s{seed}"
     m_rows: List[Dict[str, Any]] = []
     y = YOLO(str(best))
     for standard in (True, False):
         st = eval_settings(cfg, standard)
-        r = y.val(data=str(ds / "data_main.yaml"), split="test", imgsz=st["imgsz"], conf=st["conf"], iou=st["iou"],
+        r = y.val(data=str(ds / "data_main.yaml"), split="test", imgsz=imgsz, conf=st["conf"], iou=st["iou"],
                   max_det=st["max_det"], plots=False, verbose=False, project=str(out_dir / "val"), name=f"{tag}_{st['kind']}", exist_ok=True)
         names = {int(k): v for k, v in r.names.items()}
         for cname, vals in per_class_metrics(r, names).items():
-            m_rows.append({"model": model, "seed": seed, "settings": st["kind"], "conf": st["conf"], "max_det": st["max_det"], "class": cname, **vals})
+            m_rows.append({"model": label, "seed": seed, "settings": st["kind"], "conf": st["conf"], "max_det": st["max_det"], "imgsz": imgsz, "class": cname, **vals})
         del r
         release_cuda()
     del y
@@ -111,20 +131,20 @@ def evaluate_one(cfg, model: str, seed: int, best: Path, ds: Path, out_dir: Path
     # masks of the high-smile-line test images, at the operating point (what the pipeline uses)
     high_list = ds / "lists" / "arch_test_high.txt"
     mask_dir = out_dir / "masks" / tag
-    df = predict_list(cfg, best, high_list, mask_dir, tag, {"model": model, "seed": seed}, batch=batch)
+    df = predict_list(cfg, best, high_list, mask_dir, tag, {"model": label, "seed": seed}, batch=batch)
     df.to_csv(out_dir / "predictions" / f"{tag}.csv", index=False)
     return df
 
 
-def measure_one(cfg, model: str, seed: int, rows: pd.DataFrame, pred_df: pd.DataFrame, out_dir: Path, combo: str, k: float) -> pd.DataFrame:
+def measure_one(cfg, label: str, seed: int, rows: pd.DataFrame, pred_df: pd.DataFrame, out_dir: Path, combo: str, k: float) -> pd.DataFrame:
     """Millimetre measurement and gingival edge errors for one run."""
-    tag = f"{model}_s{seed}"
+    tag = f"{label}_s{seed}"
     mask_dir = out_dir / "masks" / tag
     coco_root = resolve(cfg, cfg["paths"]["coco_root"])
     meas = measure_images(rows, cfg, coco_root, mask_source=str(mask_dir)).set_index("uid")
     b = boundary_table(cfg, pred_df, mask_dir).set_index("uid")
     per = rows.set_index("uid").copy()
-    per["model"], per["seed"] = model, seed
+    per["model"], per["seed"] = label, seed
     per["selected_mm"] = meas[f"{combo}_px"] / k
     per["qc_flags"] = meas["qc_flags"].fillna("")
     per["n_gingiva_instances"] = meas["n_gingiva_instances"]
@@ -149,6 +169,9 @@ def main() -> int:
     ap.add_argument("--models", default=",".join(MODELS), help="comma-separated subset of " + ", ".join(MODELS))
     ap.add_argument("--seeds", default=",".join(str(s) for s in SEEDS))
     ap.add_argument("--batch", type=int, default=None, help="prediction chunk size (cv_predict)")
+    ap.add_argument("--imgsz", type=int, default=PROTOCOL_IMGSZ,
+                    help=f"input size; anything other than {PROTOCOL_IMGSZ} is a resolution control "
+                         "(PROTOCOL_ADDENDUM_resolution.md) and is labelled <model>@<imgsz>")
     ap.add_argument("--aggregate-only", action="store_true", help="rebuild the tables from the per-image rows on disk")
     ap.add_argument("--measure-only", action="store_true",
                     help="skip training; measure every predictions/<tag>.csv that has no per_image/<tag>.csv yet "
@@ -184,7 +207,7 @@ def main() -> int:
     if args.dry_run:
         for model in models:
             for seed in seeds:
-                train_one(cfg, model, seed, ds / "data_main.yaml", dry_run=True)
+                train_one(cfg, model, seed, ds / "data_main.yaml", dry_run=True, imgsz=args.imgsz)
         print(f"[arch] DRY RUN — {len(models) * len(seeds)} runs; masks -> {out_dir / 'masks'}; list {high_list} ({len(rows)} images)")
         return 0
 
@@ -194,10 +217,10 @@ def main() -> int:
             per_path = out_dir / "per_image" / f"{tag}.csv"
             if per_path.exists():
                 continue
-            model, _, seed_s = tag.rpartition("_s")
+            label, _, seed_s = tag.rpartition("_s")
             if not seed_s.isdigit():
                 raise SystemExit(f"cannot read a model and seed from {pf.name}; expected <model>_s<seed>.csv")
-            measure_one(cfg, model, int(seed_s), rows, pd.read_csv(pf), out_dir, combo, k).to_csv(per_path, index=False)
+            measure_one(cfg, label, int(seed_s), rows, pd.read_csv(pf), out_dir, combo, k).to_csv(per_path, index=False)
             print(f"[{tag}] measured -> {per_path}")
         models, seeds = [], []
 
@@ -205,14 +228,15 @@ def main() -> int:
         if model not in MODELS:
             raise SystemExit(f"unknown model {model}; known: {', '.join(MODELS)}")
         for seed in seeds:
-            tag = f"{model}_s{seed}"
+            label = label_for(model, args.imgsz)
+            tag = f"{label}_s{seed}"
             per_path = out_dir / "per_image" / f"{tag}.csv"
             if per_path.exists():
                 print(f"[{tag}] per-image table already on disk, skipping")
                 continue
-            best = train_one(cfg, model, seed, ds / "data_main.yaml", dry_run=False)
-            pred_df = evaluate_one(cfg, model, seed, best, ds, out_dir, args.batch)
-            measure_one(cfg, model, seed, rows, pred_df, out_dir, combo, k).to_csv(per_path, index=False)
+            best = train_one(cfg, model, seed, ds / "data_main.yaml", dry_run=False, imgsz=args.imgsz)
+            pred_df = evaluate_one(cfg, label, seed, best, ds, out_dir, args.batch, imgsz=args.imgsz)
+            measure_one(cfg, label, seed, rows, pred_df, out_dir, combo, k).to_csv(per_path, index=False)
             print(f"[{tag}] done -> {per_path}")
 
     # ---------------------------------------------------------------- aggregate
@@ -234,9 +258,11 @@ def main() -> int:
     edges.to_csv(out_dir / "edges_by_seed.csv", index=False)
     avg = seed_averaged(long)
     present = sorted(long["model"].unique())
+    members = [m for m in present if not is_control(m)]
+    controls = [m for m in present if is_control(m)]
     comparisons = []
-    base = BASELINE if BASELINE in present else present[0]
-    for other in [m for m in present if m != base]:
+    base = BASELINE if BASELINE in members else (members or present)[0]
+    for other in [m for m in members if m != base]:
         c = paired_difference(avg[avg.model == base], avg[avg.model == other])
         c.update({"model_a": base, "model_b": other})
         comparisons.append(c)
@@ -244,6 +270,27 @@ def main() -> int:
     comp_t = pd.DataFrame(comparisons)
     if len(comp_t):
         comp_t.to_csv(out_dir / "paired_comparisons.csv", index=False)
+
+    # ---- resolution controls (PROTOCOL_ADDENDUM_resolution.md); never merged into the comparison
+    def pair(a: str, b: str):
+        if a not in present or b not in present:
+            return {"n": 0, "model_a": a, "model_b": b}
+        c = paired_difference(avg[avg.model == a], avg[avg.model == b])
+        c.update({"model_a": a, "model_b": b})
+        return c
+
+    ctl_b = pair(BASELINE, CONTROL_B)                 # YOLOv11x at 640 against RF-DETR at 432
+    ctl_a = pair(CONTROL_A, RFDETR_PROTOCOL)          # YOLOv11x at 1024 against RF-DETR at 624
+    mae_by_config = {m: float(np.abs(avg[avg.model == m]["selected_mm"].to_numpy(float)
+                                     - avg[avg.model == m]["ref_mm"].to_numpy(float)).mean()) for m in present}
+    verdict = resolution_verdict(ctl_b, ctl_a, mae_by_config)
+    ctl_t = pd.DataFrame([c for c in (ctl_b, ctl_a) if c.get("n")])
+    if len(ctl_t):
+        ctl_t.to_csv(out_dir / "resolution_controls.csv", index=False)
+    geom = pd.DataFrame([{"configuration": name, **mask_pixel_mm(size, k, letterbox=lb)}
+                         for name, size, lb in (("yolo11x-seg @ 640", 640, True), (CONTROL_A, 1024, True),
+                                                (RFDETR_PROTOCOL + " @ 624", 624, False), (CONTROL_B, 432, False))])
+    geom.to_csv(out_dir / "mask_pixel_geometry.csv", index=False)
     bias_scatter = bias_scatter_table(long)
     bias_scatter.to_csv(out_dir / "bias_scatter.csv", index=False)
     corr = error_correlation(long)
@@ -284,6 +331,8 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 
 {md_table(comp_t) if len(comp_t) else '(only one architecture present)'}
 
+Comparison members: {', '.join(members) or 'none'}. Resolution controls, reported separately: {', '.join(controls) or 'none'}.
+
 ## Gingival edge errors, mm at the global scale
 
 {md_table(edges)}
@@ -308,6 +357,21 @@ Models evaluated here: {', '.join(sorted(std_seg['model'].unique())) if len(std_
 predictor outside the Ultralytics framework is not evaluated through `model.val()` and therefore has
 no row; its own trainer's mask AP is reported in its run record instead, and the two are not
 interchangeable.
+
+## Resolution controls (PROTOCOL_ADDENDUM_resolution.md)
+
+Sensitivity analyses, not members of the comparison: §2 held the input resolution fixed and these
+runs deliberately break that. Vertical mask-pixel size is the one that matters, because the measured
+quantity is a vertical thickness.
+
+{md_table(geom)}
+
+{md_table(ctl_t) if len(ctl_t) else '(no control has run yet)'}
+
+Pre-registered reading: control B {'has not run' if not ctl_b.get('n') else ('points to resolution' if verdict['resolution_explains_b'] else 'points to architecture')},
+control A {'has not run' if not ctl_a.get('n') else ('points to resolution' if verdict['resolution_explains_a'] else 'points to architecture')}.
+
+**Verdict (rule {verdict['rule']}): {verdict['outcome']}.**
 
 ## Pre-registered decision (PROTOCOL.md §8)
 

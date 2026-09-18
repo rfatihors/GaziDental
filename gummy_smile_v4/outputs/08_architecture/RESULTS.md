@@ -39,6 +39,8 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 | 29 | 0.955 | 0.662 | 0.293 | 0.150 | 0.439 | 0.391 | True | yolo11x-seg | rfdetr-seg-large |
 | 29 | 0.955 | 1.001 | -0.046 | -0.097 | 0.005 | 0.144 | False | yolo11x-seg | yolo26x-seg |
 
+Comparison members: rfdetr-seg-large, yolo11x-seg, yolo26x-seg. Resolution controls, reported separately: none.
+
 ## Gingival edge errors, mm at the global scale
 
 | model | seed | n | gingiva_top_edge_mae_mm | gingiva_top_edge_bias_mm | gingiva_bottom_edge_mae_mm | gingiva_bottom_edge_bias_mm |
@@ -94,6 +96,26 @@ Models evaluated here: yolo11x-seg, yolo26x-seg. A
 predictor outside the Ultralytics framework is not evaluated through `model.val()` and therefore has
 no row; its own trainer's mask AP is reported in its run record instead, and the two are not
 interchangeable.
+
+## Resolution controls (PROTOCOL_ADDENDUM_resolution.md)
+
+Sensitivity analyses, not members of the comparison: §2 held the input resolution fixed and these
+runs deliberately break that. Vertical mask-pixel size is the one that matters, because the measured
+quantity is a vertical thickness.
+
+| configuration | grid | horizontal_mm | vertical_mm |
+|---|---|---|---|
+| yolo11x-seg @ 640 | 160 | 1.001 | 1.001 |
+| yolo11x-seg@1024 | 256 | 0.626 | 0.626 |
+| rfdetr-seg-large @ 624 | 156 | 1.027 | 0.685 |
+| rfdetr-seg-large@432 | 108 | 1.483 | 0.989 |
+
+(no control has run yet)
+
+Pre-registered reading: control B has not run,
+control A has not run.
+
+**Verdict (rule incomplete): a control is missing; no conclusion may be drawn yet.**
 
 ## Pre-registered decision (PROTOCOL.md §8)
 
