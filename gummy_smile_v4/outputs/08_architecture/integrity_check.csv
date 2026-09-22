@@ -1,4 +1,6 @@
 model,n_rows,images_without_lip,instances_ignored,edge_error_fully_systematic,suspect,problems
 rfdetr-seg-large,87,0,0,False,False,
+rfdetr-seg-large@432,87,0,0,False,False,
 yolo11x-seg,87,0,0,False,False,
+yolo11x-seg@1024,87,0,0,False,False,
 yolo26x-seg,87,0,0,False,False,
