@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Build the COCO dataset RF-DETR expects, from our participant-level partition.
 
-    python scripts/build_rfdetr_dataset.py [--out data/rfdetr_dataset] [--dry-run]
+    python scripts/build_rfdetr_dataset.py [--variant main] [--dry-run]
+    python scripts/build_rfdetr_dataset.py --variant fold0        # a cross-validation fold
+    python scripts/build_rfdetr_dataset.py --variant lc25         # a learning-curve subset
     python scripts/build_rfdetr_dataset.py --verify-only --out data/rfdetr_dataset
     .venv-rfdetr/bin/python scripts/build_rfdetr_dataset.py --verify-only    # in the RF-DETR env
 
@@ -36,6 +38,41 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ANNOTATION_FILE = "_annotations.coco.json"
 SPLITS = ("train", "valid", "test")
+
+# Which images each split holds, per dataset variant. "manifest" means the split column of the
+# dataset manifest; anything else names a list file under the YOLO dataset's lists/ directory, so
+# that RF-DETR trains on exactly the images the YOLO runs did (outputs/09_final_rfdetr/PLAN.md §2).
+VARIANTS = {
+    "main": {"train": "manifest:train", "valid": "manifest:valid", "test": "manifest:test"},
+    **{f"fold{k}": {"train": f"lists/fold{k}_train.txt", "valid": f"lists/fold{k}_valid.txt",
+                    "test": f"lists/fold{k}_heldout.txt"} for k in range(5)},
+    **{f"lc{n}": {"train": f"lists/lc{n}_train.txt", "valid": "lists/main_valid.txt",
+                  "test": "lists/main_test.txt"} for n in (25, 50, 75)},
+}
+
+
+def members(source: str, kept, lists_root: Path) -> list:
+    """The uids of one split of one variant.
+
+    ``manifest:<split>`` reads the manifest's own split column; a path reads a YOLO list file and
+    resolves each line's basename back to a uid, so the two dataset formats hold the same images.
+    """
+    if source.startswith("manifest:"):
+        want = source.split(":", 1)[1]
+        return list(kept.loc[kept["split"] == want, "uid"])
+    path = lists_root / source
+    if not path.exists():
+        raise SystemExit(f"list not found: {path} (run gsv4.train.prepare_yolo_dataset first)")
+    by_name = dict(zip(kept["yolo_name"], kept["uid"]))
+    uids, unknown = [], []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        name = Path(line.strip()).name
+        (uids.append(by_name[name]) if name in by_name else unknown.append(name))
+    if unknown:
+        raise SystemExit(f"{path}: {len(unknown)} image(s) are not in the kept manifest: {unknown[:5]}")
+    return uids
 
 
 # ----------------------------------------------------------------- conversion (stdlib only)
@@ -194,13 +231,16 @@ def verify_written(out: Path, n_samples: int = 5) -> Dict[str, Any]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default=None)
-    ap.add_argument("--out", default="data/rfdetr_dataset")
+    ap.add_argument("--variant", default="main", choices=sorted(VARIANTS), help="which dataset configuration to build")
+    ap.add_argument("--out", default=None, help="default data/rfdetr_dataset[_<variant>]")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--verify-only", action="store_true", help="re-open an existing dataset and check it; no gsv4 imports")
     ap.add_argument("--verify-with", default=None, metavar="PYTHON",
                     help="after writing, run --verify-only again with this interpreter (e.g. .venv-rfdetr/bin/python)")
     args = ap.parse_args()
-    out = Path(args.out) if Path(args.out).is_absolute() else ROOT / args.out
+    default_out = "data/rfdetr_dataset" + ("" if args.variant == "main" else f"_{args.variant}")
+    out_arg = args.out or default_out
+    out = Path(out_arg) if Path(out_arg).is_absolute() else ROOT / out_arg
 
     if args.verify_only:
         report = verify_written(out)
@@ -229,8 +269,11 @@ def main() -> int:
     counts: Dict[str, Dict[str, int]] = defaultdict(lambda: {"images": 0, "annotations": 0})
     problems: List[str] = []
     converted_strings = 0
+    spec = VARIANTS[args.variant]
+    kept_by_uid = kept.set_index("uid", drop=False)
     for split in SPLITS:
-        part = kept[kept["split"] == split]
+        uids = members(spec[split], kept, ds / "lists" / ".." )
+        part = kept_by_uid.loc[uids]
         images: List[Dict[str, Any]] = []
         annotations: List[Dict[str, Any]] = []
         next_img, next_ann = 1, 1
@@ -273,14 +316,14 @@ def main() -> int:
                                               cfg["class_names"]["lip"]: int(cfg["coco"]["category_ids"]["lip"])})
     problems += cat_check["problems"]
     total = sum(c["images"] for c in counts.values())
-    print(f"[rfdetr-dataset] {'DRY RUN — ' if args.dry_run else ''}{out}")
+    print(f"[rfdetr-dataset] {'DRY RUN — ' if args.dry_run else ''}variant {args.variant} -> {out}")
     for split, c in counts.items():
         print(f"  {split:6s} images {c['images']:5d}  annotations {c['annotations']:6d}")
     print(f"  total images {total} (kept dataset: {len(kept)})")
+    if args.variant == "main" and total != len(kept):
+        problems.append(f"image count {total} does not match the manifest ({len(kept)})")
     print(f"  categories: {cat_check['categories']}; unused class 0 in the source export: {cat_check['dummy_class_0']!r}")
     print(f"  bbox values converted from string to float: {converted_strings} (the v3 export writes width and height as formatted strings)")
-    if total != len(kept):
-        problems.append(f"image count {total} does not match the manifest ({len(kept)})")
     if problems:
         for p in problems[:20]:
             print(f"  PROBLEM: {p}")

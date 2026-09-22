@@ -189,13 +189,25 @@ def main() -> int:
     ap.add_argument("--config", default=None)
     ap.add_argument("--out", default="06_prediction")
     ap.add_argument("--n-boot", type=int, default=2000)
+    ap.add_argument("--oof-masks", default=None, help="default outputs/05_predictions/oof; use oof_rfdetr for Stage 6 with RF-DETR")
+    ap.add_argument("--test-masks", default=None, help="default outputs/05_predictions/test")
+    ap.add_argument("--exclude-uids", default=None,
+                    help="CSV with a uid column to leave out; the pre-registered sensitivity analysis of "
+                         "outputs/09_final_rfdetr/PLAN.md 5 passes the 29 images used to choose the architecture")
     args = ap.parse_args()
     cfg = load_config(args.config)
     outputs = resolve(cfg, cfg["paths"]["outputs"])
     out_dir = outputs / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     pred_dir = resolve(cfg, cfg["paths"]["predictions"])
-    oof_dir, test_dir, oracle_dir = pred_dir / "oof", pred_dir / "test", outputs / "03_oracle"
+    oof_dir = Path(args.oof_masks) if args.oof_masks else pred_dir / "oof"
+    test_dir = Path(args.test_masks) if args.test_masks else pred_dir / "test"
+    oracle_dir = outputs / "03_oracle"
+    if not oof_dir.is_absolute():
+        oof_dir = resolve(cfg, oof_dir)
+    if not test_dir.is_absolute():
+        test_dir = resolve(cfg, test_dir)
+    print(f"[stage6] out-of-fold masks {oof_dir}; test masks {test_dir}")
     coco_root = resolve(cfg, cfg["paths"]["coco_root"])
     seed = int(cfg["seed"])
     mcfg = cfg["measurement"]
@@ -255,6 +267,14 @@ def main() -> int:
 
     # ---- 3. measurement accuracy tables
     T = pd.Series(True, index=per.index)
+    excluded = set()
+    if args.exclude_uids:
+        ex = Path(args.exclude_uids)
+        if not ex.is_absolute():
+            ex = resolve(cfg, ex)
+        excluded = set(pd.read_csv(ex)["uid"])
+        print(f"[stage6] pre-registered sensitivity analysis: {len(excluded)} uid(s) excluded from the secondary set")
+    not_selection = ~per["uid"].isin(excluded)
     sets_a = {
         "(a) OOF masks, all reference images [PRIMARY]": T,
         "(a) OOF, Stage-3 holdout images only (scale never fitted on these)": per["split"] == "holdout",
@@ -267,6 +287,10 @@ def main() -> int:
         "(a) sensitivity: without zenith-fallback images": ~per["alignment_uncertain"],
         "(a) sensitivity: without empty predictions": ~per["empty_prediction"],
     }
+    if excluded:
+        # PLAN.md 5: the architecture was chosen partly on the 29 test images, so the same analysis is
+        # pre-registered on the images that played no part in that choice
+        sets_a[f"(a) PRE-REGISTERED SENSITIVITY: excluding the {len(excluded)} images used to choose the architecture"] = not_selection
     def both(per_df: pd.DataFrame, sets: dict, masks_label: str) -> pd.DataFrame:
         """Every set twice: uncorrected (PRIMARY) first, then corrected (secondary)."""
         u = measurement_table(per_df, sets, n_boot=args.n_boot, seed=seed)

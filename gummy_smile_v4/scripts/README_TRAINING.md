@@ -320,3 +320,39 @@ python scripts/run_architecture_comparison.py --aggregate-only
 `RESULTS.md` gains a Resolution controls section with the mask-pixel geometry, both paired
 comparisons and the verdict under the pre-registered rules of the addendum. The comparison tables and
 the §8 decision are computed from the members only and do not change.
+
+
+## 8. Stage 6 with RF-DETR (Addendum 2, rule 4)
+
+Both resolution controls pointed to the architecture, so rule 4 of
+`outputs/08_architecture/PROTOCOL_ADDENDUM_resolution.md` applies and Stage 6 is repeated with
+RF-DETR-Seg Large at 624. Read `outputs/09_final_rfdetr/PLAN.md` first: it was committed before any
+of this ran and fixes the configuration, the primary outcome, its pre-registered sensitivity
+analysis, and the threshold below which the offset correction is dropped.
+
+```bash
+tmux new -s rfdetr
+bash scripts/train_final_rfdetr.sh 2>&1 | tee -a logs/final_rfdetr.out
+```
+
+Eight trainings (five folds, three learning-curve subsets) plus a prediction pass for the final
+model, which is **reused** from the architecture comparison rather than retrained (PLAN.md §1). At
+roughly 100 s per epoch with early stopping the folds are the bulk of it; budget an overnight run.
+Every step writes `runs/rfdetr/<name>/DONE` and is skipped on a re-run, so an interruption costs
+only the step that was in flight.
+
+The class check runs after every prediction and aborts the script on a mismatch. That is deliberate:
+a wrongly read label space is invisible in the segmentation metrics and has already cost one full
+comparison run.
+
+Afterwards, in the training venv:
+
+```bash
+python scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle
+python scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr
+```
+
+The measurement method (`C_p25`) and the scale (16.84 px/mm) do not change: they were selected on
+ground-truth masks in Stage 3 and are a property of the measurement geometry, not of the segmentation
+model. The offset correction, by contrast, is re-estimated from scratch for this configuration and is
+expected to be dropped (PLAN.md §6).
