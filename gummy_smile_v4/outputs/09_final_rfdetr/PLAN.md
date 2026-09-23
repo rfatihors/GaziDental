@@ -186,3 +186,43 @@ to the last digit; the test-set rows move in the third decimal (mean gingiva IoU
 statistic by ≤ 0.1 px ≈ 0.006 mm). Nothing in the measurement results, the offset analysis or any
 conclusion depends on that difference, and the recomputed numbers are the ones the current code
 reproduces from the masks on disk.
+
+## Amendment 3 — 23 Sep 2026: the post-hoc offset calibration is dropped
+
+**This decision was taken after seeing the Stage-6 results, and is recorded as such.** §6 fixed the
+threshold in advance; what follows says exactly where the outcome fell against it and why the step is
+being removed anyway.
+
+**The YOLO offset is not carried over.** `measurement.bottom_edge_offset_px` was -13 px, estimated on
+the YOLOv11x out-of-fold predictions, whose lower gingival edge was drawn +0.66 mm too low. RF-DETR's
+is +0.08 mm, so the same shift over-corrects: applying it raises the mean absolute error from 0.52 mm
+to 0.59 mm. Keeping it would have made the measurement worse. It is set to **0**.
+
+**The re-estimated constant is not adopted either.** Re-fitting on the Stage-3 development subset for
+this configuration gave 0.254 mm, with a holdout improvement of 0.063 mm. Against §6 that is a split
+verdict, and both halves are stated: the improvement is 0.013 mm above the 0.05 mm threshold, so the
+rule did **not** formally trigger the drop, while the estimated offset is far below one native mask
+pixel of this configuration (0.254 mm against 0.68 mm), which is the half of the rule that did. The
+step is dropped, for reasons that go beyond the rule:
+
+* the gain is smaller than the reference's own repeatability (intra-observer SD 0.17 mm per tooth
+  site), i.e. below the noise floor of the standard it is calibrated against;
+* a post-hoc calibration estimated on the same clinical reference the pipeline is evaluated against
+  is the weakest element of the analysis, and every reviewer answer has to carry that caveat;
+* removing it leaves **one** result set instead of a primary/secondary pair, so the reported accuracy
+  is what the pipeline does with no step fitted on the reference at all.
+
+Trading 0.063 mm for that is the right trade, and it is a judgement, not a rule: the rule's threshold
+was 0.05 mm and the improvement was 0.063 mm.
+
+**Consequences.** Stage 6 and Stage 7 are regenerated with no offset: the uncorrected/corrected pair
+disappears from every table, figure and summary, and `run_prediction_eval.py` reports one result set.
+The offset analysis itself is kept and stays reproducible — `run_prediction_eval.py --offset-px -13`
+restores the YOLO appendix — and the finding it belongs to is described in
+`outputs/08_architecture/FINDINGS.md` as a property of the YOLO mask head, with
+`outputs/06_prediction/offset_correction.md` and `offset_checks.md` as its record.
+
+**What this does not change.** The primary outcome of §5 and its pre-registered sensitivity analysis,
+the method and the scale of Stage 3, and the fallback rule of §7 are untouched. The 0.52 mm primary
+result is the uncorrected number that was pre-registered as primary; dropping the correction removes a
+secondary column, not the headline.

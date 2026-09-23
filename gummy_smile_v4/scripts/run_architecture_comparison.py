@@ -307,6 +307,31 @@ def main() -> int:
         + ". A run flagged here is not measuring what it claims to; its rows must be withdrawn, the masks produced again "
           "and the tables rebuilt before anything is reported. See `scripts/check_mask_classes.py` and "
           "README_TRAINING.md §6.5.\n\n")
+    def _stage6_row(sub: str, label: str) -> str:
+        """One line per final model, from its own Stage-6 error decomposition (nothing re-measured here)."""
+        d = resolve(cfg, Path(cfg["paths"]["outputs"]) / sub / "error_decomposition.csv")
+        if not d.exists():
+            return f"| {label} | — | — | — | — | pending: `{sub}/error_decomposition.csv` |"
+        e = pd.read_csv(d)
+        acc = resolve(cfg, Path(cfg["paths"]["outputs"]) / sub / "measurement_accuracy.csv")
+        model = "?"
+        if acc.exists():
+            a = pd.read_csv(acc)
+            names = sorted({str(x) for x in a.get("model", pd.Series(dtype=str)).dropna().unique() if "COCO annotations" not in str(x)})
+            names = [n for n in names if not any(o != n and o.startswith(n) for o in names)]
+            model = ", ".join(names) or "?"
+        return (f"| {label} | {model} | {e['e_total'].abs().mean():.2f} | {e['e_meas'].abs().mean():.2f} | "
+                f"{e['e_total'].abs().mean() - e['e_meas'].abs().mean():+.2f} | "
+                f"{e['e_seg'].abs().mean():.2f} (bias {e['e_seg'].mean():+.2f}) |")
+
+    stage6_md = ("| Stage 6 run | model | pipeline MAE, mm | geometry part (GT masks), mm | what the model adds, mm | segmentation error component, mm |\n"
+                 "|---|---|---|---|---|---|\n"
+                 + _stage6_row("09_final_rfdetr", "current final model") + "\n"
+                 + _stage6_row("06_prediction", "previous final model") + "\n\n"
+                 "The geometry part is the same measurement on the annotated masks (Stage 3) and is a property of the method, "
+                 "not of the model; the segmentation part is what the predicted masks add to it. A model whose segmentation part "
+                 "is near zero measures the gingival display as well as the annotation allows.")
+
     md = f"""# Architecture comparison — results
 
 {banner}
@@ -385,6 +410,14 @@ A run that produced no lip mask anywhere, dropped instances for having no role, 
 edge error is entirely systematic is flagged here and must not be reported until it is repeated.
 
 {md_table(integrity)}
+
+## What the difference means for the measurement (Stage 6 of each final model)
+
+The comparison above is 29 test images. The clinically meaningful statement is what each architecture
+adds to the measurement error on the full out-of-fold set, against the same method and scale on the
+ground-truth masks — i.e. how much of the pipeline error is the segmentation's.
+
+{stage6_md}
 
 ## Declared limits
 

@@ -25,13 +25,31 @@ from gsv4.report import tables as T  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default=None)
+    ap.add_argument("--stage6", default="09_final_rfdetr",
+                    help="Stage-6 output sub-directory the manuscript is built from (default: the RF-DETR final model; "
+                         "pass 06_prediction for the YOLOv11x results, which stay available as the previous final model)")
     args = ap.parse_args()
     cfg = load_config(args.config)
     out = resolve(cfg, Path(cfg["paths"]["outputs"]) / "07_report")
     fig_dir, tab_dir = out / "figures", out / "tables"
     fig_dir.mkdir(parents=True, exist_ok=True); tab_dir.mkdir(parents=True, exist_ok=True)
     outputs = resolve(cfg, cfg["paths"]["outputs"])
-    oracle_dir, pred_dir, expert_dir, prediction_eval_dir = outputs / "03_oracle", outputs / "05_predictions", outputs / "04_expert", outputs / "06_prediction"
+    oracle_dir, pred_dir, expert_dir = outputs / "03_oracle", outputs / "05_predictions", outputs / "04_expert"
+    prediction_eval_dir = outputs / args.stage6
+    prev_dir = outputs / "06_prediction"          # YOLOv11x: the previous final model, reference only
+    # Which model the manuscript numbers belong to — recorded by Stage 6 in every table it writes.
+    acc6 = prediction_eval_dir / "measurement_accuracy.csv"
+    model_label = "pending (Stage 6 has not run for this directory)"
+    if acc6.exists():
+        m6 = pd.read_csv(acc6)
+        names = sorted({str(x) for x in m6.get("model", pd.Series(dtype=str)).dropna().unique() if "COCO annotations" not in str(x)})
+        # the fold models and the final model carry the same architecture label, one of them extended
+        names = [n for n in names if not any(o != n and o.startswith(n) for o in names)]
+        model_label = ", ".join(names) if names else "not recorded by Stage 6 — re-run scripts/run_prediction_eval.py"
+    elif args.stage6 != "06_prediction":
+        raise SystemExit(f"{acc6} does not exist: Stage 6 has not been run for {args.stage6}. Run scripts/run_prediction_eval.py "
+                         f"--out {args.stage6} (with its --oof-masks/--test-masks), or build the report from another directory with --stage6.")
+    print(f"[stage7] manuscript numbers from {prediction_eval_dir} — {model_label}")
     manifest = pd.read_csv(resolve(cfg, Path(cfg["paths"]["manifest_dir"]) / "dataset_manifest.csv"))
     splits = json.loads(resolve(cfg, Path(cfg["paths"]["manifest_dir"]) / "splits.json").read_text())
     pairs = pd.read_csv(input_path(cfg, "same_patient_pairs_csv"), encoding="utf-8-sig")
@@ -52,17 +70,25 @@ def main() -> int:
     if per6.exists():
         p6 = pd.read_csv(per6)
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)",
-                       **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks.png", "Full pipeline (predicted masks, out-of-fold) vs clinical reference — uncorrected (primary)", subset_col=None)})
-        if "selected_mm_corrected" in p6.columns:
+                       **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks.png", f"Full pipeline (out-of-fold masks) vs clinical reference — {model_label}", subset_col=None)})
+        if "selected_mm_corrected" in p6.columns and int(p6["bottom_edge_offset_px"].iloc[0]):
             status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF), corrected (secondary)",
                            **F.scatter_and_bland_altman(p6, fig_dir / "measurement_predicted_masks_corrected.png",
                                                         f"Full pipeline, out-of-fold masks, corrected at mask level (lower gingiva edge {int(p6['bottom_edge_offset_px'].iloc[0]):+d} px) — secondary", value_col="selected_mm_corrected", subset_col=None)})
+        else:   # no post-hoc calibration for this model: a stale corrected figure would contradict the tables
+            (fig_dir / "measurement_predicted_masks_corrected.png").unlink(missing_ok=True)
     else:
         F.placeholder(fig_dir / "measurement_predicted_masks.png", "Measurement on predicted masks (OOF)", "Stage 6: scripts/run_prediction_eval.py")
         status.append({"item": "Figure: measurement vs clinical reference, predicted masks (OOF)", "status": "pending", "needs": "Stage 6 outputs", "path": str(fig_dir / "measurement_predicted_masks.png")})
+    # the learning curve and the boundary figure belong to the model the manuscript reports
+    lc_png = prediction_eval_dir / "learning_curve.png"
+    lc_src = lc_png if lc_png.exists() else (pred_dir / "learning_curve.png" if args.stage6 == "06_prediction" else lc_png)
     status.append({"item": "Figure: learning curve (Reviewers 2 & 4, Supplementary S1)",
-                   **F.copy_or_placeholder(pred_dir / "learning_curve.png", fig_dir / "learning_curve.png", "Learning curve", "outputs/05_predictions/learning_curve.png (workstation)")})
-    status.append({"item": "Figure: boundary error, upper/lower gingiva edge (Reviewer 2 #10)", **F.boundary_error_figure(pred_dir / "boundary_error.csv", fig_dir / "boundary_error.png")})
+                   **F.copy_or_placeholder(lc_src, fig_dir / "learning_curve.png", f"Learning curve — {model_label}",
+                                           f"{lc_png} (scripts/build_rfdetr_learning_curve.py on the workstation metrics)")})
+    b_test_csv = prediction_eval_dir / "boundary_error_test.csv"
+    b_src = b_test_csv if b_test_csv.exists() else (pred_dir / "boundary_error.csv" if args.stage6 == "06_prediction" else b_test_csv)
+    status.append({"item": "Figure: boundary error, upper/lower gingiva edge (Reviewer 2 #10)", **F.boundary_error_figure(b_src, fig_dir / "boundary_error.png")})
     status.append({"item": "Figure: GT overlay examples (Stage 2)", **F.copy_or_placeholder(outputs / "02_measure" / "gt_overlay_examples.png", fig_dir / "gt_overlay_examples.png", "GT overlays", "outputs/02_measure")})
 
     # ---------------- tables
@@ -80,8 +106,9 @@ def main() -> int:
     df, st = T.dataset_counts(manifest, splits, pairs); emit("dataset_counts", df, st, "Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4)")
     df, st = T.demographics(manifest); emit("demographics", df, st, "Demographic coverage (Reviewer 3)")
     df, st = T.measurement_accuracy(oracle_dir, prediction_eval_dir); emit("measurement_accuracy", df, st, "Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)")
-    df, st = T.segmentation_metrics(pred_dir); emit("segmentation_metrics_test", df, st, "Segmentation metrics on the fixed test set (per class)")
-    df, st = T.learning_curve(pred_dir); emit("learning_curve", df, st, "Learning curve points (Supplementary S1)")
+    df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir); emit("segmentation_metrics_test", df, st, "Segmentation metrics on the fixed test set (per class)")
+    lc_dir = prediction_eval_dir if (prediction_eval_dir / "learning_curve.csv").exists() else pred_dir
+    df, st = T.learning_curve(lc_dir); emit("learning_curve", df, st, "Learning curve points (Supplementary S1)")
     df, st = T.expert_agreement(expert_dir); emit("expert_agreement", df, st, "Model vs expert agreement (Reviewer 4: clinical validity)")
     intra = oracle_dir / "intra_observer.md"
     status.append({"item": "Table: intra-observer reliability of the reference", "status": "done" if intra.exists() else "pending", "path": str(intra)})
@@ -100,17 +127,32 @@ def main() -> int:
     if bset.exists():
         b6 = pd.read_csv(bset).set_index("set")
         a6 = b6.loc["(a) OOF, 145 reference high"]
-        tm = json.loads((pred_dir / "test_metrics.json").read_text()) if (pred_dir / "test_metrics.json").exists() else {}
+        prov6 = prediction_eval_dir / "segmentation_metrics.json"
+        block = json.loads(prov6.read_text()) if prov6.exists() else {}
+        tm = block.get("metrics", {}) if block.get("available") else {}
         pc = tm.get("per_class", {})
         off_px = int(cfg["measurement"].get("bottom_edge_offset_px", 0))
-        r2_10 = (f"The mAP gap between lip (seg mAP@50 {pc.get('dudak', {}).get('seg_map50', float('nan')):.2f}) and gingiva ({pc.get('diseti', {}).get('seg_map50', float('nan')):.2f}) is decomposed at the boundary: "
+        gap = (f"The mAP gap between lip (seg mAP@50 {pc['dudak']['seg_map50']:.2f}) and gingiva ({pc['diseti']['seg_map50']:.2f}) is decomposed at the boundary: "
+               if {"dudak", "diseti"} <= set(pc) else
+               f"The segmentation quality of the gingiva class is decomposed at the boundary ({block.get('evaluator', 'own evaluator')}; per-class mAP in `tables/segmentation_metrics_test.md`): ")
+        r2_10 = (gap + 
                  f"on the 145 reference images (OOF) the upper, lip-side gingiva edge is accurate (MAE {a6['gingiva_top_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_top_edge_bias_mm_mean']:+.2f} mm) while the lower, festooned gingival margin is placed systematically too low "
                  f"(MAE {a6['gingiva_bottom_edge_mae_mm_mean']:.2f} mm, bias {a6['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm; gingiva mask IoU {a6['gingiva_mask_iou_mean']:.2f}, lip IoU {a6['lip_mask_iou_mean']:.2f}). "
-                 f"The gap is therefore not model incapacity but a constant over-inclusion of the thin lower margin — the same shift in every fold and in the final model — which the pipeline reports as such and corrects post hoc as a secondary result "
-                 f"(mask-level correction: lower gingiva edge moved up {abs(off_px)} px before measurement, `06_prediction/offset_correction.md`, `offset_checks.md`). Low/normal smile lines lower the pooled test IoU further because their annotated gingiva is thin or absent (`06_prediction/boundary_by_set.md`)")
+                 + (f"The gap is therefore not model incapacity but a constant over-inclusion of the thin lower margin — the same shift in every fold and in the final model — which the pipeline reports as such and corrects post hoc as a secondary result "
+                    f"(mask-level correction: lower gingiva edge moved up {abs(off_px)} px before measurement, `06_prediction/offset_correction.md`, `offset_checks.md`). "
+                    if off_px else
+                    f"The gingiva class is a thin structure whose mAP is dominated by a few pixels of edge disagreement, while the edge that the measurement uses is accurate; "
+                    f"this model needs no post-hoc correction of the lower margin (bias {a6['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm), unlike the previous final model, whose "
+                    f"+0.66 mm over-inclusion and its calibration stay in the appendix (`06_prediction/offset_correction.md`). ")
+                 + f"Low/normal smile lines lower the pooled test IoU further because their annotated gingiva is thin or absent (`{args.stage6}/boundary_by_set.md`)")
     rev = f"""# REVIZYON_OZETI — reviewer items and the outputs that answer them
 
 Legend: ✅ available now, ⏳ pending (what is needed is written in `report_status.md`). Paths are relative to `outputs/07_report/` unless absolute.
+
+**Final model of this revision: {model_label}.** Every measurement number, figure and segmentation metric below comes from
+`outputs/{args.stage6}/`, which records the mask directory and the evaluator of each table. The YOLOv11x results
+(`outputs/06_prediction/`, `outputs/05_predictions/`) remain in the repository as the **previous final model**: they are cited
+as such in the architecture appendix and are never merged into the rows above.
 
 | reviewer item | answer in the revision | output |
 |---|---|---|

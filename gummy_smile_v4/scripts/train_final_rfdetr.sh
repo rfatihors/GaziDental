@@ -80,3 +80,7 @@ log "      --exclude-uids outputs/08_architecture/arch_test_high_uids.csv   # PL
 log "  $PY scripts/run_offset_correction.py --out 09_final_rfdetr \\"
 log "      --oof-masks outputs/05_predictions/oof_rfdetr --test-masks outputs/05_predictions/test_rfdetr \\"
 log "      --adopted-offset-px 0   # offset re-estimation, PLAN.md 6"
+log "  (in .venv-rfdetr) $RFPY scripts/rfdetr_train_predict.py --variant main --seed 42 --predict-only --evaluate --evaluate-split val"
+log "  $PY scripts/build_rfdetr_learning_curve.py --out 09_final_rfdetr   # PLAN.md 3"
+log "  $PY scripts/build_report.py --stage6 09_final_rfdetr               # Stage 7 from this model"
+log "  $PY scripts/run_architecture_comparison.py --aggregate-only        # closing table of RESULTS.md"

@@ -93,13 +93,9 @@ def build_per_image(rows: pd.DataFrame, meas: pd.DataFrame, stage3: pd.DataFrame
         per["columns_zeroed_frac"] = dc["columns_zeroed_frac"].fillna(0.0)
         per["qc_flags_corrected"] = dc["qc_flags"].fillna("")
         per["n_zeniths_found_corrected"] = dc["n_zeniths_found"]
-    else:
-        per["selected_mm_corrected"] = per["selected_mm"]
-        for i in range(1, 7):
-            per[f"selected_region_{i}_mm_corrected"] = per[f"selected_region_{i}_mm"]
-        per["n_columns_zeroed"] = 0
-        per["columns_zeroed_frac"] = 0.0
-    per["selected_label_corrected"] = per["selected_mm_corrected"].map(label_for_mm)
+        per["selected_label_corrected"] = per["selected_mm_corrected"].map(label_for_mm)
+    # With no correction there are no corrected columns at all: a duplicate column named
+    # "corrected" would suggest a calibration step that this pipeline does not have.
     per["bottom_edge_offset_px"] = float(bottom_edge_offset_px)
     for name, ka in k_alt.items():
         per[f"{name}_mm"] = df[f"{name}_px"] / ka
@@ -221,6 +217,11 @@ def main() -> int:
     ap.add_argument("--exclude-uids", default=None,
                     help="CSV with a uid column to leave out; the pre-registered sensitivity analysis of "
                          "outputs/09_final_rfdetr/PLAN.md 5 passes the 29 images used to choose the architecture")
+    ap.add_argument("--offset-px", type=float, default=None,
+                    help="mask-level lower-edge offset whose corrected values are reported as a secondary result; "
+                         "default: measurement.bottom_edge_offset_px from the config. 0 (the configured value since the "
+                         "RF-DETR Stage 6) means no post-hoc calibration at all: ONE result set, no corrected columns. "
+                         "Pass -13 to reproduce the YOLOv11x appendix.")
     ap.add_argument("--seg-metrics", default=None,
                     help="JSON with the final model's own detection/segmentation metrics; default: the file that "
                          "belongs to the predictor of --test-masks (YOLO: outputs/05_predictions/test_metrics.json, "
@@ -250,9 +251,13 @@ def main() -> int:
     mcfg = cfg["measurement"]
     combo = combo_name(mcfg["method"]["regioning"], mcfg["method"]["estimator"], bool(mcfg["method"]["anchored"]))
     k = float(mcfg["px_per_mm"])
-    off = bottom_edge_offset_from_config(cfg)
+    off = bottom_edge_offset_from_config(cfg) if args.offset_px is None else float(args.offset_px)
     off_mm = offset_mm_at(k, off)
-    corr_tag = f"lower gingiva edge {off:+.0f} px at mask level ({off_mm:+.2f} mm at {k:.2f} px/mm), secondary"
+    # off == 0: the post-hoc calibration step does not exist for this configuration, so there is ONE
+    # result set and no uncorrected/corrected duality anywhere in the report.
+    corrected = bool(off)
+    corr_tag = (f"lower gingiva edge {off:+.0f} px at mask level ({off_mm:+.2f} mm at {k:.2f} px/mm), secondary"
+                if corrected else "none (no post-hoc offset calibration)")
     deviations: list = []
 
     # ---- inputs
@@ -360,9 +365,12 @@ def main() -> int:
         # pre-registered on the images that played no part in that choice
         sets_a[f"(a) PRE-REGISTERED SENSITIVITY: excluding the {len(excluded)} images used to choose the architecture"] = not_selection
     def both(per_df: pd.DataFrame, sets: dict, masks_label: str) -> pd.DataFrame:
-        """Every set twice: uncorrected (PRIMARY) first, then corrected (secondary)."""
+        """One row per set, or two (uncorrected first, corrected second) when an offset is applied."""
         u = measurement_table(per_df, sets, n_boot=args.n_boot, seed=seed)
-        u.insert(1, "masks", masks_label); u.insert(2, "correction", "none, PRIMARY"); u["images_with_zeroed_columns"] = 0; u["zeroed_columns_frac_mean"] = 0.0
+        u.insert(1, "masks", masks_label); u.insert(2, "correction", "none, PRIMARY" if corrected else "none")
+        u["images_with_zeroed_columns"] = 0; u["zeroed_columns_frac_mean"] = 0.0
+        if not corrected:
+            return u.reset_index(drop=True)
         c = measurement_table(per_df, sets, value_col="selected_mm_corrected", n_boot=args.n_boot, seed=seed)
         c.insert(1, "masks", masks_label); c.insert(2, "correction", corr_tag)
         c["set"] = c["set"] + " — corrected"
@@ -393,8 +401,17 @@ def main() -> int:
     acc_all["masks_dir"] = [src_of[m][1] for m in acc_all["masks"]]
     acc_all = acc_all[[c for c in MEAS_COLS if c in acc_all.columns]]
     acc_all.to_csv(out_dir / "measurement_accuracy.csv", index=False)
-    prim, prim_c = acc_all.iloc[0], acc_all.iloc[1]
-    sec, sec_c = acc_b.iloc[0], acc_b.iloc[1]
+    def row_of(df: pd.DataFrame, set_name: str, corr: bool = False) -> pd.Series:
+        """One row of a measurement table by its set name — position depends on whether a correction exists."""
+        return df[df["set"] == (set_name + " — corrected" if corr else set_name)].iloc[0]
+
+    set_primary, set_hold = list(sets_a)[0], list(sets_a)[1]
+    set_b = "(b) final model masks, test high images [secondary set]"
+    prim, hold = row_of(acc_all, set_primary), row_of(acc_all, set_hold)
+    sec = row_of(acc_b, set_b)
+    prim_c = row_of(acc_all, set_primary, True) if corrected else None
+    hold_c = row_of(acc_all, set_hold, True) if corrected else None
+    sec_c = row_of(acc_b, set_b, True) if corrected else None
     gt_all = acc_gt.iloc[0]
     fb = fallback_rate(per)
     fb_gt = fallback_rate(stage3)
@@ -405,8 +422,20 @@ def main() -> int:
     ok_b = per_t["selected_mm"].notna() & per_t["ref_mm"].notna()
     ct_b = label_confusion(per_t.loc[ok_b, "ref_label"], per_t.loc[ok_b, "selected_label"])
     ct_gt = label_confusion(per.loc[ok_a, "ref_label"], per.loc[ok_a, "gt_label"])
-    ct_a_c = label_confusion(per.loc[ok_a, "ref_label"], per.loc[ok_a, "selected_label_corrected"])
-    ct_b_c = label_confusion(per_t.loc[ok_b, "ref_label"], per_t.loc[ok_b, "selected_label_corrected"])
+    ct_a_c = label_confusion(per.loc[ok_a, "ref_label"], per.loc[ok_a, "selected_label_corrected"]) if corrected else None
+    ct_b_c = label_confusion(per_t.loc[ok_b, "ref_label"], per_t.loc[ok_b, "selected_label_corrected"]) if corrected else None
+    corr_a_md = (f"""
+### (a) corrected ({corr_tag})
+observed agreement {100 * prim_c['threshold_agreement']:.1f} %, linear-weighted κ {prim_c['threshold_kappa_linear']:.3f} [{prim_c['threshold_kappa_linear_ci_low']:.3f}, {prim_c['threshold_kappa_linear_ci_high']:.3f}]; images with zeroed columns: {int(prim_c['images_with_zeroed_columns'])}
+
+{md_table(ct_a_c.reset_index())}
+""" if corrected else "")
+    corr_b_md = (f"""
+### (b) corrected ({corr_tag})
+observed agreement {100 * sec_c['threshold_agreement']:.1f} %, linear-weighted κ {sec_c['threshold_kappa_linear']:.3f} [{sec_c['threshold_kappa_linear_ci_low']:.3f}, {sec_c['threshold_kappa_linear_ci_high']:.3f}]; images with zeroed columns: {int(sec_c['images_with_zeroed_columns'])}
+
+{md_table(ct_b_c.reset_index())}
+""" if corrected else "")
     class_md = f"""# Threshold-class agreement (Table 1 labels; a measurement check, not a clinical validation)
 
 Rows = clinical reference label, columns = pipeline label. Overlapping bands give combined labels (E1-E2, E2-E3).
@@ -416,21 +445,13 @@ observed agreement {100 * prim['threshold_agreement']:.1f} %, linear-weighted κ
 
 {md_table(ct_a.reset_index())}
 
-### (a) corrected ({corr_tag})
-observed agreement {100 * prim_c['threshold_agreement']:.1f} %, linear-weighted κ {prim_c['threshold_kappa_linear']:.3f} [{prim_c['threshold_kappa_linear_ci_low']:.3f}, {prim_c['threshold_kappa_linear_ci_high']:.3f}]; images with zeroed columns: {int(prim_c['images_with_zeroed_columns'])}
-
-{md_table(ct_a_c.reset_index())}
-
+{corr_a_md}
 ## (b) final model, test high images (n = {int(ok_b.sum())}) — secondary set
 observed agreement {100 * sec['threshold_agreement']:.1f} %, linear-weighted κ {sec['threshold_kappa_linear']:.3f} [{sec['threshold_kappa_linear_ci_low']:.3f}, {sec['threshold_kappa_linear_ci_high']:.3f}]
 
 {md_table(ct_b.reset_index())}
 
-### (b) corrected ({corr_tag})
-observed agreement {100 * sec_c['threshold_agreement']:.1f} %, linear-weighted κ {sec_c['threshold_kappa_linear']:.3f} [{sec_c['threshold_kappa_linear_ci_low']:.3f}, {sec_c['threshold_kappa_linear_ci_high']:.3f}]; images with zeroed columns: {int(sec_c['images_with_zeroed_columns'])}
-
-{md_table(ct_b_c.reset_index())}
-
+{corr_b_md}
 ## GT masks, all reference images (Stage 3 geometry only)
 observed agreement {100 * gt_all['threshold_agreement']:.1f} %, linear-weighted κ {gt_all['threshold_kappa_linear']:.3f} [{gt_all['threshold_kappa_linear_ci_low']:.3f}, {gt_all['threshold_kappa_linear_ci_high']:.3f}]
 
@@ -508,6 +529,11 @@ Pixel units of the edge metrics:
     (out_dir / "boundary_by_set.md").write_text(boundary_md, encoding="utf-8")
     (out_dir / "segmentation_metrics.md").write_text(
         seg_metrics_md(seg_metrics, prov_test["label"], rel_test, seg_evaluator, rel_to(seg_path, ROOT)), encoding="utf-8")
+    # the same block with its provenance attached, so Stage 7 reads ONE file and cannot pick up
+    # another model's metrics by convention
+    (out_dir / "segmentation_metrics.json").write_text(json.dumps(
+        {"model": prov_test["label"], "masks": rel_test, "evaluator": seg_evaluator,
+         "source": rel_to(seg_path, ROOT), "available": bool(seg_metrics), "metrics": seg_metrics}, indent=1), encoding="utf-8")
 
     # ---- 6. error decomposition (a)
     dec = error_decomposition(per)
@@ -545,24 +571,26 @@ Pixel metrics converted to mm; slope in mm of measurement error per mm (or per u
     pd.concat([tt, tg], ignore_index=True).to_csv(out_dir / "tooth_level.csv", index=False)
     mm_ref = tooth_mixed_models(long_ref)
     mm_gt = tooth_mixed_models(long_gt)
-    per_c = per.copy()
-    for i in range(1, 7):
-        per_c[f"selected_region_{i}_mm"] = per[f"selected_region_{i}_mm_corrected"]
-    long_ref_c = tooth_long(per_c, TEETH, "ref_mm_", group_col="patient_id")
-    tc = tooth_table(long_ref_c); tc.insert(0, "comparison", "OOF region i (corrected, secondary) vs reference tooth i")
-    pd.concat([tt, tg, tc], ignore_index=True).to_csv(out_dir / "tooth_level.csv", index=False)
-    mm_ref_c = tooth_mixed_models(long_ref_c)
+    tooth_parts = [tt, tg]
+    mixed_corr_md = ""
+    if corrected:
+        per_c = per.copy()
+        for i in range(1, 7):
+            per_c[f"selected_region_{i}_mm"] = per[f"selected_region_{i}_mm_corrected"]
+        long_ref_c = tooth_long(per_c, TEETH, "ref_mm_", group_col="patient_id")
+        tc = tooth_table(long_ref_c); tc.insert(0, "comparison", "OOF region i (corrected, secondary) vs reference tooth i")
+        tooth_parts.append(tc)
+        mixed_corr_md = "\n" + mixed_md(f"Pipeline (OOF, corrected: {corr_tag}) − clinical reference", tooth_mixed_models(long_ref_c)) + "\n"
+    pd.concat(tooth_parts, ignore_index=True).to_csv(out_dir / "tooth_level.csv", index=False)
     mixed_txt = f"""# Tooth-level analysis with linear mixed models (a: OOF masks)
 
 Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `patient` = same-patient cluster from the manifest, {per['patient_id'].nunique()} clusters for {len(per)} images). Region i (left-to-right, {combo}) is compared with reference tooth i (FDI {TEETH}); alignment is approximate and images where the zenith regioning fell back to equal splits are flagged `alignment_uncertain` ({int(per['alignment_uncertain'].sum())} images).
 
 ## Per tooth
-{md_table(pd.concat([tt, tg, tc], ignore_index=True))}
+{md_table(pd.concat(tooth_parts, ignore_index=True))}
 
-{mixed_md("Pipeline (OOF, uncorrected, PRIMARY) − clinical reference", mm_ref)}
-
-{mixed_md(f"Pipeline (OOF, corrected: {corr_tag}) − clinical reference", mm_ref_c)}
-
+{mixed_md("Pipeline (OOF, PRIMARY) − clinical reference" if not corrected else "Pipeline (OOF, uncorrected, PRIMARY) − clinical reference", mm_ref)}
+{mixed_corr_md}
 {mixed_md("Pipeline (OOF) − GT-mask measurement (segmentation part only)", mm_gt)}
 """
     (out_dir / "mixed_models.md").write_text(mixed_txt, encoding="utf-8")
@@ -571,8 +599,12 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
     fig_dir = out_dir / "figures"; fig_dir.mkdir(exist_ok=True)
     scatter_and_bland_altman(per, fig_dir / "measurement_oof.png", f"(a) Full pipeline, out-of-fold masks vs clinical reference — {combo}, {k:.2f} px/mm", subset_col=None)
     scatter_and_bland_altman(per_t, fig_dir / "measurement_test_high.png", f"(b) Final model, test high images vs clinical reference — {combo}, {k:.2f} px/mm", subset_col=None)
-    scatter_and_bland_altman(per, fig_dir / "measurement_oof_corrected.png", f"(a) corrected, secondary: offset_px {off:+.0f} — out-of-fold masks vs clinical reference", value_col="selected_mm_corrected", subset_col=None)
-    scatter_and_bland_altman(per_t, fig_dir / "measurement_test_high_corrected.png", f"(b) corrected, secondary: offset_px {off:+.0f} — final model, test high images", value_col="selected_mm_corrected", subset_col=None)
+    if corrected:
+        scatter_and_bland_altman(per, fig_dir / "measurement_oof_corrected.png", f"(a) corrected, secondary: offset_px {off:+.0f} — out-of-fold masks vs clinical reference", value_col="selected_mm_corrected", subset_col=None)
+        scatter_and_bland_altman(per_t, fig_dir / "measurement_test_high_corrected.png", f"(b) corrected, secondary: offset_px {off:+.0f} — final model, test high images", value_col="selected_mm_corrected", subset_col=None)
+    else:                                   # no calibration step: a stale corrected figure would be a lie
+        for stale in ("measurement_oof_corrected.png", "measurement_test_high_corrected.png"):
+            (fig_dir / stale).unlink(missing_ok=True)
     boundary_figure({"(a) OOF high\nn=145": (SET_COLOURS["a"], b_oof), "(b) test high\nfinal model": (SET_COLOURS["b"], b_sets["(b) test high, final model"]),
                      "(c) test low": (SET_COLOURS["low"], b_sets["(c) test low"]), "(c) test normal": (SET_COLOURS["normal"], b_sets["(c) test normal"])}, k, fig_dir / "boundary_by_set.png")
     decomposition_figure(dec_per, b_oof.set_index("uid"), k, fig_dir / "error_decomposition.png")
@@ -591,25 +623,48 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
         deviations.append(f"`{where}` has no `per_class` block (box/mask mAP, P, R, F1 of the final model on the test set): the workstation eval ran the boundary stage only (`--metrics-only`) and `runs/eval/DONE` was not written. Re-run `python -m gsv4.train.evaluate_test` on the workstation (validation runs, predictions are reused) and pull; the detection metrics table of Stage 7 stays pending until then.")
     nan_iou = int(b_test["gingiva_mask_iou"].isna().sum()); nan_edge = int(b_test["gingiva_top_edge_mae_px"].isna().sum())
     deviations.append(f"Test-set boundary table: gingiva IoU undefined on {nan_iou} images (both masks empty) and edge errors undefined on {nan_edge} images (no column with gingiva in both masks) — all low/normal; reported as presence categories, not as zeros.")
-    deviations.append(f"Mask-level correction ({off:+.0f} px): columns whose bottom run was shorter than the shift became 0 (never negative) in "
-                      f"{int((per['n_columns_zeroed'] > 0).sum())} of {len(per)} OOF images (mean fraction of gingiva columns {100 * per['columns_zeroed_frac'].mean():.2f} %, max {100 * per['columns_zeroed_frac'].max():.1f} %) "
-                      f"and {int((per_t['n_columns_zeroed'] > 0).sum())} of {len(per_t)} test images (mean {100 * per_t['columns_zeroed_frac'].mean():.2f} %). "
-                      f"Zenith fallback on the corrected masks: {int(per['qc_flags_corrected'].str.contains(QCFlag.ZENITH_DETECTION_FAILED.value).sum())} images (uncorrected {int(per['alignment_uncertain'].sum())}).")
+    if corrected:
+        deviations.append(f"Mask-level correction ({off:+.0f} px): columns whose bottom run was shorter than the shift became 0 (never negative) in "
+                          f"{int((per['n_columns_zeroed'] > 0).sum())} of {len(per)} OOF images (mean fraction of gingiva columns {100 * per['columns_zeroed_frac'].mean():.2f} %, max {100 * per['columns_zeroed_frac'].max():.1f} %) "
+                          f"and {int((per_t['n_columns_zeroed'] > 0).sum())} of {len(per_t)} test images (mean {100 * per_t['columns_zeroed_frac'].mean():.2f} %). "
+                          f"Zenith fallback on the corrected masks: {int(per['qc_flags_corrected'].str.contains(QCFlag.ZENITH_DETECTION_FAILED.value).sum())} images (uncorrected {int(per['alignment_uncertain'].sum())}).")
+    else:
+        deviations.append("No post-hoc offset calibration: `measurement.bottom_edge_offset_px = 0`, so this report has ONE result set and no "
+                          "uncorrected/corrected pair. The decision and its reasons are in `outputs/09_final_rfdetr/PLAN.md` (Amendment 3); the "
+                          "offset analysis itself stays in the appendix as a finding about the YOLO family "
+                          "(`outputs/06_prediction/offset_correction.md`, `offset_checks.md`, `outputs/08_architecture/FINDINGS.md`).")
     if fb["reevaluate"]:
         deviations.append(f"Zenith-regioning fallback on {fb['n_fallback']}/{fb['n']} OOF images ({100 * fb['frac']:.0f} %) exceeds the pre-registered 30 % — {alt} row in measurement_accuracy.csv is the re-evaluation.")
     (out_dir / "SAPMALAR.md").write_text("# Aşama 6 — sapmalar ve notlar\n\n" + "\n".join(f"- {d}" for d in deviations) + "\n", encoding="utf-8")
 
     # ---- 10. summaries
-    hold, hold_c = acc_all.iloc[2], acc_all.iloc[3]
-    bprime = acc_all[acc_all["set"].str.startswith("(b')") & (acc_all["correction"] == "none, PRIMARY")].iloc[0]
+    bprime = row_of(acc_all, next(n for n in sets_a if n.startswith("(b')")))
     fmt_row = lambda r: (f"n = {int(r['n'])}: MAE {r['mae']:.3f} mm, RMSE {r['rmse']:.3f} mm, r {r['r']:.3f}, ICC(2,1) {r['icc2_1']:.3f} [{r['icc2_1_ci_low']:.3f}, {r['icc2_1_ci_high']:.3f}], "
                          f"bias {r['ba_bias']:+.3f} mm [{r['ba_bias_ci_low']:+.3f}, {r['ba_bias_ci_high']:+.3f}], LoA {r['ba_loa_low']:.2f} to {r['ba_loa_high']:.2f} mm, "
                          f"proportional-bias slope {r['ba_prop_slope']:+.3f} (p = {r['ba_prop_p']:.3f}); within 0.5 mm {100 * r['within_0_5_mm']:.0f} %, within 1 mm {100 * r['within_1_mm']:.0f} %; "
                          f"label agreement {100 * r['threshold_agreement']:.1f} %, linear-weighted κ {r['threshold_kappa_linear']:.3f} [{r['threshold_kappa_linear_ci_low']:.3f}, {r['threshold_kappa_linear_ci_high']:.3f}]")
+    if corrected:
+        calib_note = (f"**Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction "
+                      f"(`measurement.bottom_edge_offset_px = {off:+.0f}`: the lower gingiva edge of the predicted mask is moved up by "
+                      f"{abs(off):.0f} px in every column before the thickness profile is built, {off_mm:+.2f} mm at the global scale; estimated on the "
+                      f"Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, "
+                      f"primary first.")
+        corr_primary_md = (f"### Secondary — same set, corrected ({corr_tag})\n"
+                           f"{fmt_row(prim_c)}. Images with columns zeroed by the shift: {int(prim_c['images_with_zeroed_columns'])} "
+                           f"(mean {100 * prim_c['zeroed_columns_frac_mean']:.2f} % of gingiva columns).\n"
+                           f"Stage-3 holdout only, corrected: {fmt_row(hold_c)}.\n")
+        corr_secondary_md = f"\nCorrected ({corr_tag}): {fmt_row(sec_c)}. Images with zeroed columns: {int(sec_c['images_with_zeroed_columns'])}."
+    else:
+        calib_note = ("**There is one result set: no post-hoc calibration is applied** "
+                      "(`measurement.bottom_edge_offset_px = 0`). The mask-level offset of the YOLOv11x pipeline was estimated for that model and is "
+                      "not carried over; for this one it was re-estimated and deliberately dropped after seeing the results "
+                      "(`outputs/09_final_rfdetr/PLAN.md`, Amendment 3). The offset analysis remains in the appendix as a finding about the YOLO family.")
+        corr_primary_md = ""
+        corr_secondary_md = ""
     show = acc_all[["set", "model", "correction", "n", "mae", "rmse", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high", "ba_bias", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p", "threshold_agreement", "threshold_kappa_linear"]]
     summary = f"""# Stage 6 — full pipeline on predicted masks
 
-Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction of config.yaml (`measurement.bottom_edge_offset_px = {off:+.0f}`: the lower gingiva edge of the predicted mask is moved up by {abs(off):.0f} px in every column before the thickness profile is built, {off_mm:+.2f} mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
+Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. {calib_note} Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
 
 ## Provenance of every number below
 | what | model | masks | metrics evaluator |
@@ -626,15 +681,11 @@ Boundary and IoU tables are computed here from exactly these masks. An earlier f
 **Segmentation failure: n = {int(prim['n_segmentation_failure'])} of {len(per)} ({100 * prim['n_segmentation_failure'] / len(per):.1f} %)** — {', '.join(chk['empty_gingiva_prediction']) or 'none'}: no gingiva instance predicted, so no measurement exists; excluded from the mm and label metrics above and reported as a separate failure category (a deployed system must flag such images for manual review rather than output a value).
 Stage-3 holdout images only (the scale was never fitted on them): {fmt_row(hold)}.
 
-### Secondary — same set, corrected ({corr_tag})
-{fmt_row(prim_c)}. Images with columns zeroed by the shift: {int(prim_c['images_with_zeroed_columns'])} (mean {100 * prim_c['zeroed_columns_frac_mean']:.2f} % of gingiva columns).
-Stage-3 holdout only, corrected: {fmt_row(hold_c)}.
-Same method and scale on the ground-truth masks (Stage 3): MAE {gt_all['mae']:.3f} mm, r {gt_all['r']:.3f}, ICC {gt_all['icc2_1']:.3f}, bias {gt_all['ba_bias']:+.3f} mm → the segmentation adds {prim['mae'] - gt_all['mae']:+.3f} mm MAE and {prim['ba_bias'] - gt_all['ba_bias']:+.3f} mm bias (see `error_decomposition.md`).
+{corr_primary_md}Same method and scale on the ground-truth masks (Stage 3): MAE {gt_all['mae']:.3f} mm, r {gt_all['r']:.3f}, ICC {gt_all['icc2_1']:.3f}, bias {gt_all['ba_bias']:+.3f} mm → the segmentation adds {prim['mae'] - gt_all['mae']:+.3f} mm MAE and {prim['ba_bias'] - gt_all['ba_bias']:+.3f} mm bias (see `error_decomposition.md`).
 
 ## Secondary — (b) final model, {int(sec['n'])} test-set high images
 {fmt_row(sec)}.
-The fold models on the same images (b'): MAE {bprime['mae']:.3f} mm, bias {bprime['ba_bias']:+.3f} mm, ICC {bprime['icc2_1']:.3f}.
-Corrected ({corr_tag}): {fmt_row(sec_c)}. Images with zeroed columns: {int(sec_c['images_with_zeroed_columns'])}.
+The fold models on the same images (b'): MAE {bprime['mae']:.3f} mm, bias {bprime['ba_bias']:+.3f} mm, ICC {bprime['icc2_1']:.3f}.{corr_secondary_md}
 
 ## Error decomposition (a)
 Segmentation part: bias {ds['e_seg_bias']:+.3f} mm, MAE {ds['e_seg_mae']:.3f} mm; geometry part (Stage 3): bias {ds['e_meas_bias']:+.3f} mm, MAE {ds['e_meas_mae']:.3f} mm; variance shares {100 * ds['share_seg']:.0f} % / {100 * ds['share_meas']:.0f} % / covariance {100 * ds['share_cov']:+.0f} %. The segmentation error follows the lower gingiva edge: bias {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm (predicted gingiva extends below the annotated edge), upper edge bias {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm — `error_decomposition.md`, figure `figures/error_decomposition.png`.
@@ -663,16 +714,27 @@ Zenith regioning ({combo}) fell back to equal splits on {fb['n_fallback']} of {f
 See `SAPMALAR.md`.
 """
     (out_dir / "prediction_summary.md").write_text(summary, encoding="utf-8")
+    if corrected:
+        ozet_calib = f"Post-hoc ofset düzeltmesi (maske düzeyi, {off:+.0f} px = {off_mm:+.2f} mm) ikincil sonuç olarak her tabloda birlikte veriliyor."
+        ozet_corr = (f"  - **İkincil, düzeltilmiş (maske düzeyi, config `bottom_edge_offset_px` = {off:+.0f} px = {off_mm:+.2f} mm):** "
+                     f"MAE {prim_c['mae']:.2f} mm, ICC {prim_c['icc2_1']:.3f}, sapma {prim_c['ba_bias']:+.2f}, sınıf uyumu {100 * prim_c['threshold_agreement']:.0f} %, "
+                     f"κ {prim_c['threshold_kappa_linear']:.2f} [{prim_c['threshold_kappa_linear_ci_low']:.2f}, {prim_c['threshold_kappa_linear_ci_high']:.2f}]; "
+                     f"holdout MAE {hold_c['mae']:.2f}; kaydırmayla sıfırlanan sütunu olan görüntü {int(prim_c['images_with_zeroed_columns'])}.\n")
+        ozet_corr_b = f" Düzeltilmiş: MAE {sec_c['mae']:.2f}, sapma {sec_c['ba_bias']:+.2f}, κ {sec_c['threshold_kappa_linear']:.2f}."
+    else:
+        ozet_calib = ("**Post-hoc ofset düzeltmesi yok** (`bottom_edge_offset_px = 0`): tek sonuç seti, düzeltilmiş/düzeltilmemiş ayrımı yok. "
+                      "Karar ve gerekçesi `outputs/09_final_rfdetr/PLAN.md` Amendment 3'te; ofset analizi YOLO ailesine özgü bir bulgu olarak ekte kalıyor.")
+        ozet_corr = ""
+        ozet_corr_b = ""
     ozet = f"""# Aşama 6 — Türkçe özet (tahmin maskeleri üzerinde doğruluk)
 
 - **Model ve kaynak:** OOF maskeleri {prov_oof['label']} → `{rel_oof}`; final model {prov_test['label']} → `{rel_test}`. Sınır/IoU tabloları bu maskelerden burada hesaplandı; tespit/segmentasyon metrikleri yalnız bu modelin kendi değerlendiricisinden ({seg_evaluator}) alınır, başka bir modelin dosyası kullanılmaz.
 - OOF kontrolü: {chk['n_rows']}/{chk['n_reference']} görüntü, hepsi `{list(chk['mask_source'])[0]}`, fold başına {list(chk['folds'].values())}; **segmentasyon başarısızlığı n = {len(chk['empty_gingiva_prediction'])}** ({', '.join(chk['empty_gingiva_prediction']) or 'yok'}: dişeti örneği yok → mm değeri yok; ayrı kategori olarak raporlanır, mm/sınıf metriklerine girmez).
-- Yöntem ve ölçek sabit (Aşama 3, GT maske): **{combo}**, **{k:.2f} px/mm**; tahmin maskelerinde yeniden seçim/yeniden uydurma yapılmadı.
+- Yöntem ve ölçek sabit (Aşama 3, GT maske): **{combo}**, **{k:.2f} px/mm**; tahmin maskelerinde yeniden seçim/yeniden uydurma yapılmadı. {ozet_calib}
 - **Birincil (a) — 145 ölçümlü high, OOF maske (ölçülen n = {int(prim['n'])}):** MAE {prim['mae']:.2f} mm, RMSE {prim['rmse']:.2f}, r {prim['r']:.3f}, ICC(2,1) {prim['icc2_1']:.3f} [{prim['icc2_1_ci_low']:.3f}, {prim['icc2_1_ci_high']:.3f}]; sapma {prim['ba_bias']:+.2f} mm, LoA {prim['ba_loa_low']:.2f}…{prim['ba_loa_high']:.2f}; sınıf uyumu {100 * prim['threshold_agreement']:.0f} %, doğrusal ağırlıklı κ {prim['threshold_kappa_linear']:.2f} [{prim['threshold_kappa_linear_ci_low']:.2f}, {prim['threshold_kappa_linear_ci_high']:.2f}].
   - Aynı yöntem GT maskede (Aşama 3): MAE {gt_all['mae']:.2f}, sapma {gt_all['ba_bias']:+.2f} → segmentasyonun eklediği: MAE {prim['mae'] - gt_all['mae']:+.2f} mm, sapma {ds['e_seg_bias']:+.2f} mm (alt dişeti kenarı GT'den {ba['gingiva_bottom_edge_bias_mm_mean']:.2f} mm aşağıda çiziliyor; üst kenar {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm).
   - Aşama 3 holdout'u (ölçek hiç görmedi, n = {int(hold['n'])}): MAE {hold['mae']:.2f}, ICC {hold['icc2_1']:.3f}.
-  - **İkincil, düzeltilmiş (maske düzeyi, config `bottom_edge_offset_px` = {off:+.0f} px = {off_mm:+.2f} mm):** MAE {prim_c['mae']:.2f} mm, ICC {prim_c['icc2_1']:.3f}, sapma {prim_c['ba_bias']:+.2f}, sınıf uyumu {100 * prim_c['threshold_agreement']:.0f} %, κ {prim_c['threshold_kappa_linear']:.2f} [{prim_c['threshold_kappa_linear_ci_low']:.2f}, {prim_c['threshold_kappa_linear_ci_high']:.2f}]; holdout MAE {hold_c['mae']:.2f}; kaydırmayla sıfırlanan sütunu olan görüntü {int(prim_c['images_with_zeroed_columns'])}.
-- **İkincil (b) — test high {int(sec['n'])} görüntü, final model:** MAE {sec['mae']:.2f} mm, r {sec['r']:.3f}, ICC {sec['icc2_1']:.3f}, sapma {sec['ba_bias']:+.2f}; κ {sec['threshold_kappa_linear']:.2f} [{sec['threshold_kappa_linear_ci_low']:.2f}, {sec['threshold_kappa_linear_ci_high']:.2f}] (n küçük, GA geniş). Düzeltilmiş: MAE {sec_c['mae']:.2f}, sapma {sec_c['ba_bias']:+.2f}, κ {sec_c['threshold_kappa_linear']:.2f}.
+{ozet_corr}- **İkincil (b) — test high {int(sec['n'])} görüntü, final model:** MAE {sec['mae']:.2f} mm, r {sec['r']:.3f}, ICC {sec['icc2_1']:.3f}, sapma {sec['ba_bias']:+.2f}; κ {sec['threshold_kappa_linear']:.2f} [{sec['threshold_kappa_linear_ci_low']:.2f}, {sec['threshold_kappa_linear_ci_high']:.2f}] (n küçük, GA geniş).{ozet_corr_b}
 - **Segmentasyon kalitesi:** (a) dişeti IoU {ba['gingiva_mask_iou_mean']:.3f}, üst kenar MAE {ba['gingiva_top_edge_mae_mm_mean']:.2f} mm, alt kenar MAE {ba['gingiva_bottom_edge_mae_mm_mean']:.2f} mm (sapma {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f}), dudak IoU {ba['lip_mask_iou_mean']:.3f}; (b) IoU {bb['gingiva_mask_iou_mean']:.3f}; (c) tüm test {int(bc['n'])} görüntü IoU {bc['gingiva_mask_iou_mean']:.3f} — low {b_low['gingiva_mask_iou_mean']:.3f}, normal {b_norm['gingiva_mask_iou_mean']:.3f}. Low/normal'da düşük IoU beklenen bir durum: dişeti ince ya da görünmüyor (low'da GT dişeti genişliği medyan {b_low['gingiva_n_columns_gt_median']:.0f} sütun, high'da {ba['gingiva_n_columns_gt_median']:.0f}); kenar hataları high'dan büyük değil. Birincil sonuç (a) üzerinden verilir.
 - Zenith bölgeleme (C) geri düşme oranı OOF'ta {100 * fb['frac']:.0f} % (GT'de {100 * fb_gt['frac']:.0f} %); %30 kuralı {'TETİKLENDİ' if fb['reevaluate'] else 'tetiklenmedi'}; {alt} satırı tabloda.
 - Diş düzeyi karma model (hasta rastgele kesişim): sapma {mm_ref[0]['fixed_effects'].loc['Intercept', 'estimate']:+.2f} mm [{mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_low']:+.2f}, {mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_high']:+.2f}].

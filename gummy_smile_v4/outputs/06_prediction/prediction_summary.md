@@ -1,6 +1,6 @@
 # Stage 6 — full pipeline on predicted masks
 
-Method **C_p25**, global scale **16.84 px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction of config.yaml (`measurement.bottom_edge_offset_px = -13`: the lower gingiva edge of the predicted mask is moved up by 13 px in every column before the thickness profile is built, -0.77 mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Bootstrap CIs of κ: 2000 resamples, seed 42.
+Method **C_p25**, global scale **16.84 px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction (`measurement.bottom_edge_offset_px = -13`: the lower gingiva edge of the predicted mask is moved up by 13 px in every column before the thickness profile is built, -0.77 mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Bootstrap CIs of κ: 2000 resamples, seed 42.
 
 ## Provenance of every number below
 | what | model | masks | metrics evaluator |

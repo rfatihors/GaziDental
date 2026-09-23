@@ -85,16 +85,21 @@ thresholds:
 
 measurement:
   px_per_mm: 16.8397          # global scale, fitted on the oracle dev subset (Stage 3)
-  # Post-hoc calibration (adopted 16 Sep 2026, Stage 6 addendum, MASK LEVEL): the model includes
-  # a fixed number of pixels too many at the LOWER gingiva edge. The lower edge of the predicted
-  # gingiva mask is moved up by |bottom_edge_offset_px| in every column before the thickness
-  # profile is built (a column whose run is shorter becomes 0, never negative; count reported).
-  # Estimated on the Stage-3 dev subset of the out-of-fold predictions (mask-level grid), validated
-  # on holdout and on the test set (06_prediction/offset_correction.md, offset_checks.md).
-  # mm conversion uses the px_per_mm valid for the image (global here, expert scale in Stage 4).
-  # Uncorrected values are PRIMARY, corrected values SECONDARY in every table.
+  # Post-hoc calibration: NONE (0) since the final model became RF-DETR-Seg Large @624
+  # (23 Sep 2026, outputs/09_final_rfdetr/PLAN.md Amendment 3). The -13 px mask-level offset
+  # adopted on 16 Sep 2026 was estimated for the YOLOv11x pipeline, which drew the lower gingiva
+  # edge +0.66 mm too low; RF-DETR does not (lower-edge bias +0.08 mm), and applying the YOLO
+  # offset to it makes the measurement worse (MAE 0.59 vs 0.52 mm). Its own re-estimated constant
+  # (0.254 mm) was rejected too: the gain is below the reference's own observer noise and a
+  # pipeline without a post-hoc calibration step is worth more than it. Stage 6 therefore reports
+  # ONE result set, with no uncorrected/corrected pair.
+  # The mechanism stays implemented and is reproducible for the YOLO appendix: a negative value
+  # moves the lower edge of the predicted gingiva mask up by that many pixels in every column
+  # before the thickness profile is built (a column whose run is shorter becomes 0, never
+  # negative; count reported), and `run_prediction_eval.py --offset-px -13` restores the YOLO
+  # numbers (06_prediction/offset_correction.md, offset_checks.md).
   # (The value-level key `offset_px` is removed; the loader rejects it.)
-  bottom_edge_offset_px: -13
+  bottom_edge_offset_px: 0
   method: {regioning: C, estimator: p25, anchored: false}  # selected in Stage 3 on dev MAE
   regions: 6
   median_filter_frac: 0.01        # of the measurement-window width, forced odd

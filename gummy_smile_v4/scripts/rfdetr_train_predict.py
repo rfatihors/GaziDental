@@ -184,8 +184,13 @@ def predict(model, ds: Path, out_masks: Path, csv_path: Path, tag: str, seed: in
 
 
 def evaluate_split(model, ds: Path, spec: dict, args) -> dict:
-    """RF-DETR's own COCO evaluation of the split this variant is judged on (PLAN.md §4)."""
-    split = spec.get("evaluate")
+    """RF-DETR's own COCO evaluation of the split this variant is judged on (PLAN.md §4).
+
+    ``--evaluate-split`` overrides that split: the learning curve compares its points on ``val``
+    (PLAN.md §3), so the 100 % point — the final model, which is judged on ``test`` — has to be
+    evaluated there too before it can join the curve.
+    """
+    split = getattr(args, "evaluate_split", None) or spec.get("evaluate")
     if not split or args.probe:
         return {}
     print(f"[rfdetr] COCO evaluation on the {split} split")
@@ -194,14 +199,19 @@ def evaluate_split(model, ds: Path, spec: dict, args) -> dict:
 
 
 def write_metrics(metrics: dict, out: Path, tag: str, spec: dict, args) -> None:
-    """rfdetr_metrics_<tag>.json — the ONLY source Stage 6 quotes for this model's segmentation
-    metrics; it never falls back to another framework's file (PLAN.md §4)."""
+    """rfdetr_metrics_<tag>[_<split>].json — the ONLY source Stage 6 quotes for this model's
+    segmentation metrics; it never falls back to another framework's file (PLAN.md §4).
+
+    The split suffix appears only when ``--evaluate-split`` overrode the variant's own split, so the
+    file Stage 6 looks for keeps its name and a learning-curve evaluation lands beside it."""
     if not metrics:
         print("[rfdetr] WARNING: the COCO evaluation returned nothing; no metrics file written")
         return
-    path = out / f"rfdetr_metrics_{tag}.json"
+    split = getattr(args, "evaluate_split", None) or spec["evaluate"]
+    suffix = f"_{split}" if getattr(args, "evaluate_split", None) else ""
+    path = out / f"rfdetr_metrics_{tag}{suffix}.json"
     path.write_text(json.dumps({"variant": args.variant, "model_label": tag.rsplit("_s", 1)[0], "seed": args.seed,
-                                "split": spec["evaluate"], "resolution": args.resolution,
+                                "split": split, "resolution": args.resolution,
                                 "evaluator": "rfdetr model.evaluate (pycocotools, iouType=segm)", **metrics},
                                indent=1, default=str), encoding="utf-8")
     print(f"[rfdetr] metrics -> {path}")
@@ -235,6 +245,9 @@ def main() -> int:
     ap.add_argument("--predict-only", action="store_true",
                     help="skip training and predict from the run's best checkpoint; use this to redo the masks "
                          "without retraining (the weights are unaffected by a label-space fault)")
+    ap.add_argument("--evaluate-split", default=None, choices=["train", "val", "test"],
+                    help="evaluate on this split instead of the variant's own (the learning curve needs the final "
+                         "model on `val`, PLAN.md 3); the metrics file then carries the split in its name")
     ap.add_argument("--evaluate", action="store_true",
                     help="with --predict-only: also run this model's own COCO evaluation of its split and write "
                          "rfdetr_metrics_<tag>.json (PLAN.md 4). The final model is reused rather than retrained, so "

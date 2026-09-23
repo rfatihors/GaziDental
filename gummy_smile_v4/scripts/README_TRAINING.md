@@ -365,7 +365,25 @@ python scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfd
 python scripts/run_offset_correction.py --out 09_final_rfdetr \
     --oof-masks outputs/05_predictions/oof_rfdetr --test-masks outputs/05_predictions/test_rfdetr \
     --adopted-offset-px 0
+
+# 4. learning curve of this model, from its own COCO evaluations (PLAN.md §3); the 100 % point
+#    needs the final model evaluated on the same split as the subsets, in the RF-DETR venv:
+.venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --variant main --seed 42 \
+    --predict-only --evaluate --evaluate-split val
+python scripts/build_rfdetr_learning_curve.py --out 09_final_rfdetr
+
+# 5. manuscript figures and tables from THIS model (Stage 7)
+python scripts/build_report.py --stage6 09_final_rfdetr
+
+# 6. the comparison's closing table, which reads both Stage-6 runs
+python scripts/run_architecture_comparison.py --aggregate-only
 ```
+
+**The offset was dropped (PLAN.md Amendment 3, 23 Sep 2026).** `configs/config.yaml` now has
+`bottom_edge_offset_px: 0`, so Stage 6 produces **one** result set and no uncorrected/corrected pair.
+The YOLOv11x appendix stays reproducible with `python scripts/run_prediction_eval.py --offset-px -13`
+(its own masks, `--out 06_prediction`), and `scripts/build_report.py --stage6 06_prediction` rebuilds
+the previous final model's report.
 
 The measurement method (`C_p25`) and the scale (16.84 px/mm) do not change: they were selected on
 ground-truth masks in Stage 3 and are a property of the measurement geometry, not of the segmentation

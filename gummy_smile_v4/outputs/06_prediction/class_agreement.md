@@ -12,6 +12,7 @@ observed agreement 62.5 %, linear-weighted κ 0.594 [0.503, 0.677]
 | E2-E3 | 0 | 1 | 19 | 5 |
 | E3 | 0 | 1 | 2 | 3 |
 
+
 ### (a) corrected (lower gingiva edge -13 px at mask level (-0.77 mm at 16.84 px/mm), secondary)
 observed agreement 80.6 %, linear-weighted κ 0.752 [0.661, 0.829]; images with zeroed columns: 78
 
@@ -31,6 +32,7 @@ observed agreement 48.3 %, linear-weighted κ 0.401 [0.205, 0.588]
 | E1-E2 | 0 | 1 | 4 | 0 |
 | E2-E3 | 0 | 1 | 2 | 2 |
 | E3 | 0 | 1 | 0 | 0 |
+
 
 ### (b) corrected (lower gingiva edge -13 px at mask level (-0.77 mm at 16.84 px/mm), secondary)
 observed agreement 75.9 %, linear-weighted κ 0.640 [0.373, 0.857]; images with zeroed columns: 17

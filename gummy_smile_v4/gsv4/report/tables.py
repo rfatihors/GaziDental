@@ -92,20 +92,26 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
     if acc6 is not None and acc6.exists():
         # Stage 6 (scripts/run_prediction_eval.py): method and scale fixed from Stage 3, nothing re-fitted
         pa = pd.read_csv(acc6)
-        wanted = [("(a) OOF masks, all reference images [PRIMARY]", f"Predicted masks (OOF, fold models), all reference images, {sel} — uncorrected (PRIMARY)"),
+        has_corr = bool(pa["set"].astype(str).str.contains("— corrected").any())
+        prim_note = "uncorrected (PRIMARY)" if has_corr else "PRIMARY (no post-hoc correction)"
+        wanted = [("(a) OOF masks, all reference images [PRIMARY]", f"Predicted masks (OOF, fold models), all reference images, {sel} — {prim_note}"),
                   ("(a) OOF masks, all reference images [PRIMARY] — corrected", f"Predicted masks (OOF, fold models), all reference images, {sel} — corrected, mask-level lower edge (secondary)"),
-                  ("(a) OOF, Stage-3 holdout images only (scale never fitted on these)", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — uncorrected"),
+                  ("(a) OOF, Stage-3 holdout images only (scale never fitted on these)", f"Predicted masks (OOF), Stage-3 holdout images, {sel}"),
                   ("(a) OOF, Stage-3 holdout images only (scale never fitted on these) — corrected", f"Predicted masks (OOF), Stage-3 holdout images, {sel} — corrected"),
-                  ("(b) final model masks, test high images [secondary set]", f"Predicted masks (final model), test-set high images, {sel} — uncorrected"),
+                  ("(b) final model masks, test high images [secondary set]", f"Predicted masks (final model), test-set high images, {sel}"),
                   ("(b) final model masks, test high images [secondary set] — corrected", f"Predicted masks (final model), test-set high images, {sel} — corrected")]
         for name, label in wanted:
             hit = pa[pa["set"] == name]
             if len(hit) and pd.notna(hit.iloc[0].get("mae", np.nan)):
                 r6 = hit.iloc[0]
                 rows.append(row(label, r6, r6["n"], {"px_per_mm": e.loc[sel, "px_per_mm_dev"], "correction": r6.get("correction", ""),
+                                                     "model": r6.get("model", ""), "masks_dir": r6.get("masks_dir", ""),
                                                      "kappa_linear": r6.get("threshold_kappa_linear", np.nan), "images_with_zeroed_columns": r6.get("images_with_zeroed_columns", np.nan)}))
         status["prediction_rows"] = "done"
         status["prediction_source"] = str(acc6)
+        models = sorted({m for m in pa.get("model", pd.Series(dtype=str)).dropna().unique() if "COCO annotations" not in str(m)})
+        status["prediction_model"] = ", ".join(models) if models else "not recorded"
+        status["post_hoc_correction"] = "yes (secondary rows)" if has_corr else "none — single result set"
     else:
         rows.append({"analysis": "Predicted masks (OOF, 145 images) — PENDING: Stage 6 (scripts/run_prediction_eval.py)", "n": 0})
         status["prediction_rows"] = "pending"
@@ -120,11 +126,34 @@ def measurement_accuracy(oracle_dir: Path, prediction_dir: Optional[Path]) -> Tu
     return df, status
 
 
-def segmentation_metrics(pred_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
-    p = pred_dir / "test_metrics.json"
-    if not p.exists():
-        return None, {"status": "pending", "needs": f"{p} (evaluate_test on the workstation)"}
-    m = json.loads(p.read_text())
+def segmentation_metrics(pred_dir: Path, stage6_dir: Optional[Path] = None) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    """Per-class detection/segmentation metrics of the final model, from ITS OWN evaluator.
+
+    ``stage6_dir/segmentation_metrics.json`` is written by scripts/run_prediction_eval.py and carries
+    the model, the mask directory, the evaluator and the source file; it is preferred over the
+    convention-based path so that another model's numbers can never be picked up by accident.
+    """
+    prov = stage6_dir / "segmentation_metrics.json" if stage6_dir is not None else None
+    if prov is not None and prov.exists():
+        block = json.loads(prov.read_text())
+        if not block.get("available"):
+            return None, {"status": "pending", "model": block.get("model"), "evaluator": block.get("evaluator"),
+                          "needs": f"{block.get('source')} — the final model's own evaluation has not run "
+                                   "(rfdetr_train_predict.py --predict-only --evaluate for RF-DETR, "
+                                   "gsv4.train.evaluate_test for YOLO); no other model's metrics are substituted"}
+        m = block["metrics"]
+        if "per_class" not in m:                      # a flat COCO block: one row per metric
+            flat = {k: v for k, v in m.items() if isinstance(v, (int, float))}
+            df = pd.DataFrame({"metric": list(flat), "value": list(flat.values())})
+            return df, {"status": "done", "source": block.get("source"), "model": block.get("model"),
+                        "evaluator": block.get("evaluator"), "masks": block.get("masks"),
+                        "note": "this framework's own COCO evaluation; not row-comparable with another framework's mAP"}
+        p, extra = Path(str(block.get("source"))), {"model": block.get("model"), "evaluator": block.get("evaluator"), "masks": block.get("masks")}
+    else:
+        p, extra = pred_dir / "test_metrics.json", {"evaluator": "Ultralytics val()"}
+        if not p.exists():
+            return None, {"status": "pending", "needs": f"{p} (evaluate_test on the workstation)", **extra}
+        m = json.loads(p.read_text())
     if "per_class" not in m:
         # the workstation ran the boundary stage only (--metrics-only); validation metrics are still missing
         return None, {"status": "pending", "needs": f"{p} without a per_class block — re-run gsv4.train.evaluate_test on the workstation (validation pass)",
@@ -142,7 +171,7 @@ def segmentation_metrics(pred_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[s
         for cname, vals in block.items():
             rows.append({"settings": label, "conf": st_.get("conf"), "max_det": st_.get("max_det"), "class": cname, **vals})
     df = pd.DataFrame(rows)
-    st = {"status": "done", "source": str(p), "n_test_images": m.get("n_images"), "weights": m.get("weights"),
+    st = {"status": "done", "source": str(p), **extra, "n_test_images": m.get("n_images"), "weights": m.get("weights"),
           "settings_of_the_reported_map": settings.get("kind"),
           "note": ("mAP is reported at the standard evaluation settings (conf 0.001, NMS IoU 0.7, max_det 300); "
                    "the operating-point rows are the configuration the measurement pipeline runs at"
