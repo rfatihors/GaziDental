@@ -348,11 +348,25 @@ comparison run.
 Afterwards, in the training venv:
 
 ```bash
+# 1. measurement on the RF-DETR out-of-fold masks; fallback rate of C_p25 (PLAN.md §7)
 python scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle
-python scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr
+
+# 2. primary outcome and its pre-registered sensitivity analysis (PLAN.md §5)
+python scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfdetr \
+    --test-masks outputs/05_predictions/test_rfdetr --out 09_final_rfdetr \
+    --exclude-uids outputs/08_architecture/arch_test_high_uids.csv
+
+# 3. offset re-estimated from scratch for this configuration (PLAN.md §6); the config offset
+#    was fitted on YOLO masks, so it is not the one whose effect is reported here
+python scripts/run_offset_correction.py --out 09_final_rfdetr \
+    --oof-masks outputs/05_predictions/oof_rfdetr --test-masks outputs/05_predictions/test_rfdetr \
+    --adopted-offset-px 0
 ```
 
 The measurement method (`C_p25`) and the scale (16.84 px/mm) do not change: they were selected on
 ground-truth masks in Stage 3 and are a property of the measurement geometry, not of the segmentation
-model. The offset correction, by contrast, is re-estimated from scratch for this configuration and is
-expected to be dropped (PLAN.md §6).
+model. `run_oracle.py --masks` therefore **takes both from `configs/config.yaml` and selects nothing**;
+it never writes to the config, and `--reselect` (off by default) is the only way to re-run the selection
+on predicted masks — a sensitivity analysis, never the primary result. The offset correction, by
+contrast, is re-estimated from scratch for this configuration and is expected to be dropped
+(PLAN.md §6); step 3 fits it on the Stage-3 dev subset with the method held fixed.

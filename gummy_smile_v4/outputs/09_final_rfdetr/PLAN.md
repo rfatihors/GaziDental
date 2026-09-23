@@ -123,3 +123,31 @@ This will be described as an observation about the two mask-head designs, with t
 unidentified. No causal claim is made: a dense prototype-and-coefficient head and a
 query-attention-with-upsampling head differ in many ways at once, and this study varied neither in a
 controlled fashion.
+
+---
+
+## Amendment 1 — 23 Sep 2026: a first run of §5–§6 was invalid and has been discarded
+
+**What happened.** The first workstation pass ran
+`scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle`. That
+script still carried its Stage-3 behaviour: it re-ran the *whole* method and scale selection, on the
+predicted masks and against the same clinical reference, and reported `B_p05` at 13.55 px/mm as the
+"selected" method. §5 of this plan says the opposite — method `C_p25` and scale 16.84 px/mm are fixed,
+selected in Stage 3 on ground-truth masks, applied unchanged here. The re-selection was a second look
+at the reference and it landed on the wrong side of a 0.004 mm difference in dev mean absolute error:
+in its own table `C_p25` had holdout MAE 0.451 mm against 0.543 mm for `B_p05`.
+
+**What was affected.** Only that run's outputs under `outputs/09_final_rfdetr/oracle/`, which are
+discarded. `configs/config.yaml` was not touched (method C/p25, `px_per_mm` 16.8397 and
+`bottom_edge_offset_px` -13 were all still in place, git status clean) and `outputs/03_oracle/` was
+untouched. No result of this plan had been reported from that run.
+
+**Fix.** `run_oracle.py` now reads the method and the scale from `configs/config.yaml` whenever
+`--masks` is given and selects nothing; re-selection needs the explicit `--reselect` flag, which is
+off by default and is a sensitivity analysis only. A run on predicted masks refuses `--write-config`
+outright, so that path can no longer write to the config. §6's offset re-estimation runs with the
+method fixed, through
+`scripts/run_offset_correction.py --out 09_final_rfdetr --oof-masks … --test-masks … --adopted-offset-px 0`.
+
+**Unchanged.** Every pre-registered decision above stands: the primary outcome of §5, its sensitivity
+analysis, the offset rule of §6 and the fallback rule of §7 are as they were written before any run.

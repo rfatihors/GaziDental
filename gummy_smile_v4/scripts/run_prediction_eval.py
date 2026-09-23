@@ -235,7 +235,7 @@ def main() -> int:
 
     # ---- 1. OOF integrity
     chk = check_oof(oof, ref[["image", "uid", "cv_fold"]], oof_dir)
-    chk_md = ["# OOF prediction check (outputs/05_predictions/oof)", "",
+    chk_md = [f"# OOF prediction check ({oof_dir})", "",
               f"- rows: {chk['n_rows']} (reference images: {chk['n_reference']})", f"- mask_source: {chk['mask_source']}",
               f"- images per fold: {chk['folds']}", f"- gingiva PNG missing: {chk['n_missing_png']}",
               f"- empty gingiva prediction (no instance above conf {cfg['yolo']['conf']}): {chk['empty_gingiva_prediction'] or 'none'}",

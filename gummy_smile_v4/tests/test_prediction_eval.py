@@ -27,15 +27,40 @@ def test_check_oof_passes_on_a_consistent_table(tmp_path):
     assert c["empty_gingiva_prediction"] == ["IMG_5"] and c["folds"] == {0: 2, 1: 1, 2: 1, 3: 1, 4: 1}
 
 
+def test_check_oof_accepts_every_known_predictor_mask_source(tmp_path):
+    for source in ("yolo:masks.data", "yolo:masks.xy", "rfdetr:masks"):
+        oof, ref = _oof(source=source), _ref()
+        for i in oof["image"]:
+            (tmp_path / f"{i}_gingiva.png").write_bytes(b"x")
+        c = check_oof(oof, ref, tmp_path)
+        assert c["ok"] and c["mask_source"] == {source: 6}
+    # mixed sources are fine as long as every one of them is known
+    mixed = _oof(); mixed.loc[0, "mask_source"] = "rfdetr:masks"
+    assert check_oof(mixed, _ref(), tmp_path)["ok"]
+
+
+def test_check_oof_stops_on_an_unexpected_mask_source(tmp_path):
+    oof, ref = _oof(source="rfdetr:masks"), _ref()
+    for i in oof["image"]:
+        (tmp_path / f"{i}_gingiva.png").write_bytes(b"x")
+    oof.loc[0, "mask_source"] = "rfdetr:masks:none"      # no instance predicted
+    oof.loc[1, "mask_source"] = "png"                    # not a predictor output at all
+    c = check_oof(oof, ref, tmp_path)
+    assert not c["ok"]
+    problem = next(p for p in c["problems"] if "mask_source" in p)
+    listed = problem.split(": ", 1)[1]          # only the offending sources, not the accepted ones
+    assert "'rfdetr:masks:none': 1" in listed and "'png': 1" in listed and "'rfdetr:masks':" not in listed
+
+
 def test_check_oof_reports_every_problem(tmp_path):
-    oof = _oof(); oof.loc[0, "mask_source"] = "yolo:masks.xy"; oof.loc[1, "fold"] = 4
+    oof = _oof(); oof.loc[0, "mask_source"] = "detections"; oof.loc[1, "fold"] = 4
     oof = pd.concat([oof, oof.iloc[[2]]], ignore_index=True)
     ref = _ref(7)
     c = check_oof(oof, ref, tmp_path)
     assert not c["ok"]
     joined = " | ".join(c["problems"])
     assert "7 OOF rows but 7 reference images" not in joined and "duplicated OOF images: ['IMG_2']" in joined
-    assert "without OOF prediction: ['IMG_6']" in joined and "masks.xy" in joined and "PNG missing for 7" in joined and "fold of 1 images" in joined
+    assert "without OOF prediction: ['IMG_6']" in joined and "'detections': 1" in joined and "PNG missing for 7" in joined and "fold of 1 images" in joined
 
 
 def test_agreement_metrics_recovers_bias_and_labels():

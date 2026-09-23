@@ -3,7 +3,7 @@
 **Status: post-hoc calibration, estimated on the Stage-3 dev subset, reported on holdout.** It was not part of the pre-registered protocol (Stage 3 fixed the method and scale on ground-truth masks; Stage 6 applied them unchanged to predicted masks). If adopted, the manuscript must present it as a calibration step derived after inspecting the out-of-fold error, with the fit set and the held-out evaluation stated. Nothing here was written into `configs/config.yaml`; the recommendation below is for the clinical team's decision.
 
 ## Why
-On the OOF masks the lower gingiva edge is drawn systematically below the annotation (dev mean +11.3 px = +0.67 mm; upper edge +3.4 px = +0.20 mm), the pipeline − reference bias is +0.68 mm and the tooth-level mixed model gives +0.68 [+0.57, +0.80] mm with a proportional-bias slope near zero. A near-constant offset is the signature of a calibration error, which is correctable.
+On the OOF masks (oof) the lower gingiva edge is drawn systematically below the annotation (dev mean +11.3 px = +0.67 mm; upper edge +3.4 px = +0.20 mm) and the pipeline − reference bias on dev is +0.69 mm [+0.53, +0.86] with a proportional-bias slope of -0.171 (p = 0.003); the tooth-level mixed model (`mixed_models.md`) reports the same shift. The shift dominates, but it is not purely constant on dev (slope p = 0.003): a constant offset removes the shift and leaves the proportional part, which only the linear recalibration (c) addresses. Both are in the table below, with the holdout slope as the check.
 
 ## Data and protocol
 * Images: the 145 reference images with OOF masks; **1 segmentation failure(s)** (IMG_7289_jpg: no gingiva predicted, no mm value) excluded from the fit and the evaluation and reported as a separate category.

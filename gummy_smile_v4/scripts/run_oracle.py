@@ -2,6 +2,12 @@
 """Stage 3 — oracle validation of the measurement geometry on ground-truth masks
 (spec §4.1–4.6); re-used in Stage 6 with predicted masks (``--masks <png_dir>``).
 
+The method and the global scale are **selected on ground-truth masks only**. With
+``--masks <png_dir>`` they are read from ``configs/config.yaml`` and applied unchanged:
+nothing is re-selected, nothing is re-fitted and nothing is written back to the config.
+``--reselect`` re-runs the selection on the given masks — a deliberate second look at the
+reference, for sensitivity analyses only, and still never written to the config.
+
 Outputs (default outputs/03_oracle/):
   per_image_results.csv, dev_holdout_split.json, estimator_comparison.csv,
   sensitivity.csv, scale_estimation.md, boundary_check.csv, qc_flags.csv,
@@ -30,7 +36,7 @@ from gsv4.config import load_config, resolve  # noqa: E402
 from gsv4.dataset.build import build_all  # noqa: E402
 from gsv4.eval.agreement import bland_altman, icc_long, loo_scale  # noqa: E402
 from gsv4.eval.oracle import (  # noqa: E402
-    COMBOS, combo_name, dev_holdout_split, evaluate_combos, measure_images, per_image_scale,
+    COMBOS, combo_name, dev_holdout_split, evaluate_combos, evaluate_fixed, measure_images, per_image_scale,
     select_method, sensitivity, tooth_level,
 )
 from gsv4.measure.qc import QCFlag  # noqa: E402
@@ -83,9 +89,21 @@ def main() -> int:
     ap.add_argument("--config", default=None)
     ap.add_argument("--masks", default="gt", help="'gt' (COCO ground truth) or a directory of <image>_gingiva.png / _lip.png")
     ap.add_argument("--out", default="03_oracle", help="output sub-directory under paths.outputs")
-    ap.add_argument("--write-config", action="store_true", help="write the selected method and scale into configs/config.yaml")
+    ap.add_argument("--write-config", action="store_true",
+                    help="write the selected method and scale into configs/config.yaml; ground-truth masks only")
+    ap.add_argument("--reselect", action="store_true",
+                    help="with --masks: re-run the method/scale selection ON THE PREDICTED MASKS instead of taking "
+                         "them from configs/config.yaml. Off by default; a sensitivity analysis, never the primary "
+                         "result, and never written to the config.")
     ap.add_argument("--tolerance-mm", type=float, default=0.02)
     args = ap.parse_args()
+    if args.write_config and args.masks != "gt":
+        raise SystemExit("--write-config is for ground-truth masks only: the method and the scale are a property of the "
+                         "measurement geometry, selected in Stage 3 on GT masks. A run on predicted masks never writes "
+                         "configs/config.yaml.")
+    if args.reselect and args.masks == "gt":
+        raise SystemExit("--reselect is meaningless with --masks gt: the ground-truth run IS the selection.")
+    reselect = args.masks == "gt" or args.reselect
     cfg = load_config(args.config)
     seed = int(cfg["seed"])
     out_dir = resolve(cfg, Path(cfg["paths"]["outputs"]) / args.out)
@@ -120,13 +138,40 @@ def main() -> int:
     # ---- combinations
     results = evaluate_combos(df, split)
     results.to_csv(out_dir / "estimator_comparison.csv", index=False)
-    chosen, why = select_method(results, tolerance_mm=args.tolerance_mm)
-    combo, k = chosen["combo"], chosen["px_per_mm"]
-    sel_row = results[results["combo"] == combo].iloc[0]
+    stage3_est = None
+    if not reselect:
+        p3 = resolve(cfg, Path(cfg["paths"]["outputs"]) / "03_oracle" / "estimator_comparison.csv")
+        stage3_est = pd.read_csv(p3).set_index("combo") if p3.exists() else None
+    if reselect:
+        chosen, why = select_method(results, tolerance_mm=args.tolerance_mm)
+        combo, k = chosen["combo"], chosen["px_per_mm"]
+        sel_row = results[results["combo"] == combo].iloc[0]
+    else:
+        # Predicted masks: the method and the scale come from Stage 3 (ground-truth masks) through
+        # configs/config.yaml and are applied unchanged. `results` is still written, as a sensitivity
+        # table, but nothing in it selects anything here.
+        method = dict(cfg["measurement"]["method"])
+        combo = combo_name(method["regioning"], method["estimator"], bool(method["anchored"]))
+        k = float(cfg["measurement"]["px_per_mm"])
+        sel_row = pd.Series(evaluate_fixed(df, split, combo, k))
+        chosen = {"regioning": method["regioning"], "estimator": method["estimator"], "anchored": bool(method["anchored"]),
+                  "combo": combo, "px_per_mm": k, "mae_dev": float(sel_row["mae_dev"])}
+        best = results.sort_values("mae_dev").iloc[0]
+        why = (f"**No selection was made here.** Method `{combo}` and scale {k:.4f} px/mm are taken from "
+               f"`configs/config.yaml`, where Stage 3 put them after selecting them on ground-truth masks; on predicted "
+               f"masks they are applied unchanged (the measurement geometry is a property of the method, not of the "
+               f"segmentation model, and re-selecting here would be a second look at the same clinical reference). "
+               f"`estimator_comparison.csv` is written for information only: every combination there carries a scale "
+               f"re-fitted on the dev subset of these masks, and the best dev MAE in it is `{best['combo']}` "
+               f"({best['mae_dev']:.3f} mm vs {sel_row['mae_dev']:.3f} mm for the fixed method) — reported, not adopted. "
+               f"Re-run with `--reselect` to make that comparison the selected result.")
 
     # ---- per-image results (read by Stages 4 and 6)
     per = df[["uid", "image", "split", "ref_mm"] + [f"ref_mm_{i}" for i in range(1, 7)] + ["ref_label", "frame_ok", "width", "height", "has_dash_zero", "has_ambiguous_100_999"]].copy()
     scales = results.set_index("combo")["px_per_mm_dev"]
+    if not reselect and stage3_est is not None:
+        # every combination in mm at its Stage-3 (ground-truth dev) scale, not at a scale fitted here
+        scales = stage3_est["px_per_mm_dev"].reindex(scales.index).fillna(scales)
     for reg, est, anch in COMBOS:
         name = combo_name(reg, est, anch)
         per[f"{name}_px"] = df[f"{name}_px"]
@@ -185,7 +230,12 @@ def main() -> int:
     if fb_flag:
         ok_dev = df[(df["split"] == "dev") & ~fb_mask]
         alt = combo_name("A", chosen["estimator"], chosen["anchored"])
-        k_alt = float(results.set_index("combo").loc[alt, "px_per_mm_dev"])
+        if reselect or stage3_est is None or alt not in stage3_est.index:
+            k_alt = float(results.set_index("combo").loc[alt, "px_per_mm_dev"])
+            alt_row = results.set_index("combo").loc[alt]
+        else:                                    # fixed mode: the alternative too keeps its Stage-3 scale
+            k_alt = float(stage3_est.loc[alt, "px_per_mm_dev"])
+            alt_row = pd.Series(evaluate_fixed(df, split, alt, k_alt))
         mae_sel = float(np.abs(ok_dev[f"{combo}_px"] / k - ok_dev["ref_mm"]).mean())
         mae_alt = float(np.abs(ok_dev[f"{alt}_px"] / k_alt - ok_dev["ref_mm"]).mean())
         fb = df[fb_mask]
@@ -198,7 +248,6 @@ def main() -> int:
                      + f"reference mm: fallback {fb['ref_mm'].mean():.2f} vs success {okc['ref_mm'].mean():.2f}. "
                      + ("Fallback images are not wider, so premolar visibility is not the main cause; " if fb['window_width_frac'].mean() <= okc['window_width_frac'].mean() * 1.05 else "Fallback images show a wider band, consistent with premolars entering the window (more minima than expected); ")
                      + "the typical failure is one side of the midline having fewer than three detectable minima (a shallow festoon on that side).")
-        alt_row = results.set_index("combo").loc[alt]
         fb_detail += (f"\n\n**Sensitivity analysis — `{alt}` (no fallback, equal-split regions) side by side:** holdout MAE {alt_row['mae_holdout']:.3f} vs {sel_row['mae_holdout']:.3f} mm, RMSE {alt_row['rmse_holdout']:.3f} vs {sel_row['rmse_holdout']:.3f}, r {alt_row['r_holdout']:.3f} vs {sel_row['r_holdout']:.3f}, "
                       f"ICC(2,1) {alt_row['icc2_1_holdout']:.3f} vs {sel_row['icc2_1_holdout']:.3f}, bias {alt_row['ba_bias_holdout']:+.3f} vs {sel_row['ba_bias_holdout']:+.3f} mm, scale {alt_row['px_per_mm_dev']:.2f} vs {k:.2f} px/mm.")
         fb_detail += (f"\n\n**Stage 6 note:** on predicted masks the fallback rate of `{combo}` will be re-measured; if it exceeds 30 % the selection is re-evaluated against `{alt}`.")
@@ -248,10 +297,21 @@ Expected orders of magnitude (audit §B): ICC ≈ 0.995 / 0.998, SD ≈ 0.17 mm.
     noise_sd_img = io["ba_image"]["sd"]
 
     # ---- scale report
+    if reselect:
+        scale_head = (f"Global scale: regression through the origin on the **dev subset only** (n = {len(dev_df)}): "
+                      f"**{k:.2f} px/mm** (R² {sel_row['scale_r2_dev']:.3f}; residual SD {sel_row['scale_resid_sd_mm']:.2f} mm). Applied unchanged to holdout.\n"
+                      f"Leave-one-out on dev: mean {loo['px_per_mm_mean']:.2f}, SD {loo['px_per_mm_sd']:.3f}, "
+                      f"range {loo['px_per_mm_min']:.2f}–{loo['px_per_mm_max']:.2f} px/mm; LOO MAE {loo['loo_mae_mm']:.3f} mm.")
+    else:
+        k_here = float(results.set_index("combo").loc[combo, "px_per_mm_dev"])
+        scale_head = (f"Global scale: **{k:.2f} px/mm, FIXED** — taken from `configs/config.yaml` (Stage 3, fitted on the dev subset of the "
+                      f"**ground-truth** masks) and applied unchanged to every image here. Nothing was fitted on these masks.\n"
+                      f"For information only, never used: a through-origin fit of the same method on the dev subset of *these* masks would give "
+                      f"{k_here:.2f} px/mm ({100 * (k_here - k) / k:+.1f} %); leave-one-out on that fit: mean {loo['px_per_mm_mean']:.2f}, "
+                      f"SD {loo['px_per_mm_sd']:.3f}, range {loo['px_per_mm_min']:.2f}–{loo['px_per_mm_max']:.2f} px/mm.")
     scale_md = f"""# Scale estimation ({combo})
 
-Global scale: regression through the origin on the **dev subset only** (n = {len(dev_df)}): **{k:.2f} px/mm** (R² {sel_row['scale_r2_dev']:.3f}; residual SD {sel_row['scale_resid_sd_mm']:.2f} mm). Applied unchanged to holdout.
-Leave-one-out on dev: mean {loo['px_per_mm_mean']:.2f}, SD {loo['px_per_mm_sd']:.3f}, range {loo['px_per_mm_min']:.2f}–{loo['px_per_mm_max']:.2f} px/mm; LOO MAE {loo['loo_mae_mm']:.3f} mm.
+{scale_head}
 Expected order of magnitude 15–20 px/mm (2698 px ≈ 15–16 cm field of view): {'OK' if EXPECT['px_per_mm'][0] <= k <= EXPECT['px_per_mm'][1] else 'OUTSIDE — check'}.
 
 ## Per-image ratio px / reference mm (all {len(pis)} images; mixes scale variation with measurement noise, reported without interpretation)
@@ -272,6 +332,17 @@ Reference calibration note: ImageJ used a single 1 mm probe interval per image (
     # ---- summary
     show = results.sort_values("mae_dev")[["combo", "px_per_mm_dev", "mae_dev", "mae_holdout", "rmse_holdout", "r_holdout", "icc2_1_holdout", "icc2_1_ci_low_holdout", "icc2_1_ci_high_holdout", "ba_bias_holdout", "ba_loa_low_holdout", "ba_loa_high_holdout", "ba_prop_slope_holdout", "ba_prop_p_holdout", "threshold_agreement_holdout"]]
     above_noise = sel_row["mae_holdout"] - noise_sd_img * np.sqrt(2 / np.pi)  # expected |diff| of pure observer noise
+    if reselect:
+        proto_note = "Scale of every combination fitted on dev only and applied unchanged to holdout; holdout metrics are reported for all combinations but were not used for selection."
+        method_head = f"## Selected method: **{combo}**, global scale **{k:.2f} px/mm**"
+        table_head = "## All combinations (sorted by dev MAE; holdout columns for reporting only)"
+    else:
+        proto_note = ("The scales in the table below were re-fitted on the dev subset of these masks and are reported as a sensitivity "
+                      "analysis; the method and the scale used everywhere else in this file are the fixed ones. `--reselect` is the only "
+                      "way to turn that table into a selection, and it still writes nothing into `configs/config.yaml`.")
+        method_head = f"## Fixed method: **{combo}**, global scale **{k:.2f} px/mm** (from `configs/config.yaml`, Stage 3 — not selected here)"
+        table_head = ("## All combinations, each with a scale re-fitted on these masks — SENSITIVITY ONLY, NOT A SELECTION\n"
+                      "(sorted by dev MAE; the fixed method above is the result of this run whatever this table shows)")
     summary = f"""# Oracle validation summary — {'ground-truth masks' if args.masks == 'gt' else 'predicted masks: ' + args.masks}
 
 ## Set
@@ -279,9 +350,9 @@ Reference images (kept high with clinical measurement): {n_all}; excluded `label
 
 ## Protocol
 {why}
-Scale of every combination fitted on dev only and applied unchanged to holdout; holdout metrics are reported for all combinations but were not used for selection.
+{proto_note}
 
-## Selected method: **{combo}**, global scale **{k:.2f} px/mm**
+{method_head}
 Holdout (n = {len(hold)}): MAE {sel_row['mae_holdout']:.3f} mm, RMSE {sel_row['rmse_holdout']:.3f} mm, r {sel_row['r_holdout']:.3f}, ICC(2,1) {sel_row['icc2_1_holdout']:.3f} [{sel_row['icc2_1_ci_low_holdout']:.3f}, {sel_row['icc2_1_ci_high_holdout']:.3f}], bias {sel_row['ba_bias_holdout']:+.3f} mm [{sel_row['ba_bias_ci_low_holdout']:+.3f}, {sel_row['ba_bias_ci_high_holdout']:+.3f}], LoA {sel_row['ba_loa_low_holdout']:.2f} to {sel_row['ba_loa_high_holdout']:.2f} mm, proportional bias slope {sel_row['ba_prop_slope_holdout']:+.3f} (p = {sel_row['ba_prop_p_holdout']:.3f}); threshold-label agreement {100 * sel_row['threshold_agreement_holdout']:.1f} % (linear-weighted κ {sel_row['threshold_kappa_linear_holdout']:.3f}) — a *measurement* check against Table 1, not a clinical validation.
 Dev (n = {len(dev_df)}): MAE {sel_row['mae_dev']:.3f} mm, r {sel_row['r_dev']:.3f}, ICC(2,1) {sel_row['icc2_1_dev']:.3f}.
 
@@ -291,7 +362,7 @@ Dev (n = {len(dev_df)}): MAE {sel_row['mae_dev']:.3f} mm, r {sel_row['r_dev']:.3
 
 Pre-analysis plausibility check (audit §6, A/p25, same-data scale, n = 148): r ≈ 0.83, MAE ≈ 0.63 mm, ≈ 17 px/mm — {'consistent' if abs(sel_row['mae_holdout'] - EXPECT['mae_reasonable']) < 0.25 and 15 <= k <= 20 else 'DIFFERENT — see OZET'}.
 
-## All combinations (sorted by dev MAE; holdout columns for reporting only)
+{table_head}
 {md_table(show)}
 
 ## Bland–Altman direction and proportional bias (holdout)
@@ -318,19 +389,30 @@ Frame outside 2698×1799 ±2 px: {n_out} images (`frame_uncertain`; sensitivity 
 - v1 (XGBoost) column of the original Figure 6 is not reproduced: the regressor was trained on 512×512 gingiva-only DeepLab masks and fed lip+gingiva masks at 1024 px in v3, i.e. inputs outside its training distribution (audit §3).
 """
     (out_dir / "oracle_summary.md").write_text(summary, encoding="utf-8")
-    ozet = f"""# Aşama 3 — Türkçe özet
+    if reselect:
+        ozet_head = "# Aşama 3 — Türkçe özet"
+        ozet_masks = "ölçümlü high görüntü (GT maske)"
+        ozet_method = (f"- Seçilen yöntem **{combo}** (dev MAE {sel_row['mae_dev']:.3f} mm; basitlik kuralı ±{args.tolerance_mm} mm). "
+                       f"Global ölçek **{k:.2f} px/mm** (yalnız dev'de kestirildi).")
+    else:
+        ozet_head = f"# Oracle ölçümü — tahmin maskeleri ({args.masks})"
+        ozet_masks = f"ölçümlü high görüntü (tahmin maskesi: {args.masks})"
+        ozet_method = (f"- Yöntem **{combo}** ve ölçek **{k:.2f} px/mm** `configs/config.yaml`'den SABİT alındı (Aşama 3'te GT maskelerde seçildi); "
+                       f"burada hiçbir şey yeniden seçilmedi, yeniden kestirilmedi ve config'e yazılmadı. Bu maskelerdeki dev MAE {sel_row['mae_dev']:.3f} mm. "
+                       f"`estimator_comparison.csv` yalnız duyarlılık amaçlıdır; yeniden seçim ancak `--reselect` ile yapılır.")
+    ozet = f"""{ozet_head}
 
-- {len(df)} ölçümlü high görüntü (GT maske), dev {len(dev_df)} / holdout {len(hold)}; `label_inconsistent` dışlanan: {len(excluded_li)}.
-- Seçilen yöntem **{combo}** (dev MAE {sel_row['mae_dev']:.3f} mm; basitlik kuralı ±{args.tolerance_mm} mm). Global ölçek **{k:.2f} px/mm** (yalnız dev'de kestirildi).
+- {len(df)} {ozet_masks}, dev {len(dev_df)} / holdout {len(hold)}; `label_inconsistent` dışlanan: {len(excluded_li)}.
+{ozet_method}
 - Holdout: MAE {sel_row['mae_holdout']:.2f} mm, RMSE {sel_row['rmse_holdout']:.2f}, r {sel_row['r_holdout']:.3f}, ICC(2,1) {sel_row['icc2_1_holdout']:.3f}; sapma {sel_row['ba_bias_holdout']:+.2f} mm, orantısal eğim {sel_row['ba_prop_slope_holdout']:+.3f} (p {sel_row['ba_prop_p_holdout']:.3f}).
 - Gözlemci içi (dişeti görünürlüğünün tekrar ölçümü): ICC(2,1) diş bölgesi düzeyi {io['tooth']['icc2_1']:.3f}, görüntü ortalaması {io['image']['icc2_1']:.3f}; SD {noise_sd:.2f} mm. Holdout MAE'nin gözlemci gürültüsü üstünde kalan kısmı ≈ {above_noise:.2f} mm.
 - Dudak-altı ↔ dişeti-üstü boşluk medyanı {gap_stats['median']:.1f} px (IQR {gap_stats['q1']:.0f}–{gap_stats['q3']:.0f}); beklenti ≈ 9 px → {'uyumlu' if abs(gap_stats['median'] - 9) <= 6 else 'BEKLENTİDEN UZAK'}.
 - Çerçeve: {n_out}/{n_in + n_out} görüntü 2698×1799 dışında; görüntü bazlı oran farkı {scale_diff_pct:+.1f} %, dev regresyon ölçeği farkı {k_diff_pct:+.1f} % → {'ikili ölçek önerilir (uygulanmadı)' if 'proposed for' in dual_text else 'ikili ölçek önerilmez (yönler zıt / grup küçük ve gürültülü); tek ölçek + duyarlılık satırı'}.
-- Seçilen bölgeleme {chosen['regioning']}: {n_fb} görüntüde başarısız → A'ya düşer (raporda açık).
+- {'Seçilen bölgeleme' if reselect else 'Bölgeleme'} {chosen['regioning']}: {n_fb} görüntüde başarısız → A'ya düşer (raporda açık){'' if reselect else f"; oran %{100 * n_fb / len(df):.0f} (ön kayıtlı eşik %30)"}.
 - Ön analizle (MAE ≈ 0.63, ≈ 17 px/mm) karşılaştırma: {'makul' if abs(sel_row['mae_holdout'] - 0.63) < 0.25 and 15 <= k <= 20 else 'FARKLI — kontrol'}.
 """
     (out_dir / "OZET.md").write_text(ozet, encoding="utf-8")
-    if args.write_config:
+    if args.write_config and args.masks == "gt":      # belt and braces; argument parsing already refuses the rest
         write_config_method(resolve(cfg, "configs/config.yaml"), chosen, k)
     print(ozet)
     print(show.head(12).to_string(index=False))

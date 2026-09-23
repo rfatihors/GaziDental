@@ -154,6 +154,32 @@ def evaluate_combos(df: pd.DataFrame, split: Dict[str, List[str]], combos: Itera
     return pd.DataFrame(rows)
 
 
+def evaluate_fixed(df: pd.DataFrame, split: Dict[str, List[str]], combo: str, k: float) -> Dict[str, Any]:
+    """Dev and holdout metrics of ONE combination at a scale fixed elsewhere.
+
+    Used when the measurement runs on predicted masks: the method and ``k`` come from
+    Stage 3 (ground-truth masks) through ``configs/config.yaml`` and nothing is fitted
+    here, so the returned row is comparable with a row of :func:`evaluate_combos` but is
+    not the product of any selection on these masks.
+    """
+    d = df.set_index("uid")
+    if "ref_label" not in d.columns:
+        d["ref_label"] = d["ref_mm"].map(label_for_mm)
+    col = f"{combo}_px"
+    if col not in d.columns:
+        raise KeyError(f"combination {combo} was not measured")
+    reg, rest = combo.split("_", 1)
+    anchored = rest.endswith("_lipanchored")
+    est = rest[: -len("_lipanchored")] if anchored else rest
+    rec: Dict[str, Any] = {"regioning": reg, "estimator": est, "anchored": anchored, "combo": combo,
+                           "px_per_mm_dev": float(k), "px_per_mm_fixed": float(k), "scale_fitted_here": False}
+    for name, uids in (("dev", split["dev"]), ("holdout", split["holdout"])):
+        part = d.loc[[u for u in uids if u in d.index]]
+        m = _metrics((part[col] / k).to_numpy(dtype=float), part["ref_mm"].to_numpy(dtype=float), list(part["ref_label"]))
+        rec.update({f"{kk}_{name}": vv for kk, vv in m.items()})
+    return rec
+
+
 def select_method(results: pd.DataFrame, tolerance_mm: float = 0.02) -> Tuple[Dict[str, Any], str]:
     """Best dev MAE; ties within ``tolerance_mm`` resolved by simplicity."""
     r = results.copy()

@@ -55,6 +55,8 @@ pytest
 # Stage entry points:
 python scripts/build_manifest.py          # Stage 1 -> data/manifest/, outputs/01_data/
 python scripts/run_oracle.py --write-config   # Stage 3 -> outputs/03_oracle/, writes measurement.method/px_per_mm
+                                              # (GT masks only: with --masks <dir> the method and scale come FROM the
+                                              #  config, nothing is re-selected and the config is never written)
 python scripts/run_expert_analysis.py --synthetic   # Stage 4 dry run; drop real forms into data/expert/ and omit the flag
 python -m gsv4.train.prepare_yolo_dataset            # Stage 5 dataset (symlinks) + label-check figure; training: scripts/README_TRAINING.md
 python scripts/build_report.py                        # Stage 7 -> outputs/07_report (figures, tables, REVIZYON_OZETI.md)
@@ -73,5 +75,5 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | 3 | Oracle validation | done — `scripts/run_oracle.py` (C_p25, 16.84 px/mm) |
 | 4 | Expert-agreement analysis | done on synthetic forms — `scripts/run_expert_analysis.py [--synthetic]` |
 | 5 | Training pipeline | written + dry-run; run `scripts/train_all.sh` on the workstation (`scripts/README_TRAINING.md`) |
-| 6 | Accuracy on predicted masks | waiting for workstation outputs — `scripts/run_oracle.py --masks outputs/05_predictions/oof --out 06_prediction` |
+| 6 | Accuracy on predicted masks | done for YOLOv11x — `scripts/run_prediction_eval.py`; repeated with RF-DETR in `outputs/09_final_rfdetr/` (method and scale stay C_p25 / 16.84 px/mm) |
 | 7 | Reporting | local part done — `scripts/build_report.py` (pending items fill in on re-run) |

@@ -2,12 +2,19 @@
 """Stage 6 addendum — post-hoc offset calibration of the pipeline measurement.
 
     python scripts/run_offset_correction.py [--max-shift 24] [--tolerance-mm 0.03]
+    python scripts/run_offset_correction.py --out 09_final_rfdetr --oof-masks outputs/05_predictions/oof_rfdetr \
+        --test-masks outputs/05_predictions/test_rfdetr --adopted-offset-px 0   # PLAN.md 6, re-estimated from scratch
 
 Fits three corrections on the Stage-3 **dev** subset (60 %, seed from config, list in
 outputs/03_oracle/dev_holdout_split.json) and reports them on **holdout** (40 %); nothing
-is fitted on holdout. Writes outputs/06_prediction/offset_correction.{md,csv},
-pixel_shift_curve.csv and figures/offset_correction.png. Recommends a correction by the
-pre-stated rule but does not write anything into configs/config.yaml.
+is fitted on holdout. Writes <--out>/offset_correction.{md,csv}, pixel_shift_curve.csv and
+figures/offset_correction.png next to the Stage-6 tables of the same directory. Recommends a
+correction by the pre-stated rule but does not write anything into configs/config.yaml.
+
+The measurement method and the global scale are read from configs/config.yaml and stay fixed
+throughout (Stage 3, ground-truth masks); only the offset is estimated here. A re-estimation
+for another segmentation model therefore changes the masks and the output directory, never
+the method.
 """
 from __future__ import annotations
 
@@ -51,11 +58,20 @@ def main() -> int:
     ap.add_argument("--max-shift", type=int, default=24, help="largest lower-edge shift tried, px")
     ap.add_argument("--tolerance-mm", type=float, default=SELECTION_TOLERANCE_MM)
     ap.add_argument("--n-boot", type=int, default=2000)
+    ap.add_argument("--out", default="06_prediction", help="Stage-6 output sub-directory under paths.outputs (its per_image_results*.csv and boundary_error_oof.csv are read)")
+    ap.add_argument("--oof-masks", default=None, help="default outputs/05_predictions/oof; use oof_rfdetr for Stage 6 with RF-DETR")
+    ap.add_argument("--test-masks", default=None, help="default outputs/05_predictions/test")
+    ap.add_argument("--adopted-offset-px", type=float, default=None,
+                    help="offset whose effect the 'adopted' section reports (default: measurement.bottom_edge_offset_px "
+                         "from the config). Pass 0 when re-estimating for a model the config offset was not fitted on.")
     args = ap.parse_args()
     cfg = load_config(args.config)
     outputs = resolve(cfg, cfg["paths"]["outputs"])
-    out_dir = outputs / "06_prediction"
-    oof_dir = resolve(cfg, cfg["paths"]["predictions"]) / "oof"
+    out_dir = outputs / args.out
+    pred_dir = resolve(cfg, cfg["paths"]["predictions"])
+    oof_dir = Path(args.oof_masks) if args.oof_masks else pred_dir / "oof"
+    if not oof_dir.is_absolute():
+        oof_dir = resolve(cfg, oof_dir)
     mcfg = cfg["measurement"]
     method = dict(mcfg["method"])
     combo = combo_name(method["regioning"], method["estimator"], bool(method["anchored"]))
@@ -72,6 +88,17 @@ def main() -> int:
     b = pd.read_csv(out_dir / "boundary_error_oof.csv").set_index("uid")
     bias_px_dev = float(b.loc[dev["uid"], "gingiva_bottom_edge_bias_px"].mean())
     top_px_dev = float(b.loc[dev["uid"], "gingiva_top_edge_bias_px"].mean())
+
+    ba_dev = bland_altman(dev["selected_mm"].to_numpy(float), dev["ref_mm"].to_numpy(float))
+    if abs(ba_dev["bias"]) < 0.10:
+        why_shift = ("The bias is already below 0.10 mm, i.e. there is little for a calibration to remove; the table below says "
+                     "whether any of the three corrections is worth adopting at all.")
+    elif ba_dev["prop_p"] < 0.05:
+        why_shift = (f"The shift dominates, but it is not purely constant on dev (slope p = {ba_dev['prop_p']:.3f}): a constant offset "
+                     f"removes the shift and leaves the proportional part, which only the linear recalibration (c) addresses. "
+                     f"Both are in the table below, with the holdout slope as the check.")
+    else:
+        why_shift = "A near-constant offset is the signature of a calibration error, which is correctable."
 
     # ---- (a) constant, (c) regression — fitted on dev
     fit_a = fit_constant(dev["selected_mm"], dev["ref_mm"])
@@ -161,7 +188,7 @@ def main() -> int:
 **Status: post-hoc calibration, estimated on the Stage-3 dev subset, reported on holdout.** It was not part of the pre-registered protocol (Stage 3 fixed the method and scale on ground-truth masks; Stage 6 applied them unchanged to predicted masks). If adopted, the manuscript must present it as a calibration step derived after inspecting the out-of-fold error, with the fit set and the held-out evaluation stated. Nothing here was written into `configs/config.yaml`; the recommendation below is for the clinical team's decision.
 
 ## Why
-On the OOF masks the lower gingiva edge is drawn systematically below the annotation (dev mean {bias_px_dev:+.1f} px = {bias_px_dev / k:+.2f} mm; upper edge {top_px_dev:+.1f} px = {top_px_dev / k:+.2f} mm), the pipeline − reference bias is +0.68 mm and the tooth-level mixed model gives +0.68 [+0.57, +0.80] mm with a proportional-bias slope near zero. A near-constant offset is the signature of a calibration error, which is correctable.
+On the OOF masks ({oof_dir.name}) the lower gingiva edge is drawn systematically below the annotation (dev mean {bias_px_dev:+.1f} px = {bias_px_dev / k:+.2f} mm; upper edge {top_px_dev:+.1f} px = {top_px_dev / k:+.2f} mm) and the pipeline − reference bias on dev is {ba_dev['bias']:+.2f} mm [{ba_dev['bias_ci_low']:+.2f}, {ba_dev['bias_ci_high']:+.2f}] with a proportional-bias slope of {ba_dev['prop_slope']:+.3f} (p = {ba_dev['prop_p']:.3f}); the tooth-level mixed model (`mixed_models.md`) reports the same shift. {why_shift}
 
 ## Data and protocol
 * Images: the {len(per)} reference images with OOF masks; **{len(failed)} segmentation failure(s)** ({', '.join(failed['image']) or '—'}: no gingiva predicted, no mm value) excluded from the fit and the evaluation and reported as a separate category.
@@ -194,12 +221,16 @@ Effect of the recommended correction on holdout: MAE {h_none['mae']:.3f} → {t.
 """
     # ---- adopted correction (config.yaml: measurement.bottom_edge_offset_px) = MASK LEVEL, and the three
     # variants side by side: value-level mm constant (a), value-level px constant, mask-level px (adopted)
-    off_px = bottom_edge_offset_from_config(cfg)
+    off_px = bottom_edge_offset_from_config(cfg) if args.adopted_offset_px is None else float(args.adopted_offset_px)
     off_mm_global = offset_mm_at(k, off_px)
     d_adopt = int(round(abs(off_px)))
+    if d_adopt > args.max_shift:
+        raise SystemExit(f"adopted offset {off_px:+.0f} px is outside the re-measured grid 0..{args.max_shift}; raise --max-shift")
     per_t = pd.read_csv(out_dir / "per_image_results_test.csv")
     per_t = per_t[~per_t["empty_prediction"].astype(bool)].copy()
-    test_dir = resolve(cfg, cfg["paths"]["predictions"]) / "test"
+    test_dir = Path(args.test_masks) if args.test_masks else pred_dir / "test"
+    if not test_dir.is_absolute():
+        test_dir = resolve(cfg, test_dir)
     # mask-level re-measurement of the final model's test masks at the adopted shift
     t_mask_mm, t_zero = [], []
     for r in per_t.itertuples(index=False):

@@ -26,7 +26,11 @@ from gsv4.eval.oracle import LABEL_ORDER
 from gsv4.measure.qc import QCFlag
 from gsv4.rules.thresholds import label_for_mm
 
-EXPECTED_MASK_SOURCE = "yolo:masks.data"
+# Mask sources a prediction directory may legitimately carry: the Ultralytics full-resolution
+# masks, the polygon fallback of the same predictor, and RF-DETR's upsampled instance masks
+# (scripts/rfdetr_train_predict.py). Anything else — a resized mask, a predictor left at mask-head
+# resolution, an empty "<model>:none" row — is unexpected and stops the analysis.
+ACCEPTED_MASK_SOURCES = ("yolo:masks.data", "yolo:masks.xy", "rfdetr:masks")
 FALLBACK_REEVALUATE_FRAC = 0.30   # pre-registered: above this, C_p25 is re-evaluated against A_p25
 
 EDGE_COLS = ("gingiva_top_edge_mae_px", "gingiva_top_edge_median_px", "gingiva_top_edge_bias_px",
@@ -38,7 +42,9 @@ def check_oof(oof: pd.DataFrame, reference: pd.DataFrame, mask_dir: Path) -> Dic
     """Integrity of the out-of-fold prediction table against the reference image set.
 
     ``reference`` needs ``image``, ``uid``, ``cv_fold``. Every problem is a sentence in
-    ``problems``; ``ok`` is True only when the list is empty.
+    ``problems``; ``ok`` is True only when the list is empty. ``mask_source`` must be one of
+    ``ACCEPTED_MASK_SOURCES`` on every row — the check is that the masks came back at the
+    original image resolution from a known predictor, not that they came from one model.
     """
     problems: List[str] = []
     n = len(oof)
@@ -55,9 +61,9 @@ def check_oof(oof: pd.DataFrame, reference: pd.DataFrame, mask_dir: Path) -> Dic
     if extra:
         problems.append(f"OOF rows that are not reference images: {extra}")
     src = oof["mask_source"].value_counts().to_dict()
-    bad_src = {k: v for k, v in src.items() if k != EXPECTED_MASK_SOURCE}
+    bad_src = {k: v for k, v in src.items() if k not in ACCEPTED_MASK_SOURCES}
     if bad_src:
-        problems.append(f"mask_source other than {EXPECTED_MASK_SOURCE}: {bad_src}")
+        problems.append(f"mask_source outside the accepted set {list(ACCEPTED_MASK_SOURCES)}: {bad_src}")
     no_png = [i for i in oof["image"] if not (Path(mask_dir) / f"{i}_gingiva.png").exists()]
     if no_png:
         problems.append(f"gingiva PNG missing for {len(no_png)} images: {no_png[:5]}")

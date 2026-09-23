@@ -71,7 +71,10 @@ check_classes outputs/05_predictions/test_rfdetr outputs/09_final_rfdetr/class_c
 
 log "ALL DONE"
 log "next, in the training venv:"
-log "  $PY scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle   # offset re-estimation, PLAN.md 6"
+log "  $PY scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle   # C_p25 fallback rate, PLAN.md 7 (method and scale fixed from config; no re-selection)"
 log "  $PY scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfdetr \\"
 log "      --test-masks outputs/05_predictions/test_rfdetr --out 09_final_rfdetr \\"
 log "      --exclude-uids outputs/08_architecture/arch_test_high_uids.csv   # PLAN.md 5"
+log "  $PY scripts/run_offset_correction.py --out 09_final_rfdetr \\"
+log "      --oof-masks outputs/05_predictions/oof_rfdetr --test-masks outputs/05_predictions/test_rfdetr \\"
+log "      --adopted-offset-px 0   # offset re-estimation, PLAN.md 6"

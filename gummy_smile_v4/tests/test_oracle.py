@@ -10,6 +10,7 @@ from gsv4.eval.oracle import (
     combo_name,
     dev_holdout_split,
     evaluate_combos,
+    evaluate_fixed,
     select_method,
 )
 
@@ -66,3 +67,20 @@ def test_select_method_prefers_simpler_within_tolerance():
     # with a huge tolerance the simplest of all wins
     chosen2, _ = select_method(res, tolerance_mm=10.0)
     assert (chosen2["regioning"], chosen2["estimator"], chosen2["anchored"]) == ("A", "p25", False)
+
+
+def test_evaluate_fixed_uses_the_given_scale_and_fits_nothing():
+    df = _table()
+    split = dev_holdout_split(list(df["uid"]), seed=42, dev_frac=0.6)
+    res = evaluate_combos(df, split).set_index("combo")
+    k_fitted = float(res.loc["C_p25", "px_per_mm_dev"])
+    fixed = evaluate_fixed(df, split, "C_p25", k_fitted)
+    # same scale as the dev fit -> the same numbers as evaluate_combos, no selection involved
+    assert fixed["px_per_mm_dev"] == pytest.approx(k_fitted) and fixed["scale_fitted_here"] is False
+    assert (fixed["regioning"], fixed["estimator"], fixed["anchored"]) == ("C", "p25", False)
+    assert fixed["mae_dev"] == pytest.approx(res.loc["C_p25", "mae_dev"])
+    assert fixed["mae_holdout"] == pytest.approx(res.loc["C_p25", "mae_holdout"])
+    # a scale 10 % off must move the numbers: nothing here re-fits it away
+    off = evaluate_fixed(df, split, "C_p25", k_fitted * 1.1)
+    assert off["ba_bias_holdout"] < fixed["ba_bias_holdout"] - 0.1
+    assert evaluate_fixed(df, split, "C_p25_lipanchored", 19.0)["anchored"] is True
