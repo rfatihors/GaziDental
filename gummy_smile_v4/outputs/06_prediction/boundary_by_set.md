@@ -1,26 +1,28 @@
 # Boundary error and segmentation quality in three image sets
 
+**Model: yolo11x-seg @640.** Out-of-fold masks `outputs/05_predictions/oof` (yolo11x-seg @640, 5 fold models); final-model masks `outputs/05_predictions/test`. Every table below carries the model and the mask directory of each row; both boundary tables were computed here from those masks, not read from another run's CSV.
+
 Same function as on the workstation (`gsv4.eval.boundary.boundary_report`, boundary IoU with 5 px dilation; edge errors column-wise over columns where both masks have gingiva). Pixel values converted at the global scale 16.84 px/mm. `n_*` columns: `n_gt_gingiva` images whose ground truth contains gingiva; `n_both` both masks non-empty (IoU and edge errors defined); `n_missed` GT gingiva but empty prediction; `n_spurious` prediction without GT gingiva; `n_neither` both empty (correct absence — IoU undefined, not zero). Statistics are computed over the images where they are defined (`*_n`).
 
-| set | n | n_gt_gingiva | n_both | n_missed | n_spurious | n_neither | gingiva_mask_iou_n | gingiva_mask_iou_mean | gingiva_mask_iou_median | gingiva_boundary_iou_mean | gingiva_top_edge_mae_mm_mean | gingiva_top_edge_mae_mm_median | gingiva_top_edge_bias_mm_mean | gingiva_bottom_edge_mae_mm_mean | gingiva_bottom_edge_mae_mm_median | gingiva_bottom_edge_bias_mm_mean | gingiva_thickness_mae_mm_mean | gingiva_columns_missed_frac_mean | gingiva_columns_spurious_frac_mean | gingiva_n_columns_gt_median | lip_mask_iou_mean | lip_mask_iou_median |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| (a) OOF, 145 reference high | 145 | 145 | 144 | 1 | 0 | 0 | 145 | 0.758 | 0.774 | 0.270 | 0.322 | 0.255 | 0.160 | 0.763 | 0.729 | 0.661 | 0.724 | 0.042 | 0.015 | 935.000 | 0.794 | 0.814 |
-| (b) test high, final model | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.763 | 0.785 | 0.281 | 0.324 | 0.239 | 0.047 | 0.755 | 0.720 | 0.597 | 0.741 | 0.033 | 0.019 | 941.000 | 0.811 | 0.809 |
-| (b') test high, OOF masks | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.767 | 0.787 | 0.267 | 0.307 | 0.276 | 0.151 | 0.750 | 0.680 | 0.652 | 0.720 | 0.038 | 0.015 | 941.000 | 0.808 | 0.814 |
-| (c) test all | 192 | 161 | 152 | 9 | 6 | 25 | 167 | 0.508 | 0.548 | 0.275 | 0.301 | 0.220 | 0.016 | 0.662 | 0.600 | 0.576 | 0.715 | 0.166 | 0.148 | 279.500 | 0.786 | 0.816 |
-| (c) test low | 45 | 24 | 17 | 7 | 1 | 20 | 25 | 0.280 | 0.344 | 0.228 | 0.169 | 0.160 | -0.033 | 0.529 | 0.528 | 0.486 | 0.563 | 0.300 | 0.052 | 16.000 | 0.762 | 0.798 |
-| (c) test normal | 118 | 108 | 106 | 2 | 5 | 5 | 113 | 0.492 | 0.540 | 0.284 | 0.316 | 0.227 | 0.016 | 0.658 | 0.597 | 0.585 | 0.732 | 0.148 | 0.217 | 309.500 | 0.788 | 0.822 |
+| set | model | n | n_gt_gingiva | n_both | n_missed | n_spurious | n_neither | gingiva_mask_iou_n | gingiva_mask_iou_mean | gingiva_mask_iou_median | gingiva_boundary_iou_mean | gingiva_top_edge_mae_mm_mean | gingiva_top_edge_mae_mm_median | gingiva_top_edge_bias_mm_mean | gingiva_bottom_edge_mae_mm_mean | gingiva_bottom_edge_mae_mm_median | gingiva_bottom_edge_bias_mm_mean | gingiva_thickness_mae_mm_mean | gingiva_columns_missed_frac_mean | gingiva_columns_spurious_frac_mean | gingiva_n_columns_gt_median | lip_mask_iou_mean | lip_mask_iou_median |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| (a) OOF, 145 reference high | yolo11x-seg @640, 5 fold models | 145 | 145 | 144 | 1 | 0 | 0 | 145 | 0.758 | 0.774 | 0.270 | 0.322 | 0.255 | 0.160 | 0.763 | 0.729 | 0.661 | 0.724 | 0.042 | 0.015 | 935.000 | 0.794 | 0.814 |
+| (b) test high, final model | yolo11x-seg @640 | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.763 | 0.785 | 0.281 | 0.324 | 0.239 | 0.047 | 0.755 | 0.718 | 0.596 | 0.741 | 0.033 | 0.019 | 941.000 | 0.811 | 0.809 |
+| (b') test high, OOF masks | yolo11x-seg @640, 5 fold models | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.767 | 0.787 | 0.267 | 0.307 | 0.276 | 0.151 | 0.750 | 0.680 | 0.652 | 0.720 | 0.038 | 0.015 | 941.000 | 0.808 | 0.814 |
+| (c) test all | yolo11x-seg @640 | 192 | 161 | 152 | 9 | 6 | 25 | 167 | 0.508 | 0.548 | 0.275 | 0.301 | 0.220 | 0.016 | 0.661 | 0.600 | 0.575 | 0.714 | 0.166 | 0.148 | 279.500 | 0.786 | 0.816 |
+| (c) test low | yolo11x-seg @640 | 45 | 24 | 17 | 7 | 1 | 20 | 25 | 0.280 | 0.344 | 0.229 | 0.169 | 0.160 | -0.033 | 0.527 | 0.522 | 0.484 | 0.562 | 0.300 | 0.052 | 16.000 | 0.762 | 0.798 |
+| (c) test normal | yolo11x-seg @640 | 118 | 108 | 106 | 2 | 5 | 5 | 113 | 0.493 | 0.542 | 0.284 | 0.316 | 0.227 | 0.016 | 0.657 | 0.596 | 0.584 | 0.731 | 0.148 | 0.217 | 309.500 | 0.788 | 0.822 |
 
 Pixel units of the edge metrics:
 
-| set | gingiva_top_edge_mae_px_mean | gingiva_top_edge_mae_px_median | gingiva_top_edge_bias_px_mean | gingiva_bottom_edge_mae_px_mean | gingiva_bottom_edge_bias_px_mean | gingiva_thickness_mae_px_mean |
-|---|---|---|---|---|---|---|
-| (a) OOF, 145 reference high | 5.42 | 4.30 | 2.70 | 12.84 | 11.14 | 12.19 |
-| (b) test high, final model | 5.46 | 4.03 | 0.79 | 12.72 | 10.05 | 12.48 |
-| (b') test high, OOF masks | 5.16 | 4.65 | 2.55 | 12.63 | 10.98 | 12.12 |
-| (c) test all | 5.07 | 3.70 | 0.27 | 11.15 | 9.71 | 12.04 |
-| (c) test low | 2.85 | 2.70 | -0.56 | 8.90 | 8.19 | 9.49 |
-| (c) test normal | 5.32 | 3.83 | 0.27 | 11.09 | 9.86 | 12.33 |
+| set | model | gingiva_top_edge_mae_px_mean | gingiva_top_edge_mae_px_median | gingiva_top_edge_bias_px_mean | gingiva_bottom_edge_mae_px_mean | gingiva_bottom_edge_bias_px_mean | gingiva_thickness_mae_px_mean |
+|---|---|---|---|---|---|---|---|
+| (a) OOF, 145 reference high | yolo11x-seg @640, 5 fold models | 5.42 | 4.30 | 2.70 | 12.84 | 11.14 | 12.19 |
+| (b) test high, final model | yolo11x-seg @640 | 5.46 | 4.03 | 0.79 | 12.71 | 10.03 | 12.48 |
+| (b') test high, OOF masks | yolo11x-seg @640, 5 fold models | 5.16 | 4.65 | 2.55 | 12.63 | 10.98 | 12.12 |
+| (c) test all | yolo11x-seg @640 | 5.07 | 3.70 | 0.27 | 11.14 | 9.69 | 12.03 |
+| (c) test low | yolo11x-seg @640 | 2.85 | 2.70 | -0.56 | 8.88 | 8.16 | 9.46 |
+| (c) test normal | yolo11x-seg @640 | 5.32 | 3.83 | 0.27 | 11.07 | 9.84 | 12.32 |
 
 ## Reading the three sets
 

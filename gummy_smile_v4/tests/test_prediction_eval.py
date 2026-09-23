@@ -1,11 +1,14 @@
 """Stage 6 table logic on synthetic per-image and boundary tables."""
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from gsv4.eval.prediction import (
     agreement_metrics, boundary_set_summary, boundary_sets_table, check_oof, error_decomposition, fallback_rate,
-    label_confusion, measurement_table, presence_categories, seg_error_vs_boundary, tooth_long, tooth_table, weighted_kappa,
+    label_confusion, mask_provenance, measurement_table, presence_categories, seg_error_vs_boundary, tooth_long,
+    tooth_table, weighted_kappa,
 )
 
 
@@ -162,3 +165,48 @@ def test_presence_categories_and_set_summary():
     assert s["gingiva_bottom_edge_bias_mm_mean"] == pytest.approx(9.0 / 17.0) and s["lip_mask_iou_n"] == 4
     t = boundary_sets_table({"x": b, "y": b.iloc[:2]}, 17.0)
     assert list(t["set"]) == ["x", "y"] and t.loc[1, "n"] == 2
+
+
+CFG = {"yolo": {"model": "yolo11x-seg.pt", "imgsz": 640}}
+
+
+def _yolo_pred(n=6, folds=True):
+    df = _oof(n)
+    df["weights"] = [f"runs/fold{i % 5}/weights/best.pt" for i in range(n)]
+    if not folds:
+        df = df.drop(columns=["fold"])
+        df["weights"] = "runs/final/weights/best.pt"
+    return df
+
+
+def _rfdetr_pred(n=6, folds=True):
+    df = _oof(n, source="rfdetr:masks")
+    df["model"] = "rfdetr-seg-large"
+    df["seed"] = 42
+    if not folds:
+        df = df.drop(columns=["fold"])
+    return df
+
+
+def test_mask_provenance_names_the_model_behind_each_mask_directory():
+    yolo = mask_provenance(_yolo_pred(), Path("outputs/05_predictions/oof"), CFG, "oof", single_model=False)
+    assert yolo["family"] == "yolo" and yolo["label"] == "yolo11x-seg @640, 5 fold models" and yolo["n_models"] == 5
+    assert "Ultralytics" in yolo["evaluator"] and yolo["short"] == "oof"
+    rf = mask_provenance(_rfdetr_pred(folds=False), Path("outputs/05_predictions/test_rfdetr"), CFG, "test", single_model=True)
+    assert rf["family"] == "rfdetr" and rf["label"] == "RF-DETR-Seg Large @624, seed 42" and rf["n_models"] == 1
+    assert "COCO" in rf["evaluator"]        # never Ultralytics for RF-DETR masks
+    assert rf["evaluator"] != yolo["evaluator"]
+
+
+def test_mask_provenance_stops_when_the_source_is_ambiguous():
+    mixed = _rfdetr_pred()
+    mixed.loc[0, "mask_source"] = "yolo:masks.data"
+    with pytest.raises(SystemExit, match="mixes predictor families"):
+        mask_provenance(mixed, Path("d"), CFG, "oof", single_model=False)
+    with pytest.raises(SystemExit, match="no mask_source column"):
+        mask_provenance(_rfdetr_pred().drop(columns=["mask_source"]), Path("d"), CFG, "oof", single_model=False)
+    with pytest.raises(SystemExit, match="without a `model` column"):
+        mask_provenance(_rfdetr_pred().drop(columns=["model"]), Path("d"), CFG, "oof", single_model=False)
+    # a set that must come from one final model may not carry five fold models
+    with pytest.raises(SystemExit, match="expected one model"):
+        mask_provenance(_yolo_pred(), Path("d"), CFG, "final-model test masks", single_model=True)

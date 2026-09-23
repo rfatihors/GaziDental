@@ -70,7 +70,9 @@ step final_predict $RFPY scripts/rfdetr_train_predict.py --variant main --seed 4
 check_classes outputs/05_predictions/test_rfdetr outputs/09_final_rfdetr/class_check_test.png
 
 log "ALL DONE"
-log "next, in the training venv:"
+log "next, in THIS venv (.venv-rfdetr), the final model's own COCO evaluation (PLAN.md 4):"
+log "  $RFPY scripts/rfdetr_train_predict.py --variant main --seed 42 --predict-only --evaluate"
+log "then, in the training venv:"
 log "  $PY scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle   # C_p25 fallback rate, PLAN.md 7 (method and scale fixed from config; no re-selection)"
 log "  $PY scripts/run_prediction_eval.py --oof-masks outputs/05_predictions/oof_rfdetr \\"
 log "      --test-masks outputs/05_predictions/test_rfdetr --out 09_final_rfdetr \\"

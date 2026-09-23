@@ -193,6 +193,20 @@ def evaluate_split(model, ds: Path, spec: dict, args) -> dict:
     return {str(k): float(v) for k, v in dict(m).items() if isinstance(v, (int, float))}
 
 
+def write_metrics(metrics: dict, out: Path, tag: str, spec: dict, args) -> None:
+    """rfdetr_metrics_<tag>.json — the ONLY source Stage 6 quotes for this model's segmentation
+    metrics; it never falls back to another framework's file (PLAN.md §4)."""
+    if not metrics:
+        print("[rfdetr] WARNING: the COCO evaluation returned nothing; no metrics file written")
+        return
+    path = out / f"rfdetr_metrics_{tag}.json"
+    path.write_text(json.dumps({"variant": args.variant, "model_label": tag.rsplit("_s", 1)[0], "seed": args.seed,
+                                "split": spec["evaluate"], "resolution": args.resolution,
+                                "evaluator": "rfdetr model.evaluate (pycocotools, iouType=segm)", **metrics},
+                               indent=1, default=str), encoding="utf-8")
+    print(f"[rfdetr] metrics -> {path}")
+
+
 def run_prediction(model, ds: Path, out: Path, spec: dict, tag: str, seed: int, model_label: str, args) -> None:
     """Predict the images this variant is responsible for, if any."""
     if args.no_predict or not spec.get("masks"):
@@ -221,6 +235,10 @@ def main() -> int:
     ap.add_argument("--predict-only", action="store_true",
                     help="skip training and predict from the run's best checkpoint; use this to redo the masks "
                          "without retraining (the weights are unaffected by a label-space fault)")
+    ap.add_argument("--evaluate", action="store_true",
+                    help="with --predict-only: also run this model's own COCO evaluation of its split and write "
+                         "rfdetr_metrics_<tag>.json (PLAN.md 4). The final model is reused rather than retrained, so "
+                         "without this flag it never gets its own segmentation metrics.")
     args = ap.parse_args()
     spec = VARIANT_OUTPUT[args.variant]
     ds = ROOT / (args.dataset or ("data/rfdetr_dataset" + ("" if args.variant == "main" else f"_{args.variant}")))
@@ -246,6 +264,10 @@ def main() -> int:
         print(f"[rfdetr] loading {ckpt} (training skipped)")
         model = rf["from_checkpoint"](str(ckpt), trust_checkpoint=True)   # our own file, from our own run
         record = {"variant": args.variant, "seed": args.seed, "predict_only": True, "checkpoint": str(ckpt)}
+        if args.evaluate:
+            metrics = evaluate_split(model, ds, spec, args)
+            record["coco_metrics"] = metrics
+            write_metrics(metrics, out, tag, spec, args)
         run_prediction(model, ds, out, spec, tag, args.seed, model_label, args)
         (out / f"rfdetr_predict_{tag}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
         return 0
@@ -281,8 +303,7 @@ def main() -> int:
     metrics = evaluate_split(model, ds, spec, args)
     if metrics:
         record["coco_metrics"] = metrics
-        (out / f"rfdetr_metrics_{tag}.json").write_text(json.dumps({"variant": args.variant, "seed": args.seed,
-                                                                    "split": spec["evaluate"], **metrics}, indent=1, default=str), encoding="utf-8")
+    write_metrics(metrics, out, tag, spec, args)
     run_prediction(model, ds, out, spec, tag, args.seed, model_label, args)
     (out / f"rfdetr_train_{tag}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     print("[rfdetr] next, in the training venv: python scripts/run_architecture_comparison.py --measure-only "

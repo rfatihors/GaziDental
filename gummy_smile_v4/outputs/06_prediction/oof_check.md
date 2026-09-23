@@ -1,5 +1,7 @@
 # OOF prediction check (outputs/05_predictions/oof)
 
+- model: **yolo11x-seg @640, 5 fold models**
+- masks: `outputs/05_predictions/oof`
 - rows: 145 (reference images: 145)
 - mask_source: {'yolo:masks.data': 145}
 - images per fold: {0: 29, 1: 29, 2: 29, 3: 29, 4: 29}

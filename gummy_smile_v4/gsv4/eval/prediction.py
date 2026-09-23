@@ -14,6 +14,7 @@ Sets (pre-registered, 12 Sep 2026):
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -33,8 +34,80 @@ from gsv4.rules.thresholds import label_for_mm
 ACCEPTED_MASK_SOURCES = ("yolo:masks.data", "yolo:masks.xy", "rfdetr:masks")
 FALLBACK_REEVALUATE_FRAC = 0.30   # pre-registered: above this, C_p25 is re-evaluated against A_p25
 
+# Detection / segmentation metrics come from each framework's own evaluator. The two agree in
+# definition but not in matching detail (PLAN.md §4 of outputs/09_final_rfdetr), so a table never
+# mixes them: every reported number names the evaluator that produced it.
+EVALUATORS = {
+    "yolo": "Ultralytics val() (box/mask P, R, F1, mAP@50, mAP@50-95)",
+    "rfdetr": "RF-DETR's own COCO evaluation (pycocotools, iouType='segm')",
+}
+
 EDGE_COLS = ("gingiva_top_edge_mae_px", "gingiva_top_edge_median_px", "gingiva_top_edge_bias_px",
              "gingiva_bottom_edge_mae_px", "gingiva_bottom_edge_median_px", "gingiva_bottom_edge_bias_px", "gingiva_thickness_mae_px")
+
+
+# ----------------------------------------------------------------------------- provenance
+def rel_to(path: Any, root: Optional[Path]) -> str:
+    """``path`` written relative to ``root`` when it lies inside it — reports read better that way."""
+    if path is None:
+        return "none"
+    p = Path(path)
+    if root is not None:
+        try:
+            rel = os.path.relpath(p, root)
+            if not rel.startswith(f"..{os.sep}.."):   # a sibling directory reads well, a long climb does not
+                return rel
+        except ValueError:                      # different drive: nothing shorter to say
+            pass
+    return str(p)
+
+
+def mask_provenance(pred: pd.DataFrame, mask_dir: Path, cfg: Dict[str, Any], role: str, single_model: bool,
+                    root: Optional[Path] = None) -> Dict[str, Any]:
+    """Which model wrote the masks in ``mask_dir``, read from the prediction table itself.
+
+    A report that silently mixes two models is worse than no report, so every ambiguity stops the
+    run: no ``mask_source`` column, two predictor families in one table, an RF-DETR table without
+    its ``model`` column, or several models where the set is supposed to come from one
+    (``single_model``; the out-of-fold sets are the exception, one model per fold).
+
+    The returned ``label`` names the model, ``dir`` the directory the masks were read from and
+    ``evaluator`` the framework evaluator whose detection metrics may be quoted for it.
+    """
+    mask_dir = Path(mask_dir)
+    if "mask_source" not in pred.columns or pred["mask_source"].isna().all():
+        raise SystemExit(f"{role} ({mask_dir}): the prediction table has no mask_source column, so the model that "
+                         "wrote these masks cannot be identified — refusing to report unattributed numbers")
+    families = sorted({str(v).split(":")[0] for v in pred["mask_source"].dropna().unique()})
+    if len(families) != 1:
+        raise SystemExit(f"{role} ({mask_dir}): the prediction table mixes predictor families {families}")
+    family = families[0]
+    if family not in EVALUATORS:
+        raise SystemExit(f"{role} ({mask_dir}): unknown predictor family {family!r}")
+    folds = sorted(int(f) for f in pred["fold"].dropna().unique()) if "fold" in pred.columns else []
+    if family == "rfdetr":
+        if "model" not in pred.columns or pred["model"].isna().any():
+            raise SystemExit(f"{role} ({mask_dir}): RF-DETR prediction table without a `model` column — "
+                             "re-run scripts/rfdetr_train_predict.py, which records the model label and the seed")
+        models = sorted(pred["model"].dropna().astype(str).unique())
+        seeds = sorted({int(x) for x in pred["seed"].dropna()}) if "seed" in pred.columns else []
+        name = {"rfdetr-seg-large": "RF-DETR-Seg Large @624"}.get(models[0], models[0]) if len(models) == 1 else "/".join(models)
+        label = name + (f", seed {', '.join(str(x) for x in seeds)}" if seeds else "")
+        runs = models
+    else:
+        stem = str(cfg["yolo"]["model"]).replace(".pt", "")
+        label = f"{stem} @{int(cfg['yolo']['imgsz'])}"
+        runs = sorted({Path(str(w)).parent.parent.name for w in pred["weights"].dropna()}) if "weights" in pred.columns else []
+    n_models = len(folds) if folds else max(1, len(runs))
+    if single_model and (folds or n_models > 1):
+        raise SystemExit(f"{role} ({mask_dir}): expected one model but the table names {n_models} "
+                         f"({', '.join(map(str, folds or runs))}) — this set must come from a single final model")
+    if folds:
+        label += f", {len(folds)} fold models"
+    where = rel_to(mask_dir, root)
+    return {"family": family, "label": label, "dir": where, "short": mask_dir.name, "n_models": n_models,
+            "folds": folds, "runs": runs, "evaluator": EVALUATORS[family],
+            "text": f"{label} — masks from `{where}`"}
 
 
 # ----------------------------------------------------------------------------- OOF integrity

@@ -37,8 +37,8 @@ from gsv4.config import load_config, resolve  # noqa: E402
 from gsv4.eval.expert import tooth_mixed_models  # noqa: E402
 from gsv4.eval.oracle import COMBOS, combo_name, measure_images  # noqa: E402
 from gsv4.eval.prediction import (  # noqa: E402
-    agreement_metrics, boundary_sets_table, check_oof, error_decomposition, fallback_rate, label_confusion, md_table,
-    measurement_table, seg_error_vs_boundary, tooth_long, tooth_table,
+    EVALUATORS, agreement_metrics, boundary_sets_table, check_oof, error_decomposition, fallback_rate, label_confusion,
+    mask_provenance, md_table, measurement_table, rel_to, seg_error_vs_boundary, tooth_long, tooth_table,
 )
 from gsv4.io.forms import TEETH  # noqa: E402
 from gsv4.measure.calibration import bottom_edge_offset_from_config, offset_mm_at  # noqa: E402
@@ -49,7 +49,7 @@ from gsv4.train.evaluate_test import boundary_table  # noqa: E402
 
 # Okabe–Ito (colour-blind safe), fixed order: (a) OOF, (b) test high final, low, normal
 SET_COLOURS = {"a": "#0072B2", "b": "#D55E00", "low": "#009E73", "normal": "#CC79A7"}
-MEAS_COLS = ["set", "masks", "correction", "n", "n_segmentation_failure", "images_with_zeroed_columns", "zeroed_columns_frac_mean", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
+MEAS_COLS = ["set", "masks", "masks_dir", "model", "correction", "n", "n_segmentation_failure", "images_with_zeroed_columns", "zeroed_columns_frac_mean", "mae", "rmse", "median_abs_err", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high",
              "ba_bias", "ba_bias_ci_low", "ba_bias_ci_high", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p",
              "threshold_agreement", "threshold_kappa_linear", "threshold_kappa_linear_ci_low", "threshold_kappa_linear_ci_high", "within_0_5_mm", "within_1_mm"]
 
@@ -118,6 +118,33 @@ def build_per_image(rows: pd.DataFrame, meas: pd.DataFrame, stage3: pd.DataFrame
         per[f"gt_mm_{i}"] = per["uid"].map(s3[f"selected_region_{i}_mm"])
     per["gt_alignment_uncertain"] = per["uid"].map(s3["alignment_uncertain"]).astype(bool)
     return pd.DataFrame(per)
+
+
+def seg_metrics_md(metrics: dict, model: str, mask_dir: str, evaluator: str, source: str) -> str:
+    """The final model's own detection/segmentation metrics, from its own framework's evaluator.
+
+    Ultralytics ``val()`` and RF-DETR's COCO evaluation agree in definition but not in matching
+    detail, so the two never share a table (PLAN.md 4 of outputs/09_final_rfdetr): the evaluator is
+    named in the heading and the cross-architecture comparison is left to the framework-independent
+    boundary and IoU metrics.
+    """
+    head = (f"# Detection / segmentation metrics of the final model\n\n"
+            f"Model: **{model}**; masks `{mask_dir}`; evaluator: **{evaluator}**; source: "
+            f"`{source}`.\n\nThese numbers come from one framework's evaluator and are not "
+            f"comparable, row by row, with another framework's mAP; architecture comparisons in this project use the "
+            f"framework-independent boundary and IoU metrics of `boundary_by_set.md`.\n")
+    if not metrics:
+        return head + ("\n**Not available.** No metrics file for this model was found, and no other model's file is "
+                       "substituted for it. Run that model's own evaluation and re-run this script.\n")
+    if "per_class" in metrics:            # Ultralytics val() layout
+        rows = [{"class": c, **{kk: vv for kk, vv in v.items()}} for c, v in metrics["per_class"].items()]
+        body = md_table(pd.DataFrame(rows))
+        extra = f"\n\nWeights: `{metrics.get('weights', '?')}`; split `{metrics.get('split', '?')}`, {metrics.get('n_images', '?')} images."
+    else:                                  # a flat metric block (RF-DETR's COCO evaluation)
+        flat = {kk: vv for kk, vv in metrics.items() if isinstance(vv, (int, float))}
+        body = md_table(pd.DataFrame({"metric": list(flat), "value": list(flat.values())}), "{:.4f}")
+        extra = f"\n\nSplit: `{metrics.get('split', '?')}`; variant `{metrics.get('variant', '?')}`, seed {metrics.get('seed', '?')}."
+    return head + "\n" + body + extra + "\n"
 
 
 def mixed_md(title: str, models: list) -> str:
@@ -194,7 +221,17 @@ def main() -> int:
     ap.add_argument("--exclude-uids", default=None,
                     help="CSV with a uid column to leave out; the pre-registered sensitivity analysis of "
                          "outputs/09_final_rfdetr/PLAN.md 5 passes the 29 images used to choose the architecture")
+    ap.add_argument("--seg-metrics", default=None,
+                    help="JSON with the final model's own detection/segmentation metrics; default: the file that "
+                         "belongs to the predictor of --test-masks (YOLO: outputs/05_predictions/test_metrics.json, "
+                         "RF-DETR: outputs/08_architecture/rfdetr_metrics_<model>_s<seed>.json)")
+    ap.add_argument("--seg-evaluator", default=None, help="name of the evaluator that produced --seg-metrics (required with it)")
+    ap.add_argument("--reference-boundary", default=None,
+                    help="boundary_error.csv of an EARLIER final model, reported as clearly labelled reference rows "
+                         "only; default: outputs/05_predictions/boundary_error.csv (YOLOv11x) when the masks are not its own")
     args = ap.parse_args()
+    if bool(args.seg_metrics) != bool(args.seg_evaluator):
+        raise SystemExit("--seg-metrics and --seg-evaluator go together: a metric without its evaluator is not reportable")
     cfg = load_config(args.config)
     outputs = resolve(cfg, cfg["paths"]["outputs"])
     out_dir = outputs / args.out
@@ -230,22 +267,53 @@ def main() -> int:
     k_alt = {alt: float(est3.loc[alt, "px_per_mm_dev"])} if alt in est3.index and alt != combo else {}
     oof = pd.read_csv(oof_dir / "oof_predictions.csv")
     test_pred = pd.read_csv(test_dir / "test_predictions.csv")
-    b_test = pd.read_csv(pred_dir / "boundary_error.csv")
-    test_metrics = json.loads((pred_dir / "test_metrics.json").read_text()) if (pred_dir / "test_metrics.json").exists() else {}
+
+    # ---- provenance: which model wrote which masks, and whose evaluator may be quoted for it.
+    # Everything below is labelled with these; anything ambiguous stopped the run inside mask_provenance.
+    prov_oof = mask_provenance(oof, oof_dir, cfg, "out-of-fold masks", single_model=False, root=ROOT)
+    prov_test = mask_provenance(test_pred, test_dir, cfg, "final-model test masks", single_model=True, root=ROOT)
+    rel_oof, rel_test = prov_oof["dir"], prov_test["dir"]
+    if prov_oof["family"] != prov_test["family"]:
+        raise SystemExit(f"out-of-fold masks come from {prov_oof['label']} but the test masks from {prov_test['label']} — "
+                         "one Stage-6 report describes one segmentation model")
+    print(f"[stage6] out-of-fold masks: {prov_oof['text']}\n[stage6] final-model masks: {prov_test['text']}")
+    if args.seg_metrics:
+        seg_path, seg_evaluator = Path(args.seg_metrics), args.seg_evaluator
+        if not seg_path.is_absolute():
+            seg_path = resolve(cfg, seg_path)
+    elif prov_test["family"] == "yolo":
+        seg_path, seg_evaluator = pred_dir / "test_metrics.json", prov_test["evaluator"]
+    else:                                   # RF-DETR reports its own COCO evaluation (PLAN.md 4)
+        seeds = sorted({int(x) for x in test_pred["seed"].dropna()}) if "seed" in test_pred.columns else []
+        # scripts/rfdetr_train_predict.py writes outputs/08_architecture/rfdetr_metrics_<model>_s<seed>.json
+        seg_path = (outputs / "08_architecture" / f"rfdetr_metrics_{prov_test['runs'][0]}_s{seeds[0]}.json") if seeds else None
+        seg_evaluator = prov_test["evaluator"]
+    seg_metrics = json.loads(seg_path.read_text()) if seg_path and seg_path.exists() else {}
+    # An earlier final model's numbers may be shown as reference rows, never as this model's own.
+    ref_b_path = Path(args.reference_boundary) if args.reference_boundary else pred_dir / "boundary_error.csv"
+    if not ref_b_path.is_absolute():
+        ref_b_path = resolve(cfg, ref_b_path)
+    ref_label = "YOLOv11x (previous final model)"
+    ref_b = pd.read_csv(ref_b_path) if (ref_b_path.exists() and prov_test["family"] != "yolo") else None
+    ref_oof_b_path = outputs / "06_prediction" / "boundary_error_oof.csv"
+    ref_oof_b = pd.read_csv(ref_oof_b_path) if (ref_oof_b_path.exists() and out_dir != outputs / "06_prediction" and prov_oof["family"] != "yolo") else None
 
     # ---- 1. OOF integrity
+    # both predictors run at conf 0.25, but only the YOLO one takes it from this config
+    conf_txt = f"conf {cfg['yolo']['conf']}" if prov_oof["family"] == "yolo" else "the predictor's confidence threshold"
     chk = check_oof(oof, ref[["image", "uid", "cv_fold"]], oof_dir)
-    chk_md = [f"# OOF prediction check ({oof_dir})", "",
+    chk_md = [f"# OOF prediction check ({rel_oof})", "",
+              f"- model: **{prov_oof['label']}**", f"- masks: `{rel_oof}`",
               f"- rows: {chk['n_rows']} (reference images: {chk['n_reference']})", f"- mask_source: {chk['mask_source']}",
               f"- images per fold: {chk['folds']}", f"- gingiva PNG missing: {chk['n_missing_png']}",
-              f"- empty gingiva prediction (no instance above conf {cfg['yolo']['conf']}): {chk['empty_gingiva_prediction'] or 'none'}",
+              f"- empty gingiva prediction (no instance above {conf_txt}): {chk['empty_gingiva_prediction'] or 'none'}",
               f"- result: **{'OK' if chk['ok'] else 'PROBLEMS'}**"] + [f"  - {p}" for p in chk["problems"]]
     (out_dir / "oof_check.md").write_text("\n".join(chk_md) + "\n", encoding="utf-8")
     print("\n".join(chk_md))
     if not chk["ok"]:
         raise SystemExit("OOF prediction table is inconsistent — see oof_check.md")
     for img in chk["empty_gingiva_prediction"]:
-        deviations.append(f"`{img}`: **segmentation failure** — the fold model predicted no gingiva instance above conf {cfg['yolo']['conf']} (empty mask). Reported as its own category (`n_segmentation_failure`, 1 of 145 = 0.7 %), not as a 0 mm measurement: the image has no mm value and is excluded from the mm and label metrics (n = 144), flagged `empty_prediction` in per_image_results.csv.")
+        deviations.append(f"`{img}`: **segmentation failure** — the fold model predicted no gingiva instance above {conf_txt} (empty mask). Reported as its own category (`n_segmentation_failure`, 1 of 145 = 0.7 %), not as a 0 mm measurement: the image has no mm value and is excluded from the mm and label metrics (n = 144), flagged `empty_prediction` in per_image_results.csv.")
 
     # ---- 2. measurement with the fixed method and scale: (a) OOF masks, (b) test high with the final model
     rows_cols = ["uid", "image", "patient_id", "group", "split", "cv_fold", "width", "height", "frame_ok", "orig_split", "file_name"]
@@ -305,17 +373,24 @@ def main() -> int:
             rows.append(u.iloc[i]); rows.append(c.iloc[i])
         return pd.DataFrame(rows).reset_index(drop=True)
 
-    acc = both(per, sets_a, "OOF (fold models)")
-    acc_b = both(per_t, {"(b) final model masks, test high images [secondary set]": pd.Series(True, index=per_t.index)}, "final model")
+    label_oof = f"OOF fold models ({prov_oof['short']})"
+    label_fin = f"final model ({prov_test['short']})"
+    acc = both(per, sets_a, label_oof)
+    acc_b = both(per_t, {"(b) final model masks, test high images [secondary set]": pd.Series(True, index=per_t.index)}, label_fin)
     acc_gt = measurement_table(per, {"GT masks, all reference images (Stage 3, same method and scale)": T, "GT masks, Stage-3 holdout": per["split"] == "holdout"},
                                value_col="gt_mm", n_boot=args.n_boot, seed=seed)
     acc_gt.insert(1, "masks", "ground truth"); acc_gt.insert(2, "correction", "n/a (GT masks)")
     parts = [acc, acc_b, acc_gt]
     if k_alt:
         acc_alt = measurement_table(per, {f"(a) OOF, {alt} at its Stage-3 scale {k_alt[alt]:.2f} px/mm (fallback sensitivity)": T}, value_col=f"{alt}_mm", n_boot=args.n_boot, seed=seed)
-        acc_alt.insert(1, "masks", "OOF (fold models)"); acc_alt.insert(2, "correction", "none")
+        acc_alt.insert(1, "masks", label_oof); acc_alt.insert(2, "correction", "none")
         parts.append(acc_alt)
     acc_all = pd.concat(parts, ignore_index=True)
+    # provenance on every row of the table, so no number travels without its model
+    src_of = {label_oof: (prov_oof["label"], prov_oof["dir"]), label_fin: (prov_test["label"], prov_test["dir"]),
+              "ground truth": ("COCO annotations (no model)", rel_to(coco_root, ROOT))}
+    acc_all["model"] = [src_of[m][0] for m in acc_all["masks"]]
+    acc_all["masks_dir"] = [src_of[m][1] for m in acc_all["masks"]]
     acc_all = acc_all[[c for c in MEAS_COLS if c in acc_all.columns]]
     acc_all.to_csv(out_dir / "measurement_accuracy.csv", index=False)
     prim, prim_c = acc_all.iloc[0], acc_all.iloc[1]
@@ -364,12 +439,18 @@ observed agreement {100 * gt_all['threshold_agreement']:.1f} %, linear-weighted 
     (out_dir / "class_agreement.md").write_text(class_md, encoding="utf-8")
 
     # ---- 5. boundary / segmentation quality in the three sets
-    print("[stage6] boundary errors of the OOF masks against the COCO ground truth …")
+    # Both tables are computed HERE from the masks that were actually measured above, never read from
+    # a CSV another model's run left behind; the provenance of every row is written into the table.
+    print(f"[stage6] boundary errors of the OOF masks ({prov_oof['label']}) against the COCO ground truth …")
     b_oof = boundary_table(cfg, oof, oof_dir)
     b_oof.to_csv(out_dir / "boundary_error_oof.csv", index=False)
+    print(f"[stage6] boundary errors of the {len(test_pred)} test masks ({prov_test['label']}) …")
+    b_test = boundary_table(cfg, test_pred, test_dir)
+    b_test.to_csv(out_dir / "boundary_error_test.csv", index=False)
     test_high_uids = set(rows_t["uid"])
     if not test_high_uids <= set(b_test["uid"]):
-        raise SystemExit("boundary_error.csv (workstation) does not contain every test high image")
+        missing = sorted(test_high_uids - set(b_test["uid"]))
+        raise SystemExit(f"{test_dir}/test_predictions.csv does not cover every test high image ({len(missing)} missing: {missing[:5]})")
     b_sets = {
         "(a) OOF, 145 reference high": b_oof,
         "(b) test high, final model": b_test[b_test["group"] == "high"],
@@ -378,17 +459,37 @@ observed agreement {100 * gt_all['threshold_agreement']:.1f} %, linear-weighted 
         "(c) test low": b_test[b_test["group"] == "low"],
         "(c) test normal": b_test[b_test["group"] == "normal"],
     }
+    set_source = {name: (prov_oof if name.startswith(("(a)", "(b')")) else prov_test) for name in b_sets}
+    n_own_sets = len(b_sets)
+    if ref_b is not None:                       # earlier final model, reported side by side and labelled as such
+        b_sets[f"[reference] {ref_label}, test high"] = ref_b[ref_b["group"] == "high"]
+        b_sets[f"[reference] {ref_label}, test all"] = ref_b
+        for nm in (f"[reference] {ref_label}, test high", f"[reference] {ref_label}, test all"):
+            set_source[nm] = {"label": ref_label, "dir": rel_to(ref_b_path, ROOT), "evaluator": EVALUATORS["yolo"]}
+    if ref_oof_b is not None:
+        nm = f"[reference] {ref_label}, OOF 145 reference high"
+        b_sets[nm] = ref_oof_b
+        set_source[nm] = {"label": ref_label, "dir": rel_to(ref_oof_b_path, ROOT), "evaluator": EVALUATORS["yolo"]}
     bt = boundary_sets_table(b_sets, k)
+    bt.insert(1, "model", [set_source[n]["label"] for n in b_sets])
+    bt.insert(2, "masks_dir", [set_source[n]["dir"] for n in b_sets])
     bt.to_csv(out_dir / "boundary_by_set.csv", index=False)
-    show_b = bt[["set", "n", "n_gt_gingiva", "n_both", "n_missed", "n_spurious", "n_neither", "gingiva_mask_iou_n", "gingiva_mask_iou_mean", "gingiva_mask_iou_median",
+    show_b = bt[["set", "model", "n", "n_gt_gingiva", "n_both", "n_missed", "n_spurious", "n_neither", "gingiva_mask_iou_n", "gingiva_mask_iou_mean", "gingiva_mask_iou_median",
                  "gingiva_boundary_iou_mean", "gingiva_top_edge_mae_mm_mean", "gingiva_top_edge_mae_mm_median", "gingiva_top_edge_bias_mm_mean",
                  "gingiva_bottom_edge_mae_mm_mean", "gingiva_bottom_edge_mae_mm_median", "gingiva_bottom_edge_bias_mm_mean", "gingiva_thickness_mae_mm_mean",
                  "gingiva_columns_missed_frac_mean", "gingiva_columns_spurious_frac_mean", "gingiva_n_columns_gt_median", "lip_mask_iou_mean", "lip_mask_iou_median"]]
-    bt_px = bt[["set", "gingiva_top_edge_mae_px_mean", "gingiva_top_edge_median_px_mean" if "gingiva_top_edge_median_px_mean" in bt.columns else "gingiva_top_edge_mae_px_median",
+    bt_px = bt[["set", "model", "gingiva_top_edge_mae_px_mean", "gingiva_top_edge_median_px_mean" if "gingiva_top_edge_median_px_mean" in bt.columns else "gingiva_top_edge_mae_px_median",
                 "gingiva_top_edge_bias_px_mean", "gingiva_bottom_edge_mae_px_mean", "gingiva_bottom_edge_bias_px_mean", "gingiva_thickness_mae_px_mean"]]
     ba, bb, bc = bt.iloc[0], bt.iloc[1], bt.iloc[3]
     b_low, b_norm = bt.iloc[4], bt.iloc[5]
+    ref_note = ""
+    if ref_b is not None or ref_oof_b is not None:
+        ref_note = (f"\n\nRows marked **[reference]** are the {ref_label}, computed on ITS OWN masks in an earlier run "
+                    f"(`{rel_to(ref_b_path if ref_b is not None else ref_oof_b_path, ROOT)}`) and reported here only so the two models can be read side by side. "
+                    f"They are not this model's numbers and were not recomputed here.")
     boundary_md = f"""# Boundary error and segmentation quality in three image sets
+
+**Model: {prov_test['label']}.** Out-of-fold masks `{rel_oof}` ({prov_oof['label']}); final-model masks `{rel_test}`. Every table below carries the model and the mask directory of each row; both boundary tables were computed here from those masks, not read from another run's CSV.{ref_note}
 
 Same function as on the workstation (`gsv4.eval.boundary.boundary_report`, boundary IoU with 5 px dilation; edge errors column-wise over columns where both masks have gingiva). Pixel values converted at the global scale {k:.2f} px/mm. `n_*` columns: `n_gt_gingiva` images whose ground truth contains gingiva; `n_both` both masks non-empty (IoU and edge errors defined); `n_missed` GT gingiva but empty prediction; `n_spurious` prediction without GT gingiva; `n_neither` both empty (correct absence — IoU undefined, not zero). Statistics are computed over the images where they are defined (`*_n`).
 
@@ -405,6 +506,8 @@ Pixel units of the edge metrics:
 * **(c)** the whole test set (n = {int(bc['n'])}) has a lower mean gingiva IoU ({bc['gingiva_mask_iou_mean']:.3f}) **by construction, not because the model is worse there**: in low and normal smile lines the gingiva is thin or not visible at all. In the test low subset the annotated gingiva spans a median of {b_low['gingiva_n_columns_gt_median']:.0f} image columns (vs {ba['gingiva_n_columns_gt_median']:.0f} in the high set) and {int(b_low['n_neither']) + int(b_low['n_missed']) + int(b_low['n_spurious'])} of {int(b_low['n'])} images have an empty GT or predicted gingiva; a few pixels of edge disagreement on a sliver one or two pixels tall drive IoU towards 0 even though the edge errors themselves are *smaller* than in the high set (upper edge MAE {b_low['gingiva_top_edge_mae_mm_mean']:.2f} mm low, {b_norm['gingiva_top_edge_mae_mm_mean']:.2f} mm normal). Presence agreement in (c): both {int(bc['n_both'])}, correct absence {int(bc['n_neither'])}, missed {int(bc['n_missed'])}, spurious {int(bc['n_spurious'])}. The pipeline is specified for the high smile line only (visible gingiva → mm; otherwise NO_VISIBLE_GINGIVA), so (c) is reported for completeness of the segmentation evaluation and is not the basis of any measurement claim.
 """
     (out_dir / "boundary_by_set.md").write_text(boundary_md, encoding="utf-8")
+    (out_dir / "segmentation_metrics.md").write_text(
+        seg_metrics_md(seg_metrics, prov_test["label"], rel_test, seg_evaluator, rel_to(seg_path, ROOT)), encoding="utf-8")
 
     # ---- 6. error decomposition (a)
     dec = error_decomposition(per)
@@ -475,8 +578,17 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
     decomposition_figure(dec_per, b_oof.set_index("uid"), k, fig_dir / "error_decomposition.png")
 
     # ---- 9. deviations
-    if "per_class" not in test_metrics:
-        deviations.append("`outputs/05_predictions/test_metrics.json` has no `per_class` block (box/mask mAP, P, R, F1 of the final model on the test set): the workstation eval ran the boundary stage only (`--metrics-only`) and `runs/eval/DONE` was not written. Re-run `python -m gsv4.train.evaluate_test` on the workstation (validation runs, predictions are reused) and pull; the detection metrics table of Stage 7 stays pending until then.")
+    # No metrics file is ever borrowed from another model: the table stays empty and says what to run.
+    where = rel_to(seg_path, ROOT) if seg_path else "no metrics file could be named for this model"
+    if not seg_metrics:
+        how = ("re-run `python -m gsv4.train.evaluate_test` on the workstation (validation runs, the predictions are reused)"
+               if prov_test["family"] == "yolo" else
+               "the final model is reused from the architecture comparison with `--predict-only`, which does not evaluate; run "
+               "`.venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --variant main --seed 42 --predict-only --evaluate` on the workstation")
+        deviations.append(f"No detection/segmentation metrics for {prov_test['label']} (PLAN.md 4): `{where}` is missing, and another model's "
+                          f"file is NOT used in its place — `segmentation_metrics.md` stays empty and the Stage-7 table stays pending. To fill it, {how}, then re-run this script.")
+    elif prov_test["family"] == "yolo" and "per_class" not in seg_metrics:
+        deviations.append(f"`{where}` has no `per_class` block (box/mask mAP, P, R, F1 of the final model on the test set): the workstation eval ran the boundary stage only (`--metrics-only`) and `runs/eval/DONE` was not written. Re-run `python -m gsv4.train.evaluate_test` on the workstation (validation runs, predictions are reused) and pull; the detection metrics table of Stage 7 stays pending until then.")
     nan_iou = int(b_test["gingiva_mask_iou"].isna().sum()); nan_edge = int(b_test["gingiva_top_edge_mae_px"].isna().sum())
     deviations.append(f"Test-set boundary table: gingiva IoU undefined on {nan_iou} images (both masks empty) and edge errors undefined on {nan_edge} images (no column with gingiva in both masks) — all low/normal; reported as presence categories, not as zeros.")
     deviations.append(f"Mask-level correction ({off:+.0f} px): columns whose bottom run was shorter than the shift became 0 (never negative) in "
@@ -494,10 +606,20 @@ Six teeth per image are not independent: `diff ~ … + (1 | patient)` (REML; `pa
                          f"bias {r['ba_bias']:+.3f} mm [{r['ba_bias_ci_low']:+.3f}, {r['ba_bias_ci_high']:+.3f}], LoA {r['ba_loa_low']:.2f} to {r['ba_loa_high']:.2f} mm, "
                          f"proportional-bias slope {r['ba_prop_slope']:+.3f} (p = {r['ba_prop_p']:.3f}); within 0.5 mm {100 * r['within_0_5_mm']:.0f} %, within 1 mm {100 * r['within_1_mm']:.0f} %; "
                          f"label agreement {100 * r['threshold_agreement']:.1f} %, linear-weighted κ {r['threshold_kappa_linear']:.3f} [{r['threshold_kappa_linear_ci_low']:.3f}, {r['threshold_kappa_linear_ci_high']:.3f}]")
-    show = acc_all[["set", "correction", "n", "mae", "rmse", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high", "ba_bias", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p", "threshold_agreement", "threshold_kappa_linear"]]
+    show = acc_all[["set", "model", "correction", "n", "mae", "rmse", "r", "icc2_1", "icc2_1_ci_low", "icc2_1_ci_high", "ba_bias", "ba_loa_low", "ba_loa_high", "ba_prop_slope", "ba_prop_p", "threshold_agreement", "threshold_kappa_linear"]]
     summary = f"""# Stage 6 — full pipeline on predicted masks
 
-Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction of config.yaml (`measurement.bottom_edge_offset_px = {off:+.0f}`: the lower gingiva edge of the predicted mask is moved up by {abs(off):.0f} px in every column before the thickness profile is built, {off_mm:+.2f} mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Masks: `outputs/05_predictions/oof` (5 fold models, each predicting only its held-out fold; `oof_check.md`) and `outputs/05_predictions/test` (final model). Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
+Method **{combo}**, global scale **{k:.2f} px/mm**, both fixed in `configs/config.yaml` from Stage 3 (ground-truth masks, dev subset). Nothing was re-selected or re-fitted on predicted masks. **Uncorrected values are the PRIMARY result.** The post-hoc mask-level correction of config.yaml (`measurement.bottom_edge_offset_px = {off:+.0f}`: the lower gingiva edge of the predicted mask is moved up by {abs(off):.0f} px in every column before the thickness profile is built, {off_mm:+.2f} mm at the global scale; estimated on the Stage-3 dev subset, `offset_correction.md` / `offset_checks.md`) gives the SECONDARY, corrected values; every table carries both, primary first. Bootstrap CIs of κ: {args.n_boot} resamples, seed {seed}.
+
+## Provenance of every number below
+| what | model | masks | metrics evaluator |
+|---|---|---|---|
+| (a) out-of-fold masks, {chk['n_rows']} reference images | {prov_oof['label']} | `{rel_oof}` (`oof_check.md`) | — (mm accuracy is measured here, not by a framework) |
+| (b) final-model masks, test high images | {prov_test['label']} | `{rel_test}` | {seg_evaluator} → `segmentation_metrics.md` |
+| ground-truth masks (Stage 3 comparison) | COCO annotations, no model | `{rel_to(coco_root, ROOT)}` | — |
+{f"| [reference] rows in `boundary_by_set.md` | {ref_label} | `{rel_to(ref_b_path if ref_b is not None else ref_oof_b_path, ROOT)}` | {EVALUATORS['yolo']} |" if (ref_b is not None or ref_oof_b is not None) else ""}
+
+Boundary and IoU tables are computed here from exactly these masks. An earlier final model's figures appear only in rows marked **[reference]**, never merged into this model's rows, and detection metrics are taken only from the evaluator of the model that produced the masks ({seg_evaluator}) — the two frameworks' mAP definitions are not interchangeable (PLAN.md 4).
 
 ## Primary result — (a) all {int(prim['n'])} reference images, out-of-fold masks
 {fmt_row(prim)}.
@@ -517,7 +639,7 @@ Corrected ({corr_tag}): {fmt_row(sec_c)}. Images with zeroed columns: {int(sec_c
 ## Error decomposition (a)
 Segmentation part: bias {ds['e_seg_bias']:+.3f} mm, MAE {ds['e_seg_mae']:.3f} mm; geometry part (Stage 3): bias {ds['e_meas_bias']:+.3f} mm, MAE {ds['e_meas_mae']:.3f} mm; variance shares {100 * ds['share_seg']:.0f} % / {100 * ds['share_meas']:.0f} % / covariance {100 * ds['share_cov']:+.0f} %. The segmentation error follows the lower gingiva edge: bias {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f} mm (predicted gingiva extends below the annotated edge), upper edge bias {ba['gingiva_top_edge_bias_mm_mean']:+.2f} mm — `error_decomposition.md`, figure `figures/error_decomposition.png`.
 
-## Segmentation quality (three sets; `boundary_by_set.md`)
+## Segmentation quality (three sets; `boundary_by_set.md`) — {prov_test['label']}, masks `{rel_test}` / `{rel_oof}`
 | set | n | gingiva IoU mean (median) | upper edge MAE, mm | lower edge MAE, mm | lower edge bias, mm | lip IoU |
 |---|---|---|---|---|---|---|
 | (a) OOF, 145 reference high | {int(ba['n'])} | {ba['gingiva_mask_iou_mean']:.3f} ({ba['gingiva_mask_iou_median']:.3f}) | {ba['gingiva_top_edge_mae_mm_mean']:.2f} | {ba['gingiva_bottom_edge_mae_mm_mean']:.2f} | {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f} | {ba['lip_mask_iou_mean']:.3f} |
@@ -543,6 +665,7 @@ See `SAPMALAR.md`.
     (out_dir / "prediction_summary.md").write_text(summary, encoding="utf-8")
     ozet = f"""# Aşama 6 — Türkçe özet (tahmin maskeleri üzerinde doğruluk)
 
+- **Model ve kaynak:** OOF maskeleri {prov_oof['label']} → `{rel_oof}`; final model {prov_test['label']} → `{rel_test}`. Sınır/IoU tabloları bu maskelerden burada hesaplandı; tespit/segmentasyon metrikleri yalnız bu modelin kendi değerlendiricisinden ({seg_evaluator}) alınır, başka bir modelin dosyası kullanılmaz.
 - OOF kontrolü: {chk['n_rows']}/{chk['n_reference']} görüntü, hepsi `{list(chk['mask_source'])[0]}`, fold başına {list(chk['folds'].values())}; **segmentasyon başarısızlığı n = {len(chk['empty_gingiva_prediction'])}** ({', '.join(chk['empty_gingiva_prediction']) or 'yok'}: dişeti örneği yok → mm değeri yok; ayrı kategori olarak raporlanır, mm/sınıf metriklerine girmez).
 - Yöntem ve ölçek sabit (Aşama 3, GT maske): **{combo}**, **{k:.2f} px/mm**; tahmin maskelerinde yeniden seçim/yeniden uydurma yapılmadı.
 - **Birincil (a) — 145 ölçümlü high, OOF maske (ölçülen n = {int(prim['n'])}):** MAE {prim['mae']:.2f} mm, RMSE {prim['rmse']:.2f}, r {prim['r']:.3f}, ICC(2,1) {prim['icc2_1']:.3f} [{prim['icc2_1_ci_low']:.3f}, {prim['icc2_1_ci_high']:.3f}]; sapma {prim['ba_bias']:+.2f} mm, LoA {prim['ba_loa_low']:.2f}…{prim['ba_loa_high']:.2f}; sınıf uyumu {100 * prim['threshold_agreement']:.0f} %, doğrusal ağırlıklı κ {prim['threshold_kappa_linear']:.2f} [{prim['threshold_kappa_linear_ci_low']:.2f}, {prim['threshold_kappa_linear_ci_high']:.2f}].
@@ -553,7 +676,7 @@ See `SAPMALAR.md`.
 - **Segmentasyon kalitesi:** (a) dişeti IoU {ba['gingiva_mask_iou_mean']:.3f}, üst kenar MAE {ba['gingiva_top_edge_mae_mm_mean']:.2f} mm, alt kenar MAE {ba['gingiva_bottom_edge_mae_mm_mean']:.2f} mm (sapma {ba['gingiva_bottom_edge_bias_mm_mean']:+.2f}), dudak IoU {ba['lip_mask_iou_mean']:.3f}; (b) IoU {bb['gingiva_mask_iou_mean']:.3f}; (c) tüm test {int(bc['n'])} görüntü IoU {bc['gingiva_mask_iou_mean']:.3f} — low {b_low['gingiva_mask_iou_mean']:.3f}, normal {b_norm['gingiva_mask_iou_mean']:.3f}. Low/normal'da düşük IoU beklenen bir durum: dişeti ince ya da görünmüyor (low'da GT dişeti genişliği medyan {b_low['gingiva_n_columns_gt_median']:.0f} sütun, high'da {ba['gingiva_n_columns_gt_median']:.0f}); kenar hataları high'dan büyük değil. Birincil sonuç (a) üzerinden verilir.
 - Zenith bölgeleme (C) geri düşme oranı OOF'ta {100 * fb['frac']:.0f} % (GT'de {100 * fb_gt['frac']:.0f} %); %30 kuralı {'TETİKLENDİ' if fb['reevaluate'] else 'tetiklenmedi'}; {alt} satırı tabloda.
 - Diş düzeyi karma model (hasta rastgele kesişim): sapma {mm_ref[0]['fixed_effects'].loc['Intercept', 'estimate']:+.2f} mm [{mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_low']:+.2f}, {mm_ref[0]['fixed_effects'].loc['Intercept', 'ci_high']:+.2f}].
-- Sapmalar: `SAPMALAR.md` ({len(deviations)} madde{'; test_metrics.json içinde per_class bloğu yok — iş istasyonunda evaluate_test yeniden çalıştırılmalı' if 'per_class' not in test_metrics else ''}).
+- Sapmalar: `SAPMALAR.md` ({len(deviations)} madde{'' if seg_metrics else f'; {prov_test["label"]} için değerlendirici çıktısı yok — `segmentation_metrics.md` boş'}).
 """
     (out_dir / "OZET.md").write_text(ozet, encoding="utf-8")
     print(ozet)

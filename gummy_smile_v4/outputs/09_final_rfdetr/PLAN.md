@@ -151,3 +151,38 @@ method fixed, through
 
 **Unchanged.** Every pre-registered decision above stands: the primary outcome of §5, its sensitivity
 analysis, the offset rule of §6 and the fallback rule of §7 are as they were written before any run.
+
+## Amendment 2 — 23 Sep 2026: every table names its masks, its model and its evaluator
+
+§4 requires RF-DETR's segmentation metrics to come from its own COCO evaluation and to stay out of any
+table with Ultralytics numbers. Two paths in the code did not yet honour that: `run_prediction_eval.py`
+read the boundary/IoU table from `outputs/05_predictions/boundary_error.csv` and the detection metrics
+from `outputs/05_predictions/test_metrics.json`, both of them YOLOv11x artefacts, whatever masks it was
+given. A Stage-6 run on RF-DETR masks would therefore have reported YOLO's segmentation quality as its
+own.
+
+From now on:
+
+* the boundary and IoU tables are computed from the mask directories the run was given
+  (`--oof-masks`, `--test-masks`) and written with the model and the directory in every row;
+* the model behind each directory is read from the prediction table itself, and anything ambiguous
+  stops the run — no `mask_source` column, two predictor families in one table, an RF-DETR table
+  without its `model` column, or several models where the final model must be one;
+* detection and segmentation metrics come only from the evaluator that belongs to those masks
+  (Ultralytics `val()` for YOLO, RF-DETR's own COCO evaluation for RF-DETR). When that evaluator has
+  not run, `segmentation_metrics.md` stays empty and names the command; another model's file is never
+  substituted;
+* YOLOv11x stays visible as rows labelled `[reference] YOLOv11x (previous final model)`, computed on
+  its own masks in its own run, never merged into this model's rows.
+
+The final model of §1 is reused with `--predict-only`, which does not evaluate, so it had no COCO
+metrics at all; `scripts/rfdetr_train_predict.py --predict-only --evaluate` now produces them as
+`outputs/08_architecture/rfdetr_metrics_rfdetr-seg-large_s42.json`, and that is the file Stage 6 quotes.
+
+Side effect on the YOLO Stage 6 already reported in `outputs/06_prediction/`: its test-set boundary rows
+are now recomputed locally from `outputs/05_predictions/test` instead of being read from the CSV the
+workstation wrote before the shared instance-mask core of 17 Sep. The (a) out-of-fold rows are unchanged
+to the last digit; the test-set rows move in the third decimal (mean gingiva IoU by ≤ 0.001, every edge
+statistic by ≤ 0.1 px ≈ 0.006 mm). Nothing in the measurement results, the offset analysis or any
+conclusion depends on that difference, and the recomputed numbers are the ones the current code
+reproduces from the masks on disk.

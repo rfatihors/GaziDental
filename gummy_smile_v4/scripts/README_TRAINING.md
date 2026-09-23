@@ -348,6 +348,10 @@ comparison run.
 Afterwards, in the training venv:
 
 ```bash
+# 0. the final model's own COCO evaluation (PLAN.md §4) — it is reused, not retrained, and
+#    --predict-only alone does not evaluate, so without this it has no segmentation metrics
+.venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --variant main --seed 42 --predict-only --evaluate
+
 # 1. measurement on the RF-DETR out-of-fold masks; fallback rate of C_p25 (PLAN.md §7)
 python scripts/run_oracle.py --masks outputs/05_predictions/oof_rfdetr --out 09_final_rfdetr/oracle
 
@@ -370,3 +374,14 @@ it never writes to the config, and `--reselect` (off by default) is the only way
 on predicted masks — a sensitivity analysis, never the primary result. The offset correction, by
 contrast, is re-estimated from scratch for this configuration and is expected to be dropped
 (PLAN.md §6); step 3 fits it on the Stage-3 dev subset with the method held fixed.
+
+**Where the numbers come from.** `run_prediction_eval.py` reads the model behind each mask directory
+out of the prediction table itself and stops if it is ambiguous (no `mask_source`, two predictor
+families in one table, an RF-DETR table without its `model` column, several models where the final
+model should be one). It then computes the boundary and IoU tables **from the masks it was given**,
+writes the model and the mask directory into every table, and takes detection metrics only from the
+evaluator that belongs to those masks — Ultralytics `val()` for YOLO, RF-DETR's own COCO evaluation
+(`iouType="segm"`) for RF-DETR, never one in place of the other (PLAN.md §4). If that evaluator has
+not run, `segmentation_metrics.md` stays empty and says what to run. The YOLOv11x numbers remain
+available as rows explicitly marked `[reference] YOLOv11x (previous final model)`, computed on its
+own masks and never merged into the new model's rows.
