@@ -14,29 +14,29 @@ Per seed:
 |---|---|---|---|---|---|
 | rfdetr-seg-large | 42 | 29 | 0.671 | 0.284 | 0.941 |
 | rfdetr-seg-large | 43 | 29 | 0.651 | 0.255 | 0.926 |
-| rfdetr-seg-large | 44 | 29 | 0.671 | 0.279 | 0.961 |
-| rfdetr-seg-large@432 | 42 | 29 | 0.645 | 0.273 | 0.921 |
-| rfdetr-seg-large@432 | 43 | 29 | 0.705 | 0.322 | 0.981 |
-| rfdetr-seg-large@432 | 44 | 29 | 0.672 | 0.302 | 0.943 |
+| rfdetr-seg-large | 44 | 29 | 0.669 | 0.277 | 0.960 |
+| rfdetr-seg-large@432 | 42 | 29 | 0.644 | 0.273 | 0.921 |
+| rfdetr-seg-large@432 | 43 | 29 | 0.705 | 0.321 | 0.981 |
+| rfdetr-seg-large@432 | 44 | 29 | 0.672 | 0.301 | 0.943 |
 | yolo11x-seg | 42 | 29 | 0.857 | 0.571 | 1.036 |
-| yolo11x-seg | 43 | 29 | 1.026 | 0.731 | 1.180 |
-| yolo11x-seg | 44 | 29 | 0.989 | 0.702 | 1.132 |
-| yolo11x-seg@1024 | 42 | 29 | 0.962 | 0.667 | 1.115 |
-| yolo11x-seg@1024 | 43 | 29 | 0.821 | 0.513 | 1.018 |
+| yolo11x-seg | 43 | 29 | 1.025 | 0.731 | 1.179 |
+| yolo11x-seg | 44 | 29 | 0.987 | 0.700 | 1.131 |
+| yolo11x-seg@1024 | 42 | 29 | 0.962 | 0.666 | 1.115 |
+| yolo11x-seg@1024 | 43 | 29 | 0.822 | 0.514 | 1.019 |
 | yolo11x-seg@1024 | 44 | 29 | 0.935 | 0.659 | 1.103 |
-| yolo26x-seg | 42 | 29 | 0.983 | 0.700 | 1.115 |
-| yolo26x-seg | 43 | 29 | 1.009 | 0.710 | 1.148 |
-| yolo26x-seg | 44 | 29 | 1.012 | 0.735 | 1.138 |
+| yolo26x-seg | 42 | 29 | 0.983 | 0.699 | 1.114 |
+| yolo26x-seg | 43 | 29 | 1.015 | 0.715 | 1.152 |
+| yolo26x-seg | 44 | 29 | 1.013 | 0.736 | 1.139 |
 
 Per model (mean ± SD over seeds):
 
 | model | n_seeds | mae_mm_mean | mae_mm_sd | bias_mm_mean | bias_mm_sd | rmse_mm_mean | rmse_mm_sd |
 |---|---|---|---|---|---|---|---|
-| rfdetr-seg-large | 3 | 0.664 | 0.011 | 0.273 | 0.016 | 0.943 | 0.017 |
-| rfdetr-seg-large@432 | 3 | 0.674 | 0.030 | 0.299 | 0.024 | 0.948 | 0.030 |
-| yolo11x-seg | 3 | 0.957 | 0.089 | 0.668 | 0.085 | 1.116 | 0.073 |
-| yolo11x-seg@1024 | 3 | 0.906 | 0.075 | 0.613 | 0.086 | 1.079 | 0.053 |
-| yolo26x-seg | 3 | 1.001 | 0.016 | 0.715 | 0.018 | 1.134 | 0.017 |
+| rfdetr-seg-large | 3 | 0.664 | 0.011 | 0.272 | 0.015 | 0.942 | 0.017 |
+| rfdetr-seg-large@432 | 3 | 0.674 | 0.030 | 0.298 | 0.024 | 0.948 | 0.030 |
+| yolo11x-seg | 3 | 0.956 | 0.088 | 0.667 | 0.085 | 1.116 | 0.073 |
+| yolo11x-seg@1024 | 3 | 0.906 | 0.074 | 0.613 | 0.086 | 1.079 | 0.052 |
+| yolo26x-seg | 3 | 1.004 | 0.018 | 0.717 | 0.019 | 1.135 | 0.019 |
 
 ## Paired difference (seed-averaged, bootstrap over the shared images)
 
@@ -44,8 +44,8 @@ Positive `diff_mae_mm` means the first model has the larger error, i.e. the seco
 
 | n | mae_a | mae_b | diff_mae_mm | ci_low | ci_high | sd_paired_mm | excludes_zero | model_a | model_b |
 |---|---|---|---|---|---|---|---|---|---|
-| 29 | 0.955 | 0.662 | 0.293 | 0.150 | 0.439 | 0.391 | True | yolo11x-seg | rfdetr-seg-large |
-| 29 | 0.955 | 1.001 | -0.046 | -0.097 | 0.005 | 0.144 | False | yolo11x-seg | yolo26x-seg |
+| 29 | 0.955 | 0.661 | 0.293 | 0.149 | 0.440 | 0.392 | True | yolo11x-seg | rfdetr-seg-large |
+| 29 | 0.955 | 1.004 | -0.049 | -0.102 | 0.004 | 0.146 | False | yolo11x-seg | yolo26x-seg |
 
 Comparison members: rfdetr-seg-large, yolo11x-seg, yolo26x-seg. Resolution controls, reported separately: rfdetr-seg-large@432, yolo11x-seg@1024.
 
@@ -77,21 +77,21 @@ most any post-hoc bias correction could take off that model's MAE.
 
 | model | n | mae_mm | bias_mm | sd_of_error_mm | mae_without_own_bias_mm | removable_by_calibration_mm | within_0_5_mm | within_1_mm |
 |---|---|---|---|---|---|---|---|---|
-| rfdetr-seg-large | 29 | 0.662 | 0.273 | 0.915 | 0.517 | 0.145 | 0.414 | 0.862 |
-| rfdetr-seg-large@432 | 29 | 0.671 | 0.299 | 0.905 | 0.510 | 0.160 | 0.448 | 0.828 |
-| yolo11x-seg | 29 | 0.955 | 0.668 | 0.894 | 0.502 | 0.453 | 0.138 | 0.655 |
-| yolo11x-seg@1024 | 29 | 0.905 | 0.613 | 0.892 | 0.523 | 0.382 | 0.207 | 0.586 |
-| yolo26x-seg | 29 | 1.001 | 0.715 | 0.888 | 0.487 | 0.514 | 0.069 | 0.552 |
+| rfdetr-seg-large | 29 | 0.661 | 0.272 | 0.915 | 0.517 | 0.144 | 0.414 | 0.862 |
+| rfdetr-seg-large@432 | 29 | 0.670 | 0.298 | 0.905 | 0.510 | 0.160 | 0.448 | 0.828 |
+| yolo11x-seg | 29 | 0.955 | 0.667 | 0.894 | 0.503 | 0.452 | 0.138 | 0.655 |
+| yolo11x-seg@1024 | 29 | 0.905 | 0.613 | 0.893 | 0.524 | 0.382 | 0.207 | 0.621 |
+| yolo26x-seg | 29 | 1.004 | 0.717 | 0.888 | 0.489 | 0.515 | 0.069 | 0.552 |
 
 Correlation of the per-image error between architectures (seed-averaged):
 
 | model | rfdetr-seg-large | rfdetr-seg-large@432 | yolo11x-seg | yolo11x-seg@1024 | yolo26x-seg |
 |---|---|---|---|---|---|
-| rfdetr-seg-large | 1.000 | 0.975 | 0.947 | 0.962 | 0.969 |
-| rfdetr-seg-large@432 | 0.975 | 1.000 | 0.972 | 0.974 | 0.978 |
+| rfdetr-seg-large | 1.000 | 0.975 | 0.947 | 0.962 | 0.970 |
+| rfdetr-seg-large@432 | 0.975 | 1.000 | 0.972 | 0.974 | 0.979 |
 | yolo11x-seg | 0.947 | 0.972 | 1.000 | 0.987 | 0.987 |
 | yolo11x-seg@1024 | 0.962 | 0.974 | 0.987 | 1.000 | 0.982 |
-| yolo26x-seg | 0.969 | 0.978 | 0.987 | 0.982 | 1.000 |
+| yolo26x-seg | 0.970 | 0.979 | 0.987 | 0.982 | 1.000 |
 
 ## Secondary: per-class segmentation metrics on the fixed test set, standard settings
 
@@ -136,8 +136,8 @@ quantity is a vertical thickness.
 
 | n | mae_a | mae_b | diff_mae_mm | ci_low | ci_high | sd_paired_mm | excludes_zero | model_a | model_b |
 |---|---|---|---|---|---|---|---|---|---|
-| 29 | 0.955 | 0.671 | 0.285 | 0.167 | 0.396 | 0.320 | True | yolo11x-seg | rfdetr-seg-large@432 |
-| 29 | 0.905 | 0.662 | 0.243 | 0.120 | 0.366 | 0.340 | True | yolo11x-seg@1024 | rfdetr-seg-large |
+| 29 | 0.955 | 0.670 | 0.284 | 0.167 | 0.396 | 0.321 | True | yolo11x-seg | rfdetr-seg-large@432 |
+| 29 | 0.905 | 0.661 | 0.244 | 0.122 | 0.367 | 0.340 | True | yolo11x-seg@1024 | rfdetr-seg-large |
 
 Pre-registered reading: control B points to architecture,
 control A points to architecture.
@@ -148,7 +148,7 @@ control A points to architecture.
 
 Rule: a challenger replaces yolo11x-seg only when it leads by more than 0.15 mm in mean absolute error and the paired 95 % bootstrap interval of that lead excludes zero (both conditions).
 
-**Outcome: rfdetr-seg-large leads yolo11x-seg by 0.293 mm [0.150, 0.439]: Stage 6 is repeated with it (PROTOCOL.md §8).**
+**Outcome: rfdetr-seg-large leads yolo11x-seg by 0.293 mm [0.149, 0.440]: Stage 6 is repeated with it (PROTOCOL.md §8).**
 
 ## Integrity check
 
