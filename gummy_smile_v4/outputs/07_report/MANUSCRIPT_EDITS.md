@@ -46,13 +46,13 @@ A total of 1315 frontal smiling photographs were categorised according to smile 
 
 **Proposed:**
 
-On the fixed, participant-level test set (n = 192 images, evaluated once) the final YOLOv11x-seg model achieved a mask mAP@50 of 0.70 (gingiva 0.41, lip 0.98), mask mAP@50–95 0.43, mask precision 0.76 and mask recall 0.77; the corresponding box metrics were mAP@50 0.78, precision 0.83 and recall 0.84. Gingival display measured from the predicted masks agreed with the clinical reference measurements with MAE 0.84 mm, RMSE 1.00 mm, r = 0.875, ICC(2,1) 0.784 [0.288, 0.909], mean difference +0.68 mm (95 % limits of agreement -0.75 to 2.12 mm) on the 144 high-smile-line images predicted out of fold, and MAE 0.95 mm, RMSE 1.11 mm, r = 0.804, ICC(2,1) 0.731 [0.344, 0.884], mean difference +0.65 mm (95 % limits of agreement -1.15 to 2.44 mm) on the fixed test set. In a secondary analysis correcting a systematic displacement of the lower gingival margin, the out-of-fold error fell to MAE 0.48 mm with a mean difference of -0.05 mm.
+On the fixed, participant-level test set (n = 192 images, evaluated once) the final model (RF-DETR-Seg Large @624, seed 42) achieved a mask mAP@50 of 0.81 (both classes together; RF-DETR's own COCO evaluation (pycocotools, iouType='segm')) and a mask mAP@50–95 of 0.47, with box mAP@50 0.84. That evaluation returns no per-class average precision; per-class segmentation quality is reported in the Results as mask IoU and boundary error (gingiva IoU 0.82, lip IoU 0.84). Gingival display measured from the predicted masks agreed with the clinical reference measurements with MAE 0.52 mm, RMSE 0.73 mm, r = 0.892, ICC(2,1) 0.877 [0.804, 0.919], mean difference +0.27 mm (95 % limits of agreement -1.06 to 1.61 mm) on the 145 high-smile-line images predicted out of fold, and MAE 0.67 mm, RMSE 0.94 mm, r = 0.804, ICC(2,1) 0.787 [0.594, 0.894], mean difference +0.28 mm (95 % limits of agreement -1.51 to 2.07 mm) on the fixed test set. No post-hoc calibration is applied: these are the only measurement results reported.
 
 **Why:** The submitted numbers are validation-set metrics of a model tuned on that validation set, and mix Box with Mask metrics without labelling them; no millimetre accuracy is reported.
 
 **Reviewer item:** R2-2, R2-8, R3-Results-4, R4-4, R4-6
 
-<!-- source: outputs/07_report/tables/segmentation_metrics_test.csv; outputs/05_predictions/test_metrics.json; outputs/06_prediction/measurement_accuracy.csv -->
+<!-- source: outputs/07_report/tables/segmentation_metrics_test.csv; outputs/05_predictions/test_metrics.json; outputs/09_final_rfdetr/measurement_accuracy.csv -->
 
 ### manuscript · Abstract (Conclusions)
 
@@ -68,7 +68,7 @@ The proposed framework quantifies gingival display from smile photographs with a
 
 **Reviewer item:** R3-Abstract-1, R3-Discussion-5, R4-1
 
-<!-- source: outputs/06_prediction/measurement_accuracy.csv -->
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 
 ### manuscript · Abstract (Clinical Significance)
 
@@ -106,7 +106,7 @@ Replace the keyword 'Excessive gingival display' with 'High smile line'; add 'Gi
 
 **Proposed:**
 
-REMOVE the whole sample-size paragraph and Appendix A, and replace with: "No formal power calculation was applied to the segmentation training set, because conventional hypothesis-testing sample-size methods do not determine the data requirements of deep-learning models. Data adequacy was instead assessed empirically: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant, and gingiva mask mAP@50 rose from 0.40 to 0.44, reaching a plateau (Supplementary Figure S1). For the millimetre-level agreement analysis the sample size is justified by precision rather than power: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.043 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.71 mm (Bland & Altman 1999)."
+REMOVE the whole sample-size paragraph and Appendix A, and replace with: "No formal power calculation was applied to the segmentation training set, because conventional hypothesis-testing sample-size methods do not determine the data requirements of deep-learning models. Data adequacy was instead assessed empirically: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant, and mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (Supplementary Figure S1). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. For the millimetre-level agreement analysis the sample size is justified by precision rather than power: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.043 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.71 mm (Bland & Altman 1999)."
 
 **Why:** The χ² calculation describes a comparison of correct and incorrect detections that the study never performs, and it cannot determine the data requirement of a segmentation model.
 
@@ -244,7 +244,7 @@ In a preliminary screening on the annotation platform, the YOLOv11 family gave t
 
 **Proposed:**
 
-The final YOLOv11x-seg model was evaluated once on the fixed, participant-level test set (n = 192 images): mask mAP@50 0.70, mask mAP@50–95 0.43, mask precision 0.76, mask recall 0.77, mask F1 0.54 (gingiva) and 0.99 (lip); box mAP@50 0.78, box mAP@50–95 0.49, box precision 0.83, box recall 0.84. Per class, mask mAP@50 was 0.41 for gingiva and 0.98 for lip. Metric type (Box or Mask) is stated for every value; validation-set metrics are not reported as results.
+The final model (RF-DETR-Seg Large @624, seed 42) was evaluated once on the fixed, participant-level test set (n = 192 images), by RF-DETR's own COCO evaluation (pycocotools, iouType='segm'): mask mAP@50 0.81, mask mAP@50–95 0.47, box mAP@50 0.84, box mAP@50–95 0.53, box mAP@75 0.57, mean average recall 0.68; precision 0.85, recall 0.81 and F1 0.83 as that evaluation returns them, i.e. over both classes and without a box/mask split. Average precision is pooled over the two classes and no per-class value is produced by this evaluation; per-class segmentation quality is reported as mask IoU and boundary error in the boundary subsection. Metric type (Box or Mask) is stated for every value; validation-set metrics are not reported as results.
 
 **Why:** The submitted figures are validation-set metrics of a model whose hyperparameters were selected on that validation set, and the list mixes Box precision/recall with Mask mAP without labels.
 
@@ -260,13 +260,13 @@ The final YOLOv11x-seg model was evaluated once on the fixed, participant-level 
 
 **Proposed:**
 
-On the fixed test set, lip segmentation reached a mask mAP@50 of 0.98 whereas gingiva segmentation reached 0.41. The difference is examined at the boundary rather than left as an aggregate gap: against the annotated masks of the 145 reference images, the upper, lip-side gingiva edge is accurate (mean absolute column-wise error 0.32 mm, bias +0.16 mm) while the lower, festooned gingival margin is placed systematically too low (0.76 mm, bias +0.66 mm); gingiva mask IoU 0.76, lip mask IoU 0.79. Pooled over the whole test set the gingiva IoU is lower (0.51) because in low (0.28) and average (0.49) smile lines the annotated gingiva is thin or absent (median annotated width 16 image columns in the low group against 935 in the high group).
+On the fixed test set the evaluation of this model reports mask mAP@50 0.81 over the two classes together and no per-class value, so the lip/gingiva difference is reported where it can be measured per class: mask IoU 0.84 for the lip against 0.82 for the gingiva. The difference is examined at the boundary rather than left as an aggregate gap: against the annotated masks of the 145 reference images, the upper, lip-side gingiva edge is accurate (mean absolute column-wise error 0.28 mm, bias +0.02 mm) while the lower, festooned gingival margin is placed systematically too low (0.47 mm, bias +0.08 mm); gingiva mask IoU 0.82, lip mask IoU 0.84. In low and average smile lines the annotated gingiva is thin or absent (median annotated width 16 and 310 image columns against 935 in the high group — a property of the annotation), which is why those images are training material and the measurement is specified for the high smile line only.
 
 **Why:** The reviewers ask for a quantitative investigation of the lip/gingiva gap and for the low gingiva value to be stated in the text.
 
 **Reviewer item:** R2-8, R2-10
 
-<!-- source: outputs/07_report/tables/segmentation_metrics_test.csv; outputs/06_prediction/boundary_by_set.csv -->
+<!-- source: outputs/07_report/tables/segmentation_metrics_test.csv; outputs/09_final_rfdetr/boundary_by_set.csv -->
 
 ### manuscript · 3.x (new section)
 
@@ -276,13 +276,13 @@ On the fixed test set, lip segmentation reached a mask mAP@50 of 0.98 whereas gi
 
 **Proposed:**
 
-INSERT a new Results section before the threshold-based classification: "3.x Millimetre measurement accuracy. Measurement geometry was first evaluated on the annotated masks (MAE 0.54 mm, RMSE 0.76 mm, r = 0.872, ICC(2,1) 0.868 [0.819, 0.904], mean difference +0.15 mm (95 % limits of agreement -1.31 to 1.61 mm); method C_p25, scale fitted on a 60 % development subset and applied unchanged to the remaining 40 %: MAE 0.52 mm, ICC 0.858). The full pipeline was then evaluated on the model's own masks, each image predicted by a model that had not seen it: MAE 0.84 mm, RMSE 1.00 mm, r = 0.875, ICC(2,1) 0.784 [0.288, 0.909], mean difference +0.68 mm (95 % limits of agreement -0.75 to 2.12 mm); agreement with the reference class was 62 % (linear-weighted κ 0.59) and 67 % of images were within 1 mm of the reference. On the fixed test set with the final model: MAE 0.95 mm, RMSE 1.11 mm, r = 0.804, ICC(2,1) 0.731 [0.344, 0.884], mean difference +0.65 mm (95 % limits of agreement -1.15 to 2.44 mm). One image (1 of 145) produced no gingiva mask and is reported as a segmentation failure rather than as a 0 mm measurement. A post-hoc correction of the lower gingival margin (mask level, 13 px estimated on the development subset) is reported as a secondary analysis: MAE 0.48 mm, mean difference -0.05 mm, class agreement 81 %."
+INSERT a new Results section before the threshold-based classification: "3.x Millimetre measurement accuracy. Measurement geometry was first evaluated on the annotated masks (MAE 0.54 mm, RMSE 0.76 mm, r = 0.872, ICC(2,1) 0.868 [0.819, 0.904], mean difference +0.15 mm (95 % limits of agreement -1.31 to 1.61 mm); method C_p25, scale fitted on a 60 % development subset and applied unchanged to the remaining 40 %: MAE 0.52 mm, ICC 0.858). The full pipeline was then evaluated on the model's own masks, each image predicted by a model that had not seen it: MAE 0.52 mm, RMSE 0.73 mm, r = 0.892, ICC(2,1) 0.877 [0.804, 0.919], mean difference +0.27 mm (95 % limits of agreement -1.06 to 1.61 mm); agreement with the reference class was 76 % (linear-weighted κ 0.72) and 87 % of images were within 1 mm of the reference. On the fixed test set with the final model: MAE 0.67 mm, RMSE 0.94 mm, r = 0.804, ICC(2,1) 0.787 [0.594, 0.894], mean difference +0.28 mm (95 % limits of agreement -1.51 to 2.07 mm). One image (0 of 145) produced no gingiva mask and is reported as a segmentation failure rather than as a 0 mm measurement. No post-hoc calibration is applied: a correction of the lower gingival margin was re-estimated for this model and dropped because its gain was below the repeatability of the clinical reference, so a single, uncorrected result set is reported."
 
 **Why:** The manuscript reports no millimetre accuracy at all; this is the reviewers' central objection and the thresholds at 3, 4, 6 and 8 mm make the measurement error clinically decisive.
 
 **Reviewer item:** R3-Results-5, R4-3, R4-4
 
-<!-- source: outputs/06_prediction/measurement_accuracy.csv; outputs/03_oracle/estimator_comparison.csv; outputs/06_prediction/offset_correction.md -->
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv; outputs/03_oracle/estimator_comparison.csv; outputs/09_final_rfdetr/offset_correction.md -->
 
 ### manuscript · 3.4 Confusion matrix analysis
 
@@ -292,7 +292,7 @@ INSERT a new Results section before the threshold-based classification: "3.x Mil
 
 **Proposed:**
 
-On the fixed test set the model produced 419 correct gingiva instances, 181 false positives and 165 false negatives for the gingiva class (precision 0.53, recall 0.54 for the mask), against 0.98 and 0.99 for the lip class. Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation, because there is no fixed set of candidate regions and hence no count of true negatives; precision, recall, F1 and the confusion matrix are reported instead.
+On the fixed test set the evaluation of this model gives precision 0.85, recall 0.81 and F1 0.83 over both classes; it produces no per-class confusion matrix of instance counts, and the previous model's matrix is not carried over. What is reported per class is the image-level outcome of the segmentation: on the 29 high-smile-line test images the gingiva is missed in 0 and predicted where the annotation has none in 0, and on the 145 out-of-fold reference images in 0 and 0. Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation, because there is no fixed set of candidate regions and hence no count of true negatives; precision, recall and F1 are reported instead, with the per-image missed and spurious counts above.
 
 **Why:** The reviewer asks explicitly whether false positives and false negatives were computed, and whether 'performance' means sensitivity or specificity.
 
@@ -308,13 +308,13 @@ On the fixed test set the model produced 419 correct gingiva instances, 181 fals
 
 **Proposed:**
 
-Rewrite around the corrected measurement and state the erratum: "Figure 6 of the submitted version reported values produced by an earlier implementation of the measurement module. That implementation merged the gingiva and lip masks, selected the largest contour and reported the between-region variation of its upper edge; the gingival margin was not used. Both columns of the original figure are therefore withdrawn. The figure has been reproduced with the corrected measurement module and is accompanied by the agreement analysis against the clinical reference (MAE 0.84 mm, RMSE 1.00 mm, r = 0.875, ICC(2,1) 0.784 [0.288, 0.909], mean difference +0.68 mm (95 % limits of agreement -0.75 to 2.12 mm))."
+Rewrite around the corrected measurement and state the erratum: "Figure 6 of the submitted version reported values produced by an earlier implementation of the measurement module. That implementation merged the gingiva and lip masks, selected the largest contour and reported the between-region variation of its upper edge; the gingival margin was not used. Both columns of the original figure are therefore withdrawn. The figure has been reproduced with the corrected measurement module and is accompanied by the agreement analysis against the clinical reference (MAE 0.52 mm, RMSE 0.73 mm, r = 0.892, ICC(2,1) 0.877 [0.804, 0.919], mean difference +0.27 mm (95 % limits of agreement -1.06 to 1.61 mm))."
 
 **Why:** Reviewer 4 asks that the figure be explained and the correct measurement demonstrated against an independent clinical standard; the cause was a software error and must be stated as such.
 
 **Reviewer item:** R4-3
 
-<!-- source: outputs/06_prediction/measurement_accuracy.csv -->
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 
 ### manuscript · 4 Discussion (first paragraph)
 
@@ -352,13 +352,13 @@ Add, in the same paragraph, the overlap statement: the two studies draw on the s
 
 **Proposed:**
 
-Expand the Limitations to state, each in its own sentence: single centre and single device, so the performance is an internal estimate; gingival and skin pigmentation and ethnicity were not recorded, so their effect on segmentation could not be assessed; age and sex were recorded for part of the cohort only (495 and 382 of 1230); the E4 class (> 8 mm) does not occur in this cohort, so that branch of the decision table is not validated; gingival segmentation is the weakest component (test-set mask mAP@50 0.41) and places the lower gingival margin 0.66 mm too low on average; and one image produced no gingiva mask, so a deployed system must flag such images for manual review rather than output a value.
+Expand the Limitations to state, each in its own sentence: single centre and single device, so the performance is an internal estimate; gingival and skin pigmentation and ethnicity were not recorded, so their effect on segmentation could not be assessed; age and sex were recorded for part of the cohort only (495 and 382 of 1230); the E4 class (> 8 mm) does not occur in this cohort, so that branch of the decision table is not validated; gingival segmentation is the weakest component (mask IoU 0.82 against 0.84 for the lip) and places the lower gingival margin 0.08 mm too low on average; the learning curve had not plateaued within the available training-set size, so additional training data could still improve segmentation performance; and one image produced no gingiva mask, so a deployed system must flag such images for manual review rather than output a value.
 
 **Why:** The reviewers ask for pigmentation, rare classes and the gingiva performance to be discussed as limitations; the current sentence is vague.
 
 **Reviewer item:** R2-8, R3-Results-1, R3-Discussion-5
 
-<!-- source: outputs/07_report/tables/demographics.csv; outputs/07_report/tables/segmentation_metrics_test.csv; outputs/06_prediction/boundary_by_set.csv -->
+<!-- source: outputs/07_report/tables/demographics.csv; outputs/07_report/tables/segmentation_metrics_test.csv; outputs/09_final_rfdetr/boundary_by_set.csv -->
 
 ### manuscript · 5 Conclusion
 
@@ -448,13 +448,13 @@ Rewrite the appendix as a record of dataset versions used during development, st
 
 **Proposed:**
 
-Replace with the final training configuration actually used: dataset 1230 images partitioned at participant level (846 / 192 / 192); model yolo11x-seg.pt; 100 epochs, batch 16, image size 640, AdamW optimiser, initial learning rate 0.0005, final learning-rate fraction 0.02, cosine schedule, close_mosaic 10, patience 20, seed 42, deterministic training; 2.14.0+cu130 / Ultralytics 8.4.153 on an NVIDIA GeForce RTX 5090.
+Replace with the final training configuration actually used: dataset 1230 images partitioned at participant level (846 / 192 / 192); model RFDETRSegLarge at resolution 624, at the published defaults — nothing tuned; epoch budget 100 with early stopping after 20 epochs without improvement on val/segm_mAP_50_95 (max of regular and EMA), seed 42; torch 2.14.0+cu130 on an NVIDIA GeForce RTX 5090.
 
 **Why:** The appendix must describe the training that produced the reported model, not the superseded hyperparameter search on an augmented dataset version.
 
 **Reviewer item:** R2-5, R2-9, R4-6, R4-7
 
-<!-- source: outputs/05_predictions/final/environment.json; configs/config.yaml -->
+<!-- source: outputs/08_architecture/rfdetr_train_rfdetr-seg-large_s42.json; configs/config.yaml -->
 
 ### Appendix D · D.1 (YOLOv8 screening)
 
@@ -496,13 +496,13 @@ Replace with the instance counts of the original annotation: 3,938 gingiva and 1
 
 **Proposed:**
 
-Report the configuration of the reported model: batch 16, image size 640, AdamW, initial learning rate 0.0005, final fraction 0.02, cosine schedule, close_mosaic 10, patience 20, cache True, workers 8, seed 42. Describe the earlier grid search as exploratory and state that it was performed on a superseded dataset version.
+Report the configuration of the reported model: model RFDETRSegLarge at resolution 624, at the published defaults — nothing tuned; epoch budget 100 with early stopping after 20 epochs without improvement on val/segm_mAP_50_95 (max of regular and EMA), seed 42; torch 2.14.0+cu130 on an NVIDIA GeForce RTX 5090. Describe the earlier grid search as exploratory, performed on a superseded dataset version and on the previous final model; state that the reported model was not tuned, which removes the asymmetry the comparison had.
 
 **Why:** The appendix should let a reader reproduce the reported model.
 
 **Reviewer item:** R2-9, R4-6
 
-<!-- source: outputs/05_predictions/final/environment.json; configs/config.yaml -->
+<!-- source: outputs/08_architecture/rfdetr_train_rfdetr-seg-large_s42.json; configs/config.yaml -->
 
 ## Appendix F
 

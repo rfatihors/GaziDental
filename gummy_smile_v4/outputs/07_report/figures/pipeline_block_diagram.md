@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-    A[Smile photograph] --> B[YOLOv11x-seg<br/>imgsz 640, retina_masks]
+    A[Smile photograph] --> B[RF-DETR-Seg Large @624<br/>seed 42]
     B --> C[Class-separated masks<br/>gingiva / lip, union of instances,<br/>original resolution]
     C --> D[Column-wise thickness profile t(x)<br/>longest vertical run, empty columns = 0]
     D --> E[Tooth regioning<br/>midline-anchored zeniths (C), fallback A]

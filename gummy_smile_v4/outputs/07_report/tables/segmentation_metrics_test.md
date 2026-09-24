@@ -1,4 +1,4 @@
-# Segmentation metrics on the fixed test set (per class)
+# Segmentation metrics on the fixed test set (pooled over the classes by this model's own evaluator)
 
 | metric | value |
 |---|---|
