@@ -416,14 +416,24 @@ workstation. Its `selected_mm` columns still carry the old tie order and the old
 
 ```bash
 git pull
-python scripts/run_architecture_comparison.py --measure-only    # re-measures the five configurations
-python scripts/run_architecture_comparison.py --aggregate-only  # rebuilds RESULTS.md from them
+python scripts/run_architecture_comparison.py --measure-only --remeasure   # re-measures all five configurations
+python scripts/run_architecture_comparison.py --aggregate-only             # rebuilds RESULTS.md from them
 git add outputs/08_architecture && git commit -m "architecture comparison re-measured after the zenith tie fix" && git push
 ```
 
-No training is involved; it reads `outputs/08_architecture/masks/` and takes minutes. The expected
-effect is far below the reported precision (Amendment 6 A6.6 states why, before the run), but the
-re-measured tables replace the current ones whatever they show.
+**`--remeasure` is not optional here.** `--measure-only` on its own resumes an interrupted run: it
+fills in the per-image tables that are missing and skips the ones already on disk. After a finished
+run all fifteen exist, so without `--remeasure` it measures nothing and the aggregation that follows
+rebuilds `RESULTS.md` from the same stale numbers — which is exactly what happened on the first
+attempt (commit `3f9e2d3`, whose only change was a cosmetic numpy repr). The skip is now printed per
+run and the aggregation refuses tables measured under a different method or scale, so a repeat of
+that failure stops the run instead of producing a reassuring commit.
+
+No training is involved; it reads `outputs/08_architecture/masks/` and takes minutes. Those masks are
+git-ignored, so they exist only on the machine that produced them — if they are gone, the step stops
+and names the directory rather than measuring nothing. The expected effect on the result is far below
+the reported precision (Amendment 6 A6.6 states why, before the run), but the re-measured tables
+replace the current ones whatever they show.
 
 Anywhere a stored result table sits next to the masks it came from, this checks that one follows from
 the other:

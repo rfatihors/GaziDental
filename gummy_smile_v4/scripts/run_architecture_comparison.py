@@ -145,6 +145,9 @@ def measure_one(cfg, label: str, seed: int, rows: pd.DataFrame, pred_df: pd.Data
     b = boundary_table(cfg, pred_df, mask_dir).set_index("uid")
     per = rows.set_index("uid").copy()
     per["model"], per["seed"] = label, seed
+    # the measurement this table was produced with: a table measured under a different scale or a
+    # different method is not comparable with the others, and aggregation refuses to mix them
+    per["selected_method"], per["selected_px_per_mm"] = combo, k
     per["selected_mm"] = meas[f"{combo}_px"] / k
     per["qc_flags"] = meas["qc_flags"].fillna("")
     per["n_gingiva_instances"] = meas["n_gingiva_instances"]
@@ -173,6 +176,9 @@ def main() -> int:
                     help=f"input size; anything other than {PROTOCOL_IMGSZ} is a resolution control "
                          "(PROTOCOL_ADDENDUM_resolution.md) and is labelled <model>@<imgsz>")
     ap.add_argument("--aggregate-only", action="store_true", help="rebuild the tables from the per-image rows on disk")
+    ap.add_argument("--remeasure", action="store_true",
+                    help="with --measure-only: measure again even where a per-image table already exists. Needed after a "
+                         "change to the measurement or to the scale; without it --measure-only only fills in what is missing")
     ap.add_argument("--measure-only", action="store_true",
                     help="skip training; measure every predictions/<tag>.csv that has no per_image/<tag>.csv yet "
                          "(this is how RF-DETR masks, produced in their own virtualenv, enter the same tables)")
@@ -212,16 +218,30 @@ def main() -> int:
         return 0
 
     if args.measure_only:
+        n_done = n_skipped = 0
         for pf in sorted((out_dir / "predictions").glob("*.csv")):
             tag = pf.stem
             per_path = out_dir / "per_image" / f"{tag}.csv"
-            if per_path.exists():
+            if per_path.exists() and not args.remeasure:
+                # this flag resumes an interrupted run; it does NOT refresh a finished one. Say so,
+                # because a silent skip once made a "re-measured" commit that measured nothing.
+                print(f"[{tag}] per-image table already on disk — SKIPPED (pass --remeasure to redo it)")
+                n_skipped += 1
                 continue
             label, _, seed_s = tag.rpartition("_s")
             if not seed_s.isdigit():
                 raise SystemExit(f"cannot read a model and seed from {pf.name}; expected <model>_s<seed>.csv")
+            mask_dir = out_dir / "masks" / tag
+            if not any(mask_dir.glob("*_gingiva.png")):
+                raise SystemExit(f"{tag}: no masks in {mask_dir}. They are git-ignored, so they exist only on the machine "
+                                 "that produced them; re-run the prediction there, or copy the mask directories in.")
             measure_one(cfg, label, int(seed_s), rows, pd.read_csv(pf), out_dir, combo, k).to_csv(per_path, index=False)
             print(f"[{tag}] measured -> {per_path}")
+            n_done += 1
+        print(f"[arch] {n_done} run(s) measured, {n_skipped} skipped")
+        if n_skipped and not n_done:
+            print("[arch] nothing was measured. --measure-only resumes an interrupted run; to refresh finished "
+                  "tables after a change to the measurement, re-run with --remeasure.")
         models, seeds = [], []
 
     for model in models:
@@ -244,6 +264,22 @@ def main() -> int:
     if not parts:
         raise SystemExit("no per-image tables to aggregate")
     long = per_image_errors(pd.concat([pd.read_csv(p) for p in parts], ignore_index=True))
+    # Every row must have been measured with the same method and scale, and with the ones the config
+    # holds now. A comparison is paired across models, so a table measured under an older scale is
+    # not comparable with the others, and saying so here is cheaper than finding it in the results.
+    if "selected_px_per_mm" in long.columns and long["selected_px_per_mm"].notna().any():
+        scales = sorted({round(float(v), 4) for v in long["selected_px_per_mm"].dropna()})
+        methods = sorted({str(v) for v in long.get("selected_method", pd.Series(dtype=str)).dropna()})
+        if len(scales) > 1 or len(methods) > 1:
+            raise SystemExit(f"the per-image tables were measured under different settings (scales {scales}, methods {methods}); "
+                             "re-measure them all with --measure-only --remeasure")
+        if abs(scales[0] - round(k, 4)) > 1e-4 or (methods and methods[0] != combo):
+            raise SystemExit(f"the per-image tables were measured with {methods[0] if methods else '?'} at {scales[0]} px/mm, "
+                             f"but configs/config.yaml now says {combo} at {k:.4f} px/mm. Re-measure them: "
+                             "scripts/run_architecture_comparison.py --measure-only --remeasure")
+    else:
+        print("[arch] WARNING: the per-image tables predate the method/scale stamp, so it cannot be checked that they "
+              f"were measured with {combo} at {k:.4f} px/mm. Re-measure with --measure-only --remeasure to remove this warning.")
     long.to_csv(out_dir / "per_image_all.csv", index=False)
     integrity = integrity_check(long)
     integrity.to_csv(out_dir / "integrity_check.csv", index=False)
@@ -338,7 +374,7 @@ def main() -> int:
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: {len(rows)} high-smile-line
 test images with a clinical reference measurement. Measurement method **{combo}** at **{k:.2f} px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{json.dumps(SHARED)} and seeds {list(seeds_t['seed'].unique())}.
+{json.dumps(SHARED)} and seeds {sorted(int(v) for v in seeds_t['seed'].unique())}.
 
 ## Primary outcome: millimetre error against the clinical reference
 

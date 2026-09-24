@@ -4,7 +4,7 @@
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: 29 high-smile-line
 test images with a clinical reference measurement. Measurement method **C_p25** at **16.84 px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [np.int64(42), np.int64(43), np.int64(44)].
+{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [42, 43, 44].
 
 ## Primary outcome: millimetre error against the clinical reference
 

@@ -478,3 +478,27 @@ Every pre-registered decision of this plan and of `PROTOCOL.md`: the primary out
 sensitivity analysis, the offset rule of §6 and its outcome in Amendment 3, the fallback rule of §7,
 the learning-curve reading of Amendment 4, and the seed-spread pre-registration of Amendment 5, whose
 runs have not started.
+
+### A6.8 — 24 Sep 2026: the first attempt at A6.6 measured nothing
+
+The re-measure of A6.6 was run on the workstation and committed as `3f9e2d3`, "architecture
+comparison re-measured after the zenith tie fix". Its only change was one line of `RESULTS.md`, a
+cosmetic difference in how numpy renders the seed list. No per-image table moved — which cannot
+happen if the measurement actually ran, because the scale alone changed from 16.8397 to
+16.8422 px/mm and every `selected_mm` is a quotient of it.
+
+**Cause.** `--measure-only` is a resume flag: it fills in the per-image tables that are missing and
+skips the ones already on disk. After a finished run all fifteen exist, so it skipped all fifteen
+silently, and `--aggregate-only` then rebuilt `RESULTS.md` from the same stale numbers. The
+instruction in `README_TRAINING.md` 8b was ours, and it was wrong.
+
+**Fix.** `--remeasure` measures again where a table exists; the per-run skip is now printed; the
+step stops with the directory named if the masks are not on the machine; each per-image table now
+records the method and the scale it was measured with; and the aggregation refuses to mix tables
+measured under different settings, or tables measured under a scale other than the configured one.
+A table written before the stamp existed produces a warning that says exactly that, which is what
+`outputs/08_architecture/` currently carries.
+
+**Status.** The architecture comparison is **still measured under the old tie order and the old
+scale**. A6.6 stands unchanged, including its statement, made before the run, of why the conclusion
+is not in question. The corrected command is the first item of `README_TRAINING.md` 8b.
