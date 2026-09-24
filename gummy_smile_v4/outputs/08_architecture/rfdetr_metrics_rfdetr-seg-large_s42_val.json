@@ -1,0 +1,17 @@
+{
+ "variant": "main",
+ "model_label": "rfdetr-seg-large",
+ "seed": 42,
+ "split": "val",
+ "resolution": 624,
+ "evaluator": "rfdetr model.evaluate (pycocotools, iouType=segm)",
+ "val/mAP_50_95": 0.5476966500282288,
+ "val/mAP_50": 0.8479864597320557,
+ "val/mAP_75": 0.5802024602890015,
+ "val/mAR": 0.693636417388916,
+ "val/segm_mAP_50_95": 0.47917306423187256,
+ "val/segm_mAP_50": 0.8036566376686096,
+ "val/F1": 0.8255049586296082,
+ "val/precision": 0.8417981266975403,
+ "val/recall": 0.8104708194732666
+}

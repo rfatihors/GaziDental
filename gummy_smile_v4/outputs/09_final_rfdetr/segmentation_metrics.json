@@ -1,0 +1,25 @@
+{
+ "model": "RF-DETR-Seg Large @624, seed 42",
+ "masks": "outputs/05_predictions/test_rfdetr",
+ "evaluator": "RF-DETR's own COCO evaluation (pycocotools, iouType='segm')",
+ "source": "outputs/08_architecture/rfdetr_metrics_rfdetr-seg-large_s42.json",
+ "available": true,
+ "metrics": {
+  "variant": "main",
+  "model_label": "rfdetr-seg-large",
+  "seed": 42,
+  "split": "test",
+  "resolution": 624,
+  "evaluator": "rfdetr model.evaluate (pycocotools, iouType=segm)",
+  "test/loss": 12.7365140914917,
+  "test/mAP_50_95": 0.5271580219268799,
+  "test/mAP_50": 0.8382543921470642,
+  "test/mAP_75": 0.573847770690918,
+  "test/mAR": 0.6828793883323669,
+  "test/segm_mAP_50_95": 0.46589845418930054,
+  "test/segm_mAP_50": 0.8080925941467285,
+  "test/F1": 0.8297692537307739,
+  "test/precision": 0.8463132381439209,
+  "test/recall": 0.8149423003196716
+ }
+}

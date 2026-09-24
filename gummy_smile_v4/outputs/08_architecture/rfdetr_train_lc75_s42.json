@@ -1,0 +1,30 @@
+{
+ "model_variant": "RFDETRSegLarge",
+ "variant": "lc75",
+ "model_label": "rfdetr-seg-large",
+ "resolution": 624,
+ "epochs_budget": 100,
+ "seed": 42,
+ "early_stopping": {
+  "early_stopping": true,
+  "early_stopping_patience": 20,
+  "early_stopping_min_delta": 0.0
+ },
+ "monitored_metric": "val/segm_mAP_50_95 (max of regular and EMA)",
+ "seconds_total": 12060.3,
+ "seconds_per_epoch": 120.6,
+ "peak_gpu_gb": 16.22,
+ "probe": false,
+ "projected_full_run_hours": 3.35,
+ "coco_metrics": {
+  "val/mAP_50_95": 0.5181394219398499,
+  "val/mAP_50": 0.8270694613456726,
+  "val/mAP_75": 0.5518218874931335,
+  "val/mAR": 0.6690799593925476,
+  "val/segm_mAP_50_95": 0.4561706781387329,
+  "val/segm_mAP_50": 0.7762786149978638,
+  "val/F1": 0.8130183815956116,
+  "val/precision": 0.837715208530426,
+  "val/recall": 0.7913404107093811
+ }
+}

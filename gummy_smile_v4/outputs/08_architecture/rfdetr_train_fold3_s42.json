@@ -1,0 +1,31 @@
+{
+ "model_variant": "RFDETRSegLarge",
+ "variant": "fold3",
+ "model_label": "rfdetr-seg-large",
+ "resolution": 624,
+ "epochs_budget": 100,
+ "seed": 42,
+ "early_stopping": {
+  "early_stopping": true,
+  "early_stopping_patience": 20,
+  "early_stopping_min_delta": 0.0
+ },
+ "monitored_metric": "val/segm_mAP_50_95 (max of regular and EMA)",
+ "seconds_total": 10994.4,
+ "seconds_per_epoch": 109.9,
+ "peak_gpu_gb": 17.61,
+ "probe": false,
+ "projected_full_run_hours": 3.05,
+ "coco_metrics": {
+  "test/loss": 10.750732421875,
+  "test/mAP_50_95": 0.7483352422714233,
+  "test/mAP_50": 0.9525328874588013,
+  "test/mAP_75": 0.8827952146530151,
+  "test/mAR": 0.8689655065536499,
+  "test/segm_mAP_50_95": 0.6500600576400757,
+  "test/segm_mAP_50": 0.941763699054718,
+  "test/F1": 0.9149568676948547,
+  "test/precision": 0.9166666865348816,
+  "test/recall": 0.9137930870056152
+ }
+}

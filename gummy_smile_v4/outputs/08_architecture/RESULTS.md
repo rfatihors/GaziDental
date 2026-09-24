@@ -4,7 +4,7 @@
 Protocol: `PROTOCOL.md`, written and committed before any run. Comparison set: 29 high-smile-line
 test images with a clinical reference measurement. Measurement method **C_p25** at **16.84 px/mm**, both fixed
 in configs/config.yaml and unchanged here. Every architecture ran at its published defaults with the shared budget
-{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [42, 43, 44].
+{"epochs": 100, "patience": 20, "imgsz": 640, "batch": 16, "deterministic": true} and seeds [np.int64(42), np.int64(43), np.int64(44)].
 
 ## Primary outcome: millimetre error against the clinical reference
 
@@ -171,7 +171,7 @@ ground-truth masks — i.e. how much of the pipeline error is the segmentation's
 
 | Stage 6 run | model | pipeline MAE, mm | geometry part (GT masks), mm | what the model adds, mm | segmentation error component, mm |
 |---|---|---|---|---|---|
-| current final model | — | — | — | — | pending: `09_final_rfdetr/error_decomposition.csv` |
+| current final model | RF-DETR-Seg Large @624, seed 42, 5 fold models | 0.52 | 0.54 | -0.02 | 0.28 (bias +0.12) |
 | previous final model | yolo11x-seg @640, 5 fold models | 0.84 | 0.54 | +0.30 | 0.58 (bias +0.53) |
 
 The geometry part is the same measurement on the annotated masks (Stage 3) and is a property of the method, not of the model; the segmentation part is what the predicted masks add to it. A model whose segmentation part is near zero measures the gingival display as well as the annotation allows.
