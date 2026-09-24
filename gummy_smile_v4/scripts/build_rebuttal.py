@@ -149,6 +149,7 @@ def main() -> int:
     if var is not None:
         S["var"] = src(o6 / "offset_variants.csv", root)
     per6 = pd.read_csv(o6 / "per_image_results.csv"); S["per6"] = src(o6 / "per_image_results.csv", root)
+    TM, TMS = T.threshold_margin(o6); S["tm_margin"] = src(tab / "threshold_margin.csv", root)
     intra_md = o3 / "intra_observer.md"; S["intra"] = src(intra_md, root)
     tooth_row, image_row = read_md_table_row(intra_md, "tooth site"), read_md_table_row(intra_md, "image mean")
     intra_in_coco = re.search(r"(\d+) of the (\d+) images are in the current COCO set", intra_md.read_text(encoding="utf-8"))
@@ -651,6 +652,150 @@ def main() -> int:
         "We make no assumption that the new architecture preserves the accuracy of the previous study; the numbers above are measured on this model, and they are not better than those of the previous study."),
         changes="[Results 3.2 — new section: millimetre measurement accuracy]; [Figure 6 — replaced by scatter and Bland–Altman plots]; [Table — measurement accuracy] `tables/measurement_accuracy.md`; Abstract", files=["outputs/06_prediction/prediction_summary.md", "outputs/07_report/tables/measurement_accuracy.md", "outputs/07_report/figures/measurement_predicted_masks.png", "outputs/03_oracle/intra_observer.md"], sources=[S["acc"], S["intra"], S["est3"]])
 
+
+    # ---------------- the full letter (docs/Hakem_Yorumları.docx) added 27 items the abridged
+    # summary did not carry. Editorial and clinical-judgement items get the technical half of the
+    # answer here and are marked CLINICAL; the clinical team writes the rest (KLINIK_EKIBE.md).
+    A["intro_rewrite"] = dict(status="CLINICAL", text=(
+        "Accepted. The Introduction is rewritten with one stated aim and a reference for every claim it makes. "
+        "What the technical side supplies for it: the gap this study can legitimately claim is not that gingival display has never been quantified automatically — the group's own J Dent 2026 study did that — but that no published system converts the measurement into an explicit, auditable rule set and then measures how far that layer agrees with clinicians. "
+        "The Introduction will say so in those words, and the sentences that generalise about 'AI-based image analysis' are replaced by the specific prior work with citations."),
+        changes="Introduction — rewritten: one aim, a reference for every statement, the gap restated as the decision layer rather than the measurement", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["methods_clarity"] = dict(status="CLINICAL", text=(
+        "Accepted, and most of it is already rewritten. The Methods now state the design and the recruitment (clinical team), and, from the analysis side: the participant-level partition and its exact counts, the annotation procedure, the pixel-to-millimetre calibration (item Methods 6), the measurement geometry and the single fixed estimator with its sensitivity analysis, the training configuration of the reported model, the evaluation protocol with the test set used once, and the statistical methods with their software. "
+        "Each of those is a numbered subsection so that a reader can follow the pipeline end to end."),
+        changes="Methods 2.1-2.9 — restructured; calibration, measurement geometry, partition and evaluation protocol each given their own subsection", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["discussion_rewrite"] = dict(status="CLINICAL", text=(
+        "Accepted. Three reviewers make the same point — the Discussion is long, repeats the literature and draws conclusions the study did not test — and it is rewritten around this study's own results: the measurement accuracy against the clinical reference, the boundary analysis that explains where the error comes from, the controlled architecture comparison, the learning curve that has not plateaued, and the agreement of the decision layer with independent clinical assessment. "
+        "Literature that belongs to the rationale moves to the Introduction, the general passages are cut, and the conclusions are restricted to what was measured."),
+        changes="Discussion — shortened and restructured around this study's results; repeated literature moved to the Introduction; general conclusions removed", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["language"] = dict(status="CLINICAL", text=(
+        "Accepted. The manuscript is going through professional language editing before resubmission, and the certificate will accompany it."),
+        changes="Whole manuscript — professional language editing", files=[], sources=[])
+    A["title_claim"] = dict(status="CLINICAL", text=(
+        "Accepted. The subtitle promises what the study does not validate, and it is changed: the revision proposes 'measurement accuracy and a rule-based framework for etiological interpretation' in place of 'Toward etiological interpretation and treatment planning'. "
+        "The final wording is the clinical team's, but it will not contain a claim of clinical validation of treatment planning."),
+        changes="Title / subtitle — rewritten so the claim matches what was validated", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["abstract_limitations"] = dict(status="READY", text=(
+        "Accepted; the Abstract now carries the limitations rather than leaving them to the Discussion. Three are named, and all three are ours: "
+        "the design is single-centre and single-device, so no claim of external validity is made (the learning curve, which has not plateaued, says the same thing from the model's side); "
+        "the clinical reference was measured by one examiner, so only intra-observer reliability is available for it at present (tooth-site ICC(2,1) " + (f"{tooth_row[2]}" if tooth_row else "?") + ", SD " + (f"{tooth_row[6]}" if tooth_row else "?") + " mm) and the inter-observer component is being collected in the expert study (item R2-7); "
+        "and the etiological and treatment layer is compared with independent clinical assessment as an agreement analysis, not validated as a decision tool."),
+        changes="[Abstract — new Limitations sentence]; Discussion — Limitations paragraph expanded", files=["outputs/03_oracle/intra_observer.md", "outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["intra"]])
+    A["intro_gap"] = dict(status="CLINICAL", text=(
+        "The reviewer reads the sentence correctly and the reading exposes a real problem: as written, the gap is only in the clinical application, which is the part the study does not evaluate. "
+        "The revision states the gap where the study actually contributes and says which of the two questions the reviewer raises is open. Automated segmentation of gingiva and lip is not an open question in general; the millimetre validity of the measurement derived from it is reported here against a clinical reference "
+        f"({acc_line(P)}), and the open question the study addresses is whether an explicit rule layer on top of that measurement agrees with clinical judgement."),
+        changes="Introduction — the scientific gap restated and narrowed to what the study tests", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["acc"]])
+    A["intro_objectives"] = dict(status="CLINICAL", text=(
+        "Accepted. The revision names one primary objective — to quantify gingival display from a frontal smile photograph and report its accuracy in millimetres against a clinical reference — and lists the secondary objectives separately: the controlled comparison of segmentation architectures, and the agreement of the rule-based etiological/treatment layer with independent clinical assessment."),
+        changes="Introduction, final paragraph — one primary objective, secondary objectives listed separately", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["study_design"] = dict(status="CLINICAL", text=(
+        "Accepted; this belongs to the clinical team and the wording is being supplied. The design is a retrospective, cross-sectional analysis of photographs and clinical records collected in a single centre under ethics approval E-77082166-604.01-881629, and the recruitment window and the consecutive/selective nature of the sampling are being stated explicitly, because the reviewer's later question about selection bias (Discussion 3) cannot be answered without them. "
+        "From the analysis side, what can already be stated is the flow from the export to the analysed set: " + (f"{int(dc.loc['total', 'images_roboflow_export'])} exported images, {int(dc.loc['total', 'kept'])} analysed after the exclusions, partitioned at participant level into {int(dc.loc['total', 'train'])} / {int(dc.loc['total', 'valid'])} / {int(dc.loc['total', 'test'])}.")),
+        changes="Methods 2.1 — design, retrospective/prospective, recruitment process and dates", files=["outputs/07_report/tables/dataset_counts.md"], sources=[S["dc"]])
+    A["inclusion_criteria"] = dict(status="CLINICAL", text=(
+        "Correct, and it is a real omission: only exclusion criteria were given. The inclusion criteria are being written by the clinical team. "
+        "The analysis-side filters that act on top of them are already documented and will be stated in the same place, because they determine which images enter which analysis: an image enters the segmentation training set if it has a usable annotation, and it enters the millimetre analysis only if it is a high smile line with a clinical reference measurement "
+        + (f"(n = {int(dc.loc['high', 'kept'])}). " if 'high' in dc.index else ". ")
+        + "Duplicate photographs of the same participant were reduced to one image per participant before partitioning."),
+        changes="Methods 2.1 — inclusion criteria added beside the exclusion criteria", files=["outputs/07_report/tables/dataset_counts.md"], sources=[S["dc"]])
+    A["sample_size_placement"] = dict(status="READY", text=(
+        "Accepted, and the change is larger than a move. The G*Power calculation is removed altogether rather than relocated, because it does not determine the data requirement of a segmentation model (item R2-3); the Methods instead describe how data adequacy was assessed empirically, with the learning curve, and how the precision of the agreement analysis was justified. "
+        "The counts of participants and images move to the Results, where the reviewer asks for them, and the Discussion carries the interpretation of that number rather than a justification of it."),
+        changes="Methods 2.1 — power calculation removed, empirical data-adequacy assessment described; Results — participant and image counts; Discussion — interpretation of the cohort size", files=["outputs/07_report/tables/learning_curve.md", "outputs/07_report/tables/dataset_counts.md"], sources=[S["lcmd"], S["dc"]])
+    A["why_1315"] = dict(status="READY", text=(
+        "The number was not chosen. The cohort is every photograph in the centre's archive that met the criteria over the recruitment window, so 1,315 is what the archive contained rather than a target that was set (the recruitment window itself is stated by the clinical team, item Methods 1). "
+        "What we can do, and now do, is say whether that number was enough, and we answer it with evidence rather than assertion: "
+        f"the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) with the validation set held constant, and {lc_finding}."
+        + ("" if LC["plateau"] else " In other words, the honest answer to 'why 1,315' is that 1,315 is what was available and that more would probably still help; we no longer claim the cohort is sufficient.")),
+        changes="Methods 2.1 / Discussion — the cohort described as the available archive, with the learning curve as the data-adequacy evidence", files=["outputs/07_report/figures/learning_curve.png", "outputs/07_report/tables/learning_curve.md"], sources=[S["lc"], S["lcmd"]])
+    A["probe_calibration"] = dict(status="READY", text=(
+        "Yes, the probe was used, and the reviewer is right that the procedure was missing from the manuscript. It is now described in full. "
+        "A Hu-Friedy UNC periodontal probe is visible in every photograph. For the clinical reference the image was opened in ImageJ at 2698×1799, two consecutive 1 mm marks on the probe were selected, and the scale was set with Set Scale (1 mm), per image; the gingival display was then measured at six tooth sites on that scale. "
+        "The pipeline does not read the probe. It applies a single global scale of "
+        + (f"{m_scale.group(1)} px/mm, fitted by regression through the origin on the development subset only (R² {m_scale.group(2)}, residual SD {m_scale.group(3)} mm" if m_scale else f"{k:.2f} px/mm, fitted on the development subset")
+        + (f"; leave-one-out mean {m_loo.group(1)}, SD {m_loo.group(2)} px/mm" if m_loo else "") + "), applied unchanged to every other image, because the photographs were taken at a fixed camera-to-subject distance with a fixed setup. "
+        + (f"The per-image ratio of pixels to reference millimetres has a coefficient of variation of {m_cv.group(3)}, which includes the reference's own calibration noise: with a 1 mm probe interval of about 17 px, a one-pixel marking error is roughly 6 % of the scale. " if m_cv else "")
+        + "The two scales are therefore reported separately and neither is presented as the other: the reference is per-image and probe-based, the pipeline is a single fitted constant, and the agreement between the two is what the millimetre results measure. "
+        "The individual per-image probe scales were not stored at the time, which is stated as a limitation; the three experts of the agreement study enter their own probe scale per image, which will give an independent estimate of that calibration's precision."),
+        changes="Methods 2.4 (calibration) — new subsection: probe, ImageJ Set Scale, per-image reference scale vs the pipeline's single fitted scale; Limitations — per-image probe scales not stored", files=["outputs/03_oracle/scale_estimation.md", "outputs/04_expert/scale_agreement.md"], sources=[S["scale"]])
+    A["clinical_cutoff"] = dict(status="READY" if TM is not None else "PENDING", text=(
+        "Two questions here, and we answer both with numbers. "
+        "**What error is clinically acceptable.** The decision boundaries of Table 1 are at 3, 4, 6 and 8 mm, so the tolerance is not a single number: an error matters only where it can cross a boundary. "
+        + (f"The measurement error is {f(P['mae'])} mm on average (95 % limits of agreement {f(P['ba_loa_low'])} to {f(P['ba_loa_high'])} mm), and the reference images are stratified below by how far the reference value sits from the nearest boundary. "
+           f"Agreement with the reference class is {TMS['agreement_away_from_a_boundary']} for images more than 2 mm from a boundary and {TMS['agreement_near_a_boundary']} for images within 0.5 mm of one, while the mean absolute error is essentially the same in every stratum "
+           f"({TM['MAE, mm'].min():.2f} to {TM['MAE, mm'].max():.2f} mm). {TMS['share_of_disagreements_within_1_mm_of_a_boundary']} of all class disagreements occur within 1 mm of a boundary, and {TMS['share_within_0_5_mm_of_a_boundary']} of the cohort sits that close to one. "
+           "So the measurement is not worse near a boundary; the boundary is simply close, and a sub-millimetre error is enough to cross it. That is a property of Table 1's spacing, not of the measurement, and it is now stated as such: the system reports the millimetre value with its uncertainty and, near a boundary, more than one candidate category. "
+           if TM is not None else "[PENDING — the near-boundary stratification is produced by scripts/build_report.py.] ")
+        + "**Whether 0, 1 and 3 mm should be called a gummy smile.** We agree with the reviewer, and this is a terminology problem in the submitted manuscript rather than a disagreement. The quantity measured is *gingival display in millimetres*, which is defined at any value including zero; 'gummy smile' is a clinical judgement that is not made by the measurement and is not made by the system. "
+        + (f"In this cohort {TMS['reference_below_4_mm']} have a reference value below 4 mm. " if TM is not None else "")
+        + "The revision uses 'gingival display' for the measured quantity throughout, reserves 'high smile line' for the group, and does not describe any value as a gummy smile. Where Table 1 assigns a category below 4 mm it is reporting a candidate etiology for an observed display, not asserting that the case requires treatment — which is the reviewer's Methods 10a, answered there."),
+        changes="Methods 2.8 — the acceptable-error question answered against the Table-1 boundaries; [Results — new table: class agreement by distance to a boundary]; terminology corrected throughout", files=["outputs/07_report/tables/threshold_margin.md", "outputs/07_report/tables/measurement_accuracy.md"], sources=[S["tm_margin"], S["acc"]])
+    A["table1_evidence"] = dict(status="CLINICAL", text=(
+        "No, a systematic search was not performed, and the manuscript should not have implied otherwise. Table 1 is a narrative synthesis of the thresholds used in references 14-23, assembled by the clinical authors from the literature they work with. "
+        "The revision says exactly that: it describes the table as a literature-derived, non-systematic synthesis, states the criterion by which each threshold was taken, and lists the source of every band, so that a reader can see which numbers are widely used and which are one group's convention. "
+        "The clinical team will supply the description of how the references were gathered. If the editors prefer, the table can instead be presented as the pre-specified rule set this study evaluates, with its provenance given and no claim of evidence synthesis attached to it."),
+        changes="Methods — Table 1 described as a narrative, literature-derived synthesis with the source of each band; no claim of a systematic search", files=[], sources=[])
+    A["table1_logic"] = dict(status="CLINICAL", text=(
+        "Two reviewers make this objection — Reviewer 3 in Methods 10 (a, b and c) and Reviewer 4 in his second fundamental problem — and they are right on the substance. The clinical framing is the clinical team's to write; what the technical side can state, and what the design already does, is this. "
+        "**The system does not diagnose.** It measures gingival display in millimetres and applies a published threshold table to produce one or more *candidate* etiologies with the treatments associated with them in the literature. The output field is named `treatment_alternatives`, not 'treatment'. "
+        "**Overlapping bands are reported as overlaps, not resolved.** The bands of Table 1 overlap by construction (E1 below 4 mm, E2 from 3 to 6, E3 from 4 to 8, E4 above 8), so a 5 mm display returns the combined label E2-E3 and both sets of candidates rather than a single answer. The engine has no metadata-based tie-breaking and never picks one etiology from a measurement alone — which is precisely the reviewers' point, built into the rule set rather than argued against it. "
+        "**On 10a specifically:** a display below 4 mm is not asserted to be a problem. The rule returns a category for an observed display; it does not assert an indication, and a value of 0 mm returns `NO_VISIBLE_GINGIVA` rather than a class. "
+        "**On 10c and the short upper lip:** we agree that the diagnosis requires a lip measurement and that lip length varies with sex, age and ethnicity. The system does not measure lip length and therefore cannot diagnose a short lip; where the band admits that etiology it is listed as a candidate to be confirmed clinically. The revision says so in the Methods, in the Table 1 caption and in the Limitations. "
+        "**And this is exactly what the expert study measures.** Three clinicians assign the etiology from their own clinical judgement, blinded to the table and to each other; the linear-weighted κ between their majority and the rule output is the quantity that says how far a millimetre-only rule can go. Whatever that number turns out to be, it is the honest measure of this limitation, and it is reported either way."),
+        changes="Methods 2.8 and the Table 1 caption — the rule set described as a generator of candidate etiologies, not a diagnosis; overlapping bands and their combined labels made explicit; Limitations — lip length, cephalometry and periodontal findings are not inputs; Discussion — the expert agreement as the measure of this limit", files=["docs/Uzman_degerlendirme_protokolu.md", "outputs/07_report/tables/expert_agreement.md"], sources=[])
+    A["abbreviations"] = dict(status="CLINICAL", text=(
+        "Accepted. Every abbreviation is expanded at first mention in the revision — YOLO (You Only Look Once), RF-DETR (Receptive Field enhanced Detection Transformer), mAP (mean average precision), IoU (intersection over union), MAE, RMSE, ICC and LoA — and a definitions list is added where the journal allows one."),
+        changes="Whole manuscript — abbreviations expanded at first mention", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["section_35_to_methods"] = dict(status="READY", text=(
+        "Accepted; the reviewer has identified a genuine structural error. Section 3.5 describes the threshold-based classification rule, which is a method, and in the revision it moves to the Methods, where the bands of Table 1, the combined labels for overlapping bands and the handling of zero and missing values are defined once. "
+        "What stays in the Results is the validation that follows from it, and that part is now substantive rather than descriptive: the agreement between the class derived from the measurement and the class derived from the clinical reference "
+        + (f"({100 * P['threshold_agreement']:.0f} %, linear-weighted κ {f(P['threshold_kappa_linear'], 2)} [{f(P['threshold_kappa_linear_ci_low'], 2)}, {f(P['threshold_kappa_linear_ci_high'], 2)}] on the {int(P['n'])} out-of-fold images), " if 'threshold_agreement' in P else "")
+        + "its dependence on the distance to a boundary, and the agreement with independent clinical assessment from the expert study."),
+        changes="Section 3.5 moved to Methods 2.8; Results keeps only the validation results of the classification", files=["outputs/07_report/MANUSCRIPT_EDITS.md", "outputs/07_report/tables/threshold_margin.md"], sources=[S["acc"], S["tm_margin"]])
+    A["limitations"] = dict(status="READY", text=(
+        "Accepted; all three go into the Limitations, and two of them are quantified rather than merely named. "
+        "**Selection bias:** the cohort is a single centre's archive over one recruitment window, photographed with one device and one setup, so it is a convenience sample and no claim of external validity is made; the learning curve, which has not plateaued, is reported alongside as evidence that the dataset is not at its ceiling either. "
+        "**One examiner:** the clinical reference and the annotations come from a single observer, so only intra-observer reliability is currently available for them"
+        + (f" (tooth-site ICC(2,1) {tooth_row[2]}, SD {tooth_row[6]} mm; image-mean ICC(2,1) {image_row[2]})" if tooth_row and image_row else "")
+        + ". The inter-observer component is being collected in the expert study, where three blinded clinicians remeasure the gingival display at each of the six tooth sites (item R2-7). "
+        "**Demographic bias:** the demographic coverage of the cohort is reported per group rather than asserted, including how many records carry an age and a sex at all, and skin and gingival pigmentation were not recorded, which is stated as a gap rather than glossed over."),
+        changes="Limitations — rewritten: selection bias, single observer with its ICC, demographic coverage and the unrecorded pigmentation", files=["outputs/07_report/tables/demographics.md", "outputs/03_oracle/intra_observer.md", "outputs/07_report/tables/learning_curve.md"], sources=[S["dem"], S["intra"], S["lcmd"]])
+    A["duplicate_conclusion"] = dict(status="CLINICAL", text=(
+        "Accepted; this is an editing error. The revision keeps one Conclusion section and removes the concluding paragraph at the end of the Discussion."),
+        changes="Discussion — the closing conclusion paragraph removed; one Conclusion section kept", files=["outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["reference_11"] = dict(status="READY", text=(
+        "The question is well placed and the answer is that no outcome from reference 11 entered the calculation. The effect size used in G*Power (w = 0.30) is Cohen's conventional 'medium' value, not an estimate taken from that study; reference 11 was cited as context for the clinical problem and its presence beside the calculation implied a derivation that was never made. "
+        "Rather than correct the citation we remove the calculation: it does not determine the data requirement of a segmentation model, and the revision replaces it with the empirical learning curve and, for the agreement analysis, a precision-based justification"
+        + (f" ({precision_note})" if precision_note else "") + ". The misleading citation disappears with the paragraph."),
+        changes="Methods 2.1 and Appendix A — the power calculation and the reference-11 citation beside it removed", files=["outputs/07_report/tables/learning_curve.md", "docs/Istatistik_analiz_plani.md"], sources=[S["lcmd"]])
+    A["novelty"] = dict(status="CLINICAL", text=(
+        "We accept the assessment of the segmentation component and no longer present it as the contribution. Two reviewers say the same thing from different directions, and the revision answers them together: the segmentation is a competent application of existing architectures, not a new method, and it is reported as the instrument the study needs rather than as its result. "
+        "What the revision does claim, and what is new relative to the group's own previous work, is the controlled architecture comparison — a pre-registered protocol, identical data and budget, three seeds, a decision rule fixed before the runs, with the millimetre measurement as the primary outcome rather than mAP — and the explicit, auditable rule layer whose agreement with blinded clinical assessment is measured rather than assumed. "
+        "Whether that is sufficient novelty for this journal is the editors' judgement, and the manuscript now states the contribution plainly enough for them to make it."),
+        changes="Introduction and Discussion — the contribution restated: the segmentation is the instrument, the controlled comparison and the evaluated rule layer are the contribution", files=["outputs/08_architecture/RESULTS.md", "outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[])
+    A["inter_rater"] = dict(status="PENDING", text=(
+        "The reviewer is right and we do not argue with it: the annotations and the clinical reference come from one examiner, only intra-observer reliability was assessed"
+        + (f" (tooth-site ICC(2,1) {tooth_row[2]}, SD {tooth_row[6]} mm)" if tooth_row else "")
+        + ", and a single-observer reference can carry a systematic bias that no amount of internal consistency reveals. "
+        "This is being measured rather than conceded in words. The expert study already under way has three clinicians, blinded to each other, to the model and to the threshold table, measure the gingival display at each of the six tooth sites on their own per-image probe calibration, on the same reference images. That gives exactly what is missing: "
+        "an inter-observer ICC(2,1) between the three experts and the original examiner at tooth-site and image level, the between-observer limits of agreement in millimetres, and the difference between each observer's mean and the reference the model was evaluated against. "
+        "The pipeline's error is then reported against that spread, so a reader can see how much of the 0.5 mm-scale error is the model and how much is the disagreement between competent observers about where the gingival margin is. "
+        "[PENDING — the expert forms are being completed; the inter-observer numbers will be inserted from `outputs/04_expert/manuscript_numbers.md`.] "
+        "Whatever the spread turns out to be, it is reported, and if it is of the same order as the model's error, that is written into the Limitations as the ceiling the reference itself imposes."),
+        changes="Methods 2.9 — the inter-observer protocol described; [Results — new: inter-observer reliability of the reference]; Limitations — single-examiner ground truth", files=["docs/Uzman_degerlendirme_protokolu.md", "outputs/04_expert/expert_summary.md", "outputs/03_oracle/intra_observer.md"], sources=[S["intra"]])
+    A["intra_icc"] = dict(status="READY", text=(
+        "The values are now given in full rather than as 'high ICC'. The same observer remeasured the gingival display of 20 images at six tooth sites each, at a separate session: "
+        + (f"ICC(2,1) {tooth_row[2]} at tooth-site level (n = {tooth_row[1]} paired sites) and {image_row[2]} at image-mean level (n = {image_row[1]} images), "
+           f"with a mean difference of {tooth_row[5]} mm, a standard deviation of {tooth_row[6]} mm and 95 % limits of agreement of {tooth_row[7]} mm at tooth-site level. "
+           if tooth_row and image_row else "[PENDING — outputs/03_oracle/intra_observer.md.] ")
+        + "The type is stated explicitly: ICC(2,1), a two-way random-effects, absolute-agreement, single-measurement model, which is the correct choice for repeated measurements by the same rater when absolute agreement rather than consistency is what matters; ICC(3,1) is reported beside it for completeness. "
+        "The p-value is no longer quoted as evidence of agreement — a significant ICC only rejects zero — and neither is the paired t-test; the confidence interval and the limits of agreement carry the argument. "
+        "The tooth-site standard deviation of "
+        + (f"{tooth_row[6]} mm " if tooth_row else "") + "is also used as the reference's own repeatability floor, against which the pipeline's error is read elsewhere in the response."),
+        changes="Methods 2.9 and Results — ICC type, value and 95 % CI given at both levels; the p-value removed as evidence of agreement", files=["outputs/03_oracle/intra_observer.md"], sources=[S["intra"]])
+
     # Paths written before the Stage-6 directory became a choice: point them at the directory this
     # run was built from, and leave the ones only the previous model produced where they are.
     for a in A.values():
@@ -695,7 +840,9 @@ def main() -> int:
                       f"**Status:** {status}", "",
                       "Outputs: " + ", ".join(f"`{p}`" for p in a["files"]), "",
                       *a["sources"], ""]
-            rows.append({"item": it["id"], "reviewer": rev["name"], "topic": it["topic"], "status": status, "owner": it.get("owner", "technical"), "outputs": "; ".join(a["files"])})
+            rows.append({"item": it["id"], "reviewer": rev["name"], "topic": it["topic"], "status": status,
+                         "owner": it.get("owner", "technical"), "outputs": "; ".join(a["files"]),
+                         "quote": quote, "response": a["text"], "changes": a["changes"]})
     used = {it["answer"] for rev in spec["reviewers"] for it in rev["items"] if it.get("answer")}
     unmatched = [k for k in A if k not in used]
     if unmatched:
@@ -717,8 +864,38 @@ def main() -> int:
              "| madde | hakem | konu | durum | sorumlu | cevaplayan çıktı |", "|---|---|---|---|---|---|"]
     for r in rows:
         durum.append(f"| {r['item']} | {r['reviewer']} | {r['topic']} | **{r['status']}** | {'teknik' if r['owner'] == 'technical' else 'klinik'} | {r['outputs']} |")
-    durum += ["", "Not: hakemlerin orijinal metni depoda yok (`docs/Hakem_revizyonları.docx`); madde numaraları ve alıntılar belge geldiğinde `docs/hakem_maddeleri.yaml` üzerinden tamamlanacak. Listedeki maddeler teknik denetim raporu ve görev belgesinden derlendi; belgede başka maddeler varsa eklenecek."]
+    durum += ["", f"Kaynak: `docs/Hakem_Yorumları.docx` — hakem mektubunun **tam** metni. Madde listesi ve alıntılar bu dosyadan "
+              "`scripts/build_reviewer_items.py` ile üretiliyor; alıntılar mektubun satırlarından kesilerek alındığı için birebirdir. "
+              "Daha önce kullanılan `docs/Hakem_revizyonları.docx` kısaltılmış bir özettir (31 madde) ve artık kaynak değildir; "
+              "çeliştikleri yerde tam mektup esastır. Klinik ekibe gidecek maddeler ayrıca `KLINIK_EKIBE.md` dosyasında toplandı."]
     (o7 / "REBUTTAL_DURUM.md").write_text("\n".join(durum) + "\n", encoding="utf-8")
+
+    # ---- the clinical team's own list: what only they can write, with what we can already give them
+    clin_rows = [r for r in rows if r["status"] == "CLINICAL"]
+    pend_rows = [r for r in rows if r["status"] == "PENDING"]
+    kl = ["# Klinik ekibe — metni sizden beklenen hakem maddeleri", "",
+          f"Kaynak: `docs/Hakem_Yorumları.docx` (hakem mektubunun tam metni, {len(st)} madde). Bu dosyada yalnızca **metni klinik ekibin yazacağı "
+          f"{len(clin_rows)} madde** var; teknik analizden cevaplanan {int((st['status'] == 'READY').sum())} madde `RESPONSE_TO_REVIEWERS.md` içinde hazır. "
+          "Üretim: `scripts/build_rebuttal.py`; elle düzenlemeyin.", "",
+          "Her madde için: hakemin **birebir** sözü, ne gerektiği, ve teknik tarafın şimdiden sağladığı metin/sayılar. "
+          "Son cümleleri yazarken teknik kısmı olduğu gibi kullanabilirsiniz; sayılar `outputs/` dosyalarından okunuyor ve elle yazılmadı.", ""]
+    for r in clin_rows:
+        kl += [f"## {r['item']} — {r['topic']}", "",
+               f"**Hakem ({r['reviewer']}):**", "",
+               "> " + r["quote"].strip().replace("\n", "\n> "), "",
+               f"**Ne gerekiyor:** {r['changes']}", "",
+               "**Teknik tarafın sağladığı (taslak metin, sayılar çıktı dosyalarından):**", "",
+               r["response"], ""]
+        if r["outputs"]:
+            kl += ["Kaynaklar: " + ", ".join(f"`{q}`" for q in r["outputs"].split("; ") if q), ""]
+    kl += ["---", "",
+           f"## Ayrıca: uzman formları beklenen {len(pend_rows)} madde", "",
+           "Bunların metni teknik tarafta hazır; eksik olan yalnızca üç uzmanın doldurduğu formlardan gelecek sayılar "
+           "(`run_expert_analysis.py` → `outputs/04_expert/manuscript_numbers.md`). Formlar geldiğinde cevaplar kendiliğinden tamamlanır.", "",
+           "| madde | hakem | konu | ne bekleniyor |", "|---|---|---|---|"]
+    for r in pend_rows:
+        kl.append(f"| {r['item']} | {r['reviewer']} | {r['topic']} | uzman formlarından gelecek sayılar |")
+    (o7 / "KLINIK_EKIBE.md").write_text("\n".join(kl) + "\n", encoding="utf-8")
 
     ready = st[st["status"] == "READY"]; pend = st[st["status"] == "PENDING"]; clin_ = st[st["status"] == "CLINICAL"]; miss = st[st["status"] == "MISSING"]
     prun = st[st["status"] == "PENDING_RUN"]
@@ -733,15 +910,33 @@ def main() -> int:
              "- **İş istasyonu koşusu bekleyen (0)**: yok. Mimari karşılaştırması ve kontrolleri tamamlandı; sonuçlar "
              "`outputs/08_architecture/RESULTS.md`, ön-belirleme `PROTOCOL.md` ve `PROTOCOL_ADDENDUM_resolution.md`, "
              "bulgular `FINDINGS.md`. Ön-belirlenen karar kuralı tetiklendi ve nihai model RF-DETR-Seg Large olarak değişti."),
-            f"- **Hocadan beklenen ({len(miss)})**: " + (", ".join(f"{r.item}" for r in miss.itertuples()) or "yok") + " — bu maddeler elimize ulaşan hakem belgesinde yok (Reviewer 2 numaralandırması bunları atlıyor); metinleri sorumlu yazardan istenecek.",
+            (f"- **Hocadan beklenen ({len(miss)})**: " + ", ".join(f"{r.item}" for r in miss.itertuples()) + " — metinleri sorumlu yazardan istenecek."
+             if len(miss) else
+             "- **Hocadan beklenen (0)**: yok. Tam hakem mektubu (`docs/Hakem_Yorumları.docx`) elimize ulaştı; daha önce 'belgede bulunamayan' diye "
+             "işaretlenen iki madde bulundu ve yerlerine kondu: **R2-3** G*Power maddesi (eskiden `R2-sample-size` adıyla 'ayrıca iletilen yorum' "
+             "sayılıyordu) ve **R2-7** tek gözlemci / gözlemciler arası güvenilirlik maddesi."),
             "- Ölçüm doğruluğu her yerde düzeltmesiz birincil, maske düzeyi düzeltme ikincil.",
             "- Açıkça kabul edilen hatalar: eski ölçüm modülünün geometri hatası (eski Figure 6; v3 ve v1 kolonları geçersiz, figür yeniden üretildi), aynı hastanın iki fotoğrafının bölüntüler arasında bulunması (hasta düzeyi yeniden bölünme, yeniden eğitim), gözlemci içi dosyasında 15 vs 20 görüntü (tam dosyayla yeniden hesaplandı).",
             "- Yapamadıklarımız açıkça yazıldı: E4 sınıfı veri setinde yok; dış geçerlilik yok (tek merkez/cihaz); pigmentasyon kaydı yok; demografi kısmi.",
-            f"- Alıntılar hakem belgesinden birebir alındı (`docs/Hakem_revizyonları.docx`; uzantısı .docx olsa da düz metin). Reviewer 2 numaralandırması belgedeki gibi korundu (1, 2, 4, 5, 6, 8, 9, 10); Reviewer 3'ün numaraları bölüm içinde yeniden başlıyor, madde kimlikleri bölüm adını taşıyor; Reviewer 4 tek parça metin yazdığı için maddelere bölündü ve her maddenin alıntısı ilgili pasajın kendisi.",
-            f"- Toplam **{len(st)} madde** izleniyor: {len(st) - 4} tanesi hakem belgesinden, 2 tanesi ayrıca iletilen yorumlardan (`R2-sample-size`, `R4-external-validity`), 2 tanesi belgede bulunmayan ve metni beklenen madde (`R2-3`, `R2-7`).",
-            f"- Önceki 15 maddelik listeyle karşılaştırma: {len(st) - 4 - 9} madde önceki listede yoktu. Eksik olanlar: Reviewer 3'ün tamamı (9 madde: çalışma tasarımı, abstract iddiaları, grup büyüklükleri ve cinsiyet, low/normal görüntülerin rolü, pigmentasyon, sayı karışıklığı, 'performance' ne demek + FP/FN, segmentasyon ile mm ölçümünün ayrılması, klinik doğrulama iddiası), Reviewer 2'nin 1/2/4/8/9 maddeleri (abstract kapsamı, Box-Mask metrikleri, YOLOv8, dişeti mAP 0.587, iyileşme olmaması) ve Reviewer 4'ün üç maddesi (validasyon yerine test metriği, mimari karşılaştırmanın adil olmaması, mm doğruluğunun ayrı madde oluşu).",
-            "- **G*Power / örneklem büyüklüğü** iki ayrı madde olarak eklendi (`R2-sample-size`, `R4-external-validity`); metinleri hakem belgesinde değil, ayrıca iletilen yorumlardan birebir alındı ve her ikisinin altında bu not var. Cevaplar öğrenme eğrisi, hassasiyet gerekçesi ve istatistikçinin kappaSize hesabı üzerinden kuruldu; güç analizi paragrafı ile Ek A makaleden çıkarılıyor.",
-            "- Gözlemci içi güvenilirlik ve demografi ayrı hakem maddesi değil; R4-4 ve R3-Methods-5 cevaplarının içine alındı.",
+            "- Kaynak **`docs/Hakem_Yorumları.docx`** — hakem mektubunun tam metni. Madde listesi ve alıntılar `scripts/build_reviewer_items.py` ile "
+            "doğrudan bu dosyadan üretiliyor: her maddenin alıntısı mektubun belirtilen satırlarından kesiliyor, yani birebir. Daha önce kullanılan "
+            "`docs/Hakem_revizyonları.docx` kısaltılmış bir özetti (31 madde) ve artık kaynak değil; çeliştikleri yerde tam mektup esas alındı.",
+            f"- Toplam **{len(st)} madde**: " + ", ".join(f"{n} {len(i)}" for n, i in
+                [(r['name'], r['items']) for r in spec['reviewers']]) + ". Eski 31 maddelik listedeki her madde yeni listede var; "
+            "yalnızca bir kimlik değişti (`R2-sample-size` → **R2-3**, mektuptaki gerçek numarası). Tam mektupta bulunmayan eski madde yok.",
+            f"- **Net {len(st) - 31} madde arttı.** Metniyle birlikte yeni gelenler: Reviewer 3'ün 24 maddesi (bölümün tamamı 33; eski listede 9'u vardı), "
+            "Reviewer 1'in iki editoryal maddesi (özgünlük, tartışmanın uzunluğu), Reviewer 2'nin **R2-11** (önceki çalışmayla fark) ve **R2-12** "
+            "(ICC değeri/GA/tipi) maddeleri, Reviewer 4'ün **R4-9** ('etiyoloji yalnız mm'den türetilemez') ve **R4-1b** (klinik altın standart yok) "
+            "maddeleri. Ayrıca eskiden boş yer tutucu olan **R2-3** ve **R2-7** artık gerçek alıntılarıyla dolduruldu.",
+            "- **Aynı konuyu iki hakemin sorduğu yerlerde tek cevap, çapraz referansla**: örtüşme/özgünlük (R2-11 ↔ R4-2), Tablo 1'in mantığı "
+            "(R3-Methods-10 ↔ R4-9), G*Power (R2-3 ↔ R3-References-1 ↔ R4-external-validity), görüntü sayıları (R2-5 ↔ R3-Results-2), "
+            "veri sızıntısı (R2-6 ↔ R4-7), tartışmanın yeniden yazımı (R3-General-4 ↔ R3-Discussion-1/2 ↔ R1-discussion-length).",
+            "- Gözlemci içi güvenilirlik artık ayrı bir madde (**R2-12**) ve tam değerleriyle cevaplandı: ICC(2,1) tipi, değeri ve %95 GA'sı, "
+            "diş bölgesi ve görüntü düzeyinde; p değeri uyum kanıtı olarak kullanılmıyor.",
+            "- **R2-7 (tek gözlemci)** uzman formlarıyla cevaplanacak: üç kör uzman aynı referans görüntülerde altı diş bölgesini kendi prob "
+            "kalibrasyonlarıyla ölçüyor; buradan gözlemciler arası ICC(2,1), mm cinsinden uyum sınırları ve her gözlemcinin referanstan farkı çıkacak.",
+            "- **R3-Methods-8 (klinik eşik / kabul edilebilir hata)** için yeni tablo: `tables/threshold_margin.md` — referans değerin en yakın "
+            "Tablo 1 sınırına uzaklığına göre sınıf uyumu. Hata her katmanda aynı; değişen, sınırın ne kadar yakın olduğu.",
             "- Terminoloji: 'high smile line'; 'gummy smile / excessive gingival display' kullanılmadı.",
             "- Makale düzeltmeleri: `MANUSCRIPT_EDITS.md` — gönderilen makale ve Appendix B–F taranarak her değişiklik için mevcut cümle, önerilen cümle, gerekçe ve hakem maddesi; sayılar `outputs/` dosyalarından."]
     (o7 / "REBUTTAL_OZET.md").write_text("\n".join(ozet) + "\n", encoding="utf-8")

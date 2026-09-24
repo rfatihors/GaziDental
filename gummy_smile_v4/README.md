@@ -59,6 +59,7 @@ python scripts/run_oracle.py --write-config   # Stage 3 -> outputs/03_oracle/, w
                                               #  config, nothing is re-selected and the config is never written)
 python scripts/run_expert_analysis.py --synthetic   # Stage 4 dry run; drop real forms into data/expert/ and omit the flag
 python -m gsv4.train.prepare_yolo_dataset            # Stage 5 dataset (symlinks) + label-check figure; training: scripts/README_TRAINING.md
+python scripts/build_reviewer_items.py                   # docs/Hakem_Yorumları.docx (full letter) -> docs/hakem_maddeleri.yaml
 python scripts/verify_measurement_reproducible.py         # a stored result table must follow from the masks beside it
 python scripts/build_report.py --stage6 09_final_rfdetr   # Stage 7 -> outputs/07_report (figures, tables, REVIZYON_OZETI.md)
                                                          # the default; --stage6 06_prediction rebuilds the

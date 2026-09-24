@@ -6,13 +6,31 @@ Conventions: there is one set of measurement results. No post-hoc calibration is
 
 ## Reviewer 1
 
+### R1-novelty — Technical novelty is incremental and integrative rather than foundational
+
+> - The works described show a novel application of AI techniques on smile line classification.
+But the technical novelty of the method appears to be incremental and integrative rather than
+foundational.
+
+
+**Response:**
+
+We accept the assessment of the segmentation component and no longer present it as the contribution. Two reviewers say the same thing from different directions, and the revision answers them together: the segmentation is a competent application of existing architectures, not a new method, and it is reported as the instrument the study needs rather than as its result. What the revision does claim, and what is new relative to the group's own previous work, is the controlled architecture comparison — a pre-registered protocol, identical data and budget, three seeds, a decision rule fixed before the runs, with the millimetre measurement as the primary outcome rather than mAP — and the explicit, auditable rule layer whose agreement with blinded clinical assessment is measured rather than assumed. Whether that is sufficient novelty for this journal is the editors' judgement, and the manuscript now states the contribution plainly enough for them to make it.
+
+**Changes in the manuscript:** Introduction and Discussion — the contribution restated: the segmentation is the instrument, the controlled comparison and the evaluated rule layer are the contribution
+
+**Status:** CLINICAL
+
+Outputs: `outputs/08_architecture/RESULTS.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
 ### R1-1 — No system block diagram; how Fig. 6 treatment suggestions are reached
 
-> The reported works almost solely about the performance of the segmentation models in
-classifying lips, gingiva and teeth pixels. However, there is almost no description about
-how to arrive to the final result as shown in Fig.6. The authors should provide more
-details in how to arrive the treatment suggestions at the last column of Fig.6. A system
-block diagram of the system will greatly improve the presentation of the paper.
+> - The reported works almost solely about the performance of the segmentation models in
+classifying lips, gingiva and teeth pixels. However, there is almost no description about how to
+arrive to the final result as shown in Fig.6. The authors should provide more details in how to
+arrive the treatment suggestions at the last column of Fig.6. A system block diagram of the
+system will greatly improve the presentation of the paper.
 
 
 **Response:**
@@ -29,8 +47,8 @@ Outputs: `outputs/07_report/figures/pipeline_block_diagram.png`
 
 ### R1-2 — No segmentation result images
 
-> There is no segmentation result images, it is not possible to justify whether the
-segmentation module is nicely implemented.
+> - There is no segmentation result images, it is not possible to justify whether the segmentation
+module is nicely implemented.
 
 
 **Response:**
@@ -46,14 +64,30 @@ Outputs: `outputs/07_report/figures/segmentation_examples.png`, `outputs/07_repo
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
 
 
+### R1-discussion-length — The Discussion is too long and repetitive
+
+> - The length of Discussion is too long and some content are repeatedly mentioned. The authors
+should revise and shorten them.
+
+
+**Response:**
+
+Accepted. Three reviewers make the same point — the Discussion is long, repeats the literature and draws conclusions the study did not test — and it is rewritten around this study's own results: the measurement accuracy against the clinical reference, the boundary analysis that explains where the error comes from, the controlled architecture comparison, the learning curve that has not plateaued, and the agreement of the decision layer with independent clinical assessment. Literature that belongs to the rationale moves to the Introduction, the general passages are cut, and the conclusions are restricted to what was measured.
+
+**Changes in the manuscript:** Discussion — shortened and restructured around this study's results; repeated literature moved to the Introduction; general conclusions removed
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
 ## Reviewer 2
 
 ### R2-1 — Abstract implies all 1,315 images were used for the quantitative analysis
 
-> The Abstract may imply that all 1,315 images were used for quantitative gingival display
-assessment. However, this analysis was performed only in the high smile line subgroup
-(n=216, 16.4%). This restriction should be stated explicitly to avoid overstating the
-study scope.
+> 1. The Abstract may imply that all 1,315 images were used for quantitative gingival display
+assessment. However, this analysis was performed only in the high smile line subgroup (n=216,
+16.4%). This restriction should be stated explicitly to avoid overstating the study scope.
 
 
 **Response:**
@@ -70,9 +104,9 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`
 
 ### R2-2 — Box metrics vs Mask metrics not identified
 
-> The precision (0.85466) and recall (0.81039) reported in the Abstract are "Box metrics",
-whereas mAP@50 and mAP@50-95 are "Mask metrics". These metric types should be clearly
-identified to avoid misleading interpretation of segmentation performance.
+> 2. The precision (0.85466) and recall (0.81039) reported in the Abstract are "Box metrics",
+whereas mAP@50 and mAP@50-95 are "Mask metrics". These metric types should be clearly identified
+to avoid misleading interpretation of segmentation performance.
 
 
 **Response:**
@@ -87,17 +121,34 @@ Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`
 
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
 
-### R2-3 — Not in the document — text to be requested from the corresponding author
+### R2-3 — Whether a G*Power chi-square calculation is appropriate for a deep-learning segmentation model
 
-> **MISSING** — item 3 of this review is not in the document we received (the numbering skips it). The text has to be requested from the corresponding author before this item can be answered.
+> 3. The sample size calculation (G*Power, chi-square test, w=0.30, df=9, n=263) is based on
+conventional hypothesis-testing methods. It is unclear whether this approach is appropriate for
+determining the sample size required for training a deep-learning segmentation model. The
+methodological rationale should be clarified.
 
-**Status:** MISSING (text awaited)
+
+**Response:**
+
+The reviewer is right to question it, and the answer is that the approach is not appropriate; we have removed the calculation rather than defend it. A χ² test on counts of correct and incorrect detections is not an analysis performed in this study, and conventional hypothesis-testing sample-size methods do not determine how much data a deep-learning segmentation model needs. The revised manuscript replaces it with two separate, explicit justifications. (i) For model development, data adequacy is assessed empirically with a learning curve: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images), and mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (val/segm_mAP_50 gain 25→50 %: +0.0269; 75→100 %: +0.0274). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. The curve was drawn from a single training run per point (one seed), so the run-to-run spread was not measured and no error bars are given; this is why the ordering of two adjacent points is not read as a result on its own. (ii) For the millimetre-level agreement analysis, the sample size is justified by estimation precision rather than power: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.044 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.72 mm (Bland & Altman 1999). (iii) For the agreement between the model's class assignment and the clinicians' assignment, a sample-size calculation appropriate to that analysis was performed by the study statistician with the `kappaSize` package in R: for a four-category classification with a minimum acceptable kappa of 0.40, an expected kappa of 0.60, a two-sided alpha of 0.05 and 80 % power, and a conservative 2 % prevalence for the rarest class, the minimum required sample is 110 images, rising to 123 after allowing for about 10 % data loss. The high-smile-line images with a clinical reference measurement number 145 after cleaning, above that requirement. We note that the statistician's paragraph was written for 150 images; the analysed set is 145 because same-participant duplicates and images without a reference measurement were removed.
+
+**Changes in the manuscript:** Methods 2.1 — G*Power paragraph and Appendix A removed, replaced by 'Sample size and data adequacy' (learning curve + precision + kappaSize); [Supplementary Figure S1]
+
+**Status:** READY
+
+Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `docs/Istatistik_analiz_plani.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.csv -->
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
 
 ### R2-4 — "YOLOv8 and YOLOv11" inconsistent with the rest of the manuscript
 
-> The statement referring to "YOLOv8 and YOLOv11" appears inconsistent with the rest of the
-manuscript, which compares RF-DETR-Seg, YOLOv26, and YOLOv11. Since "YOLOv8" appears only
-in this sentence, this may be an error from an earlier version and should be verified.
+> 4. The statement referring to “YOLOv8 and YOLOv11” appears inconsistent with the rest of the
+manuscript, which compares RF-DETR-Seg, YOLOv26, and YOLOv11. Since “YOLOv8” appears only in
+this sentence, this may be an error from an earlier version and should be verified.
 
 
 **Response:**
@@ -114,11 +165,11 @@ Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
 
 ### R2-5 — 1,315 vs 3,403 images and the instance counts in Figure 4
 
-> The manuscript describes 1,315 images as the overall dataset, but Section 2.7 refers to an
-updated dataset containing 3,403 images, while Figure 4 reports substantially more
-annotated instances. Please clarify whether these differences resulted from additional
-images, augmentation, or another processing step, and clearly state the number of original
-images used for training.
+> 5. The manuscript describes 1,315 images as the overall dataset, but Section 2.7 refers to an
+updated dataset containing 3,403 images, while Figure 4 reports substantially more annotated
+instances. Please clarify whether these differences resulted from additional images,
+augmentation, or another processing step, and clearly state the number of original images used
+for training.
 
 
 **Response:**
@@ -135,11 +186,10 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`
 
 ### R2-6 — Image- or patient-level split; data leakage; small test set
 
-> It is unclear whether the train/validation/test split was performed at the image or patient
-level. If images from the same patient were included in different subsets, data leakage
-could occur. In addition, the 92/4/4 split provides a relatively small test set,
-particularly for the high smile line subgroup, which may reduce the reliability of
-performance estimates.
+> 6. It is unclear whether the train/validation/test split was performed at the image or patient
+level. If images from the same patient were included in different subsets, data leakage could
+occur. In addition, the 92/4/4 split provides a relatively small test set, particularly for the
+high smile line subgroup, which may reduce the reliability of performance estimates.
 
 
 **Response:**
@@ -155,18 +205,31 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`, `outputs/01_data/manifest
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 <!-- source: outputs/01_data/manifest_summary.md -->
 
-### R2-7 — Not in the document — text to be requested from the corresponding author
+### R2-7 — Single examiner; no inter-rater reliability, so a possible ground-truth bias
 
-> **MISSING** — item 7 of this review is not in the document we received (the numbering skips it). The text has to be requested from the corresponding author before this item can be answered.
+> 7. Annotation and clinical measurements were performed by a single examiner, with only
+intra-rater reliability assessed. The absence of inter-rater reliability assessment may
+introduce potential ground-truth bias.
 
-**Status:** MISSING (text awaited)
+
+**Response:**
+
+The reviewer is right and we do not argue with it: the annotations and the clinical reference come from one examiner, only intra-observer reliability was assessed (tooth-site ICC(2,1) 0.995 [0.994, 0.997], SD 0.167 mm), and a single-observer reference can carry a systematic bias that no amount of internal consistency reveals. This is being measured rather than conceded in words. The expert study already under way has three clinicians, blinded to each other, to the model and to the threshold table, measure the gingival display at each of the six tooth sites on their own per-image probe calibration, on the same reference images. That gives exactly what is missing: an inter-observer ICC(2,1) between the three experts and the original examiner at tooth-site and image level, the between-observer limits of agreement in millimetres, and the difference between each observer's mean and the reference the model was evaluated against. The pipeline's error is then reported against that spread, so a reader can see how much of the 0.5 mm-scale error is the model and how much is the disagreement between competent observers about where the gingival margin is. [PENDING — the expert forms are being completed; the inter-observer numbers will be inserted from `outputs/04_expert/manuscript_numbers.md`.] Whatever the spread turns out to be, it is reported, and if it is of the same order as the model's error, that is written into the Limitations as the ceiling the reference itself imposes.
+
+**Changes in the manuscript:** Methods 2.9 — the inter-observer protocol described; [Results — new: inter-observer reliability of the reference]; Limitations — single-examiner ground truth
+
+**Status:** PENDING
+
+Outputs: `docs/Uzman_degerlendirme_protokolu.md`, `outputs/04_expert/expert_summary.md`, `outputs/03_oracle/intra_observer.md`
+
+<!-- source: outputs/03_oracle/intra_observer.md -->
 
 ### R2-8 — Gingiva mAP@50 of 0.587 not reported in the text; should be discussed as a limitation
 
-> Importantly, Figure 2(a) shows a gingiva mAP@50 of only 0.587 (58.7%), but this value is
-not explicitly reported in the text. Because gingival segmentation directly determines the
-measurement of gingival display, this relatively low accuracy should be explicitly
-discussed as an important limitation.
+> 8. Importantly, Figure 2(a) shows a gingiva mAP@50 of only 0.587 (58.7%), but this value is not
+explicitly reported in the text. Because gingival segmentation directly determines the
+measurement of gingival display, this relatively low accuracy should be explicitly discussed as
+an important limitation.
 
 
 **Response:**
@@ -185,10 +248,10 @@ Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`, `outputs/09_fi
 
 ### R2-9 — No meaningful performance gain despite tuning, expansion and scaling
 
-> The final model achieved a Mask mAP@50 of 0.79369, essentially identical to the preliminary
-YOLOv11 performance (79.3%). Despite extensive hyperparameter tuning, dataset expansion,
-and model scaling, there was little improvement. The authors should explain this lack of
-meaningful performance gain.
+> 9. The final model achieved a Mask mAP@50 of 0.79369, essentially identical to the preliminary
+YOLOv11 performance (79.3%). Despite extensive hyperparameter tuning, dataset expansion, and
+model scaling, there was little improvement. The authors should explain this lack of meaningful
+performance gain.
 
 
 **Response:**
@@ -207,7 +270,7 @@ Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tabl
 
 ### R2-10 — Lip vs gingiva mAP gap should be investigated quantitatively
 
-> The marked difference between lip mAP (97-99%) and gingiva mAP (58.7%) should be
+> 10. The marked difference between lip mAP (97–99%) and gingiva mAP (58.7%) should be
 quantitatively investigated. Metrics such as boundary IoU or edge-distance error could help
 explain the poorer gingival segmentation performance.
 
@@ -225,36 +288,82 @@ Outputs: `outputs/09_final_rfdetr/boundary_by_set.md`, `outputs/09_final_rfdetr/
 <!-- source: outputs/09_final_rfdetr/boundary_by_set.csv -->
 <!-- source: outputs/07_report/tables/segmentation_metrics_test.csv -->
 
-### R2-sample-size — Whether a G*Power chi-square calculation is appropriate for a deep-learning segmentation model
+### R2-11 — Difference and novelty against the authors' previous study (Ref. 30, J Dent 2026)
 
-> The sample size calculation (G*Power, chi-square test, w=0.30, df=9, n=263) is based on
-conventional hypothesis-testing methods. It is unclear whether this approach is appropriate
-for determining the sample size required for training a deep-learning segmentation model.
-The methodological rationale should be clarified.
+> 11. The authors’ previous study (Ref. [30], Çankaya et al., J Dent, 2026) appears to address
+similar gingival display quantification. The specific differences and novelty of the present
+study should therefore be clarified.
 
-
-*(Conveyed to the authors separately; it is not in docs/Hakem_revizyonları.docx, which is why the document's Reviewer 2 numbering has no entry for it.)*
 
 **Response:**
 
-The reviewer is right to question it, and the answer is that the approach is not appropriate; we have removed the calculation rather than defend it. A χ² test on counts of correct and incorrect detections is not an analysis performed in this study, and conventional hypothesis-testing sample-size methods do not determine how much data a deep-learning segmentation model needs. The revised manuscript replaces it with two separate, explicit justifications. (i) For model development, data adequacy is assessed empirically with a learning curve: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images), and mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (val/segm_mAP_50 gain 25→50 %: +0.0269; 75→100 %: +0.0274). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. The curve was drawn from a single training run per point (one seed), so the run-to-run spread was not measured and no error bars are given; this is why the ordering of two adjacent points is not read as a result on its own. (ii) For the millimetre-level agreement analysis, the sample size is justified by estimation precision rather than power: With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.044 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.72 mm (Bland & Altman 1999). (iii) For the agreement between the model's class assignment and the clinicians' assignment, a sample-size calculation appropriate to that analysis was performed by the study statistician with the `kappaSize` package in R: for a four-category classification with a minimum acceptable kappa of 0.40, an expected kappa of 0.60, a two-sided alpha of 0.05 and 80 % power, and a conservative 2 % prevalence for the rarest class, the minimum required sample is 110 images, rising to 123 after allowing for about 10 % data loss. The high-smile-line images with a clinical reference measurement number 145 after cleaning, above that requirement. We note that the statistician's paragraph was written for 150 images; the analysed set is 145 because same-participant duplicates and images without a reference measurement were removed.
+Draft from the clinical team (to be confirmed and signed off by them): "Both studies draw on the same source pool of standardised smile photographs acquired at our centre. The previous study (J Dent 2026) used only high-smile-line images (n = 687) for model development, with a single "visible gingiva" class segmented by DeepLabV3+. Of the 1,315 images in the present study, 149 high-smile-line images were also part of the previous model-development set; the remaining 1,166 images (67 high, 303 low and 796 average smile line) were not analysed previously. After removal of duplicate photographs (Section 2.x), 145 of the 1,230 retained images overlap with the previous study. No training, validation or test partition from the previous study was reused: the present data were re-annotated with a two-class (lip, gingiva) instance-segmentation scheme, partitioned anew at the participant level, and used to train a different architecture. The two studies therefore share source images but differ in labelling scheme, model, task (lip–gingiva instance segmentation and threshold-based decision support versus gingiva-only segmentation and regression) and analytical outputs." Technical check: 149 of the 216 high-smile-line images have a reference measurement in the earlier study's measurement file; the earlier partition was not reused (new participant-level split, different label scheme and model).
 
-**Changes in the manuscript:** Methods 2.1 — G*Power paragraph and Appendix A removed, replaced by 'Sample size and data adequacy' (learning curve + precision + kappaSize); [Supplementary Figure S1]
+**Changes in the manuscript:** Methods 2.1 (relationship to the earlier study); `outputs/07_report/overlap_with_prior_study.md` [to be generated]
+
+**Status:** CLINICAL
+
+Outputs: `docs/Klinik_ekip_kararlari_15Eylul.md`, `outputs/01_data/OZET.md`
+
+<!-- source: docs/Klinik_ekip_kararlari_15Eylul.md -->
+<!-- source: outputs/01_data/OZET.md -->
+
+### R2-12 — Intra-observer ICC value, 95 % confidence interval and ICC type not given
+
+> 12. Intra-observer reliability is reported only as “high ICC, p>0.05.” The actual ICC value, 95%
+confidence interval, and ICC type should be provided.
+
+
+**Response:**
+
+The values are now given in full rather than as 'high ICC'. The same observer remeasured the gingival display of 20 images at six tooth sites each, at a separate session: ICC(2,1) 0.995 [0.994, 0.997] at tooth-site level (n = 120 paired sites) and 0.998 [0.995, 0.999] at image-mean level (n = 20 images), with a mean difference of 0.012 [-0.019, 0.042] mm, a standard deviation of 0.167 mm and 95 % limits of agreement of -0.32 to 0.34 mm at tooth-site level. The type is stated explicitly: ICC(2,1), a two-way random-effects, absolute-agreement, single-measurement model, which is the correct choice for repeated measurements by the same rater when absolute agreement rather than consistency is what matters; ICC(3,1) is reported beside it for completeness. The p-value is no longer quoted as evidence of agreement — a significant ICC only rejects zero — and neither is the paired t-test; the confidence interval and the limits of agreement carry the argument. The tooth-site standard deviation of 0.167 mm is also used as the reference's own repeatability floor, against which the pipeline's error is read elsewhere in the response.
+
+**Changes in the manuscript:** Methods 2.9 and Results — ICC type, value and 95 % CI given at both levels; the p-value removed as evidence of agreement
 
 **Status:** READY
 
-Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `docs/Istatistik_analiz_plani.md`
+Outputs: `outputs/03_oracle/intra_observer.md`
 
-<!-- source: outputs/07_report/tables/learning_curve.csv -->
-<!-- source: outputs/07_report/tables/learning_curve.md -->
-<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
-<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+<!-- source: outputs/03_oracle/intra_observer.md -->
 
 ## Reviewer 3
 
+### R3-General-1 — Rewrite the introduction with a specific aim and references for all statements
+
+> 1. The authors should rewrite the introduction to include a specific aim and provide references
+for all statements.
+
+
+**Response:**
+
+Accepted. The Introduction is rewritten with one stated aim and a reference for every claim it makes. What the technical side supplies for it: the gap this study can legitimately claim is not that gingival display has never been quantified automatically — the group's own J Dent 2026 study did that — but that no published system converts the measurement into an explicit, auditable rule set and then measures how far that layer agrees with clinicians. The Introduction will say so in those words, and the sentences that generalise about 'AI-based image analysis' are replaced by the specific prior work with citations.
+
+**Changes in the manuscript:** Introduction — rewritten: one aim, a reference for every statement, the gap restated as the decision layer rather than the measurement
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-General-2 — Clarify the materials and methods
+
+> 2. The authors should clarify the materials and methods.
+
+
+**Response:**
+
+Accepted, and most of it is already rewritten. The Methods now state the design and the recruitment (clinical team), and, from the analysis side: the participant-level partition and its exact counts, the annotation procedure, the pixel-to-millimetre calibration (item Methods 6), the measurement geometry and the single fixed estimator with its sensitivity analysis, the training configuration of the reported model, the evaluation protocol with the test set used once, and the statistical methods with their software. Each of those is a numbered subsection so that a reader can follow the pipeline end to end.
+
+**Changes in the manuscript:** Methods 2.1-2.9 — restructured; calibration, measurement geometry, partition and evaluation protocol each given their own subsection
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
 ### R3-General-3 — Narrow the manuscript to a validated segmentation/measurement study, or compare with clinical assessment
 
-> Improve study design by narrowing the manuscript to a properly validated
+> 3. Improve study design by narrowing the manuscript to a properly validated
 segmentation/measurement study or by comparing the AI model with clinical assessments to
 evaluate its decision making ability.
 
@@ -272,11 +381,61 @@ Outputs: `outputs/09_final_rfdetr/prediction_summary.md`, `outputs/04_expert/exp
 <!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 <!-- source: outputs/07_report/report_status.md -->
 
+### R3-General-4 — Rewrite the discussion on the study outcomes; draw relevant rather than general conclusions
+
+> 4. The authors should rewrite the discussion based on the study outcomes and draw relevant
+rather than general conclusions.
+
+
+**Response:**
+
+Accepted. Three reviewers make the same point — the Discussion is long, repeats the literature and draws conclusions the study did not test — and it is rewritten around this study's own results: the measurement accuracy against the clinical reference, the boundary analysis that explains where the error comes from, the controlled architecture comparison, the learning curve that has not plateaued, and the agreement of the decision layer with independent clinical assessment. Literature that belongs to the rationale moves to the Introduction, the general passages are cut, and the conclusions are restricted to what was measured.
+
+**Changes in the manuscript:** Discussion — shortened and restructured around this study's results; repeated literature moved to the Introduction; general conclusions removed
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-General-5 — Improve the language of the manuscript
+
+> 5. The authors should improve the language of the manuscript to enhance readability
+
+
+**Response:**
+
+Accepted. The manuscript is going through professional language editing before resubmission, and the certificate will accompany it.
+
+**Changes in the manuscript:** Whole manuscript — professional language editing
+
+**Status:** CLINICAL
+
+Outputs: 
+
+
+### R3-Title-1 — The title promises more than was validated
+
+> The title includes more than what was validated in the study: ‘Toward etiological interpretation
+and treatment planning’. In this study the clinical validity was not evaluated. '
+
+
+**Response:**
+
+Accepted. The subtitle promises what the study does not validate, and it is changed: the revision proposes 'measurement accuracy and a rule-based framework for etiological interpretation' in place of 'Toward etiological interpretation and treatment planning'. The final wording is the clinical team's, but it will not contain a claim of clinical validation of treatment planning.
+
+**Changes in the manuscript:** Title / subtitle — rewritten so the claim matches what was validated
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
 ### R3-Abstract-1 — Abstract reports no millimetric accuracy and no validation of the etiological/treatment categories
 
-> The results do not report millimetric measurement accuracy or any validation of
-etiological/treatment categories. The conclusions and clinical Significance should
-therefore be restricted to the technical validity of the AI-model
+> 1. The results do not report millimetric measurement accuracy or any validation of
+etiological/treatment categories. The conclusions and clinical Significance should therefore be
+restricted to the technical validity of the AI-model.
 
 
 **Response:**
@@ -291,9 +450,159 @@ Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`, `outputs/09_final_rfdetr/predi
 
 <!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 
+### R3-Abstract-2 — Abstract must state the limitations: single centre, one examiner, no clinical assessment
+
+> 2. Add the study limitations: the single-center design, use of only one examiner, and absence of
+clinical assessment.
+
+
+**Response:**
+
+Accepted; the Abstract now carries the limitations rather than leaving them to the Discussion. Three are named, and all three are ours: the design is single-centre and single-device, so no claim of external validity is made (the learning curve, which has not plateaued, says the same thing from the model's side); the clinical reference was measured by one examiner, so only intra-observer reliability is available for it at present (tooth-site ICC(2,1) 0.995 [0.994, 0.997], SD 0.167 mm) and the inter-observer component is being collected in the expert study (item R2-7); and the etiological and treatment layer is compared with independent clinical assessment as an agreement analysis, not validated as a decision tool.
+
+**Changes in the manuscript:** [Abstract — new Limitations sentence]; Discussion — Limitations paragraph expanded
+
+**Status:** READY
+
+Outputs: `outputs/03_oracle/intra_observer.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+<!-- source: outputs/03_oracle/intra_observer.md -->
+
+### R3-Intro-1 — A reference is missing from the paragraph describing the state of the literature
+
+> 1. The authors should add a reference or references to the paragraph containing this sentence
+((In the literature, artificial intelligence–based image analysis studies have predominantly
+focused....))
+
+
+**Response:**
+
+Accepted. The Introduction is rewritten with one stated aim and a reference for every claim it makes. What the technical side supplies for it: the gap this study can legitimately claim is not that gingival display has never been quantified automatically — the group's own J Dent 2026 study did that — but that no published system converts the measurement into an explicit, auditable rule set and then measures how far that layer agrees with clinicians. The Introduction will say so in those words, and the sentences that generalise about 'AI-based image analysis' are replaced by the specific prior work with citations.
+
+**Changes in the manuscript:** Introduction — rewritten: one aim, a reference for every statement, the gap restated as the decision layer rather than the measurement
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-Intro-2 — The stated scientific gap is general and does not match what the study evaluates
+
+> 2. The statement ((In the literature, artificial intelligence–based image analysis studies have
+predominantly focused....)) which describes the scientific gap is general. From this sentence I
+understand that there is only a gap in the clinical application (etiological/treatment
+decisions) of the AI-model. But the study did not evaluate the clinical performance of the
+AI-model. Is there also a scientific gap in the: the accuracy of automated anatomical
+segmentation or the validity of millimetric measurements performed by the AI model?
+
+
+**Response:**
+
+The reviewer reads the sentence correctly and the reading exposes a real problem: as written, the gap is only in the clinical application, which is the part the study does not evaluate. The revision states the gap where the study actually contributes and says which of the two questions the reviewer raises is open. Automated segmentation of gingiva and lip is not an open question in general; the millimetre validity of the measurement derived from it is reported here against a clinical reference (MAE 0.52 mm, RMSE 0.73 mm, r = 0.892, ICC(2,1) 0.877 [0.805, 0.919], bias +0.27 mm [+0.16, +0.38], 95 % LoA -1.07 to 1.60 mm; Table 1 class agreement 76 %, linear-weighted κ 0.72 [0.63, 0.80]), and the open question the study addresses is whether an explicit rule layer on top of that measurement agrees with clinical judgement.
+
+**Changes in the manuscript:** Introduction — the scientific gap restated and narrowed to what the study tests
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
+
+### R3-Intro-3 — Several objectives are presented at once; identify one primary objective
+
+> 3. The final section of the introduction contains several objectives that are not clearly
+presented. Identify one primary objective and present the additional objectives separately.
+
+
+**Response:**
+
+Accepted. The revision names one primary objective — to quantify gingival display from a frontal smile photograph and report its accuracy in millimetres against a clinical reference — and lists the secondary objectives separately: the controlled comparison of segmentation architectures, and the agreement of the rule-based etiological/treatment layer with independent clinical assessment.
+
+**Changes in the manuscript:** Introduction, final paragraph — one primary objective, secondary objectives listed separately
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-Methods-1 — Study design, retrospective/prospective, recruitment process and dates
+
+> 1. The study design should be described more precisely: Is this a cross-sectional study? Is it
+retrospective or prospective? The recruitment process and dates should also be mentioned.
+
+
+**Response:**
+
+Accepted; this belongs to the clinical team and the wording is being supplied. The design is a retrospective, cross-sectional analysis of photographs and clinical records collected in a single centre under ethics approval E-77082166-604.01-881629, and the recruitment window and the consecutive/selective nature of the sampling are being stated explicitly, because the reviewer's later question about selection bias (Discussion 3) cannot be answered without them. From the analysis side, what can already be stated is the flow from the export to the analysed set: 1315 exported images, 1230 analysed after the exclusions, partitioned at participant level into 846 / 192 / 192.
+
+**Changes in the manuscript:** Methods 2.1 — design, retrospective/prospective, recruitment process and dates
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/tables/dataset_counts.md`
+
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+
+### R3-Methods-2 — Inclusion criteria are not given, only exclusion criteria
+
+> 2. What are the inclusion criteria. The study mentioned only the exclusion criteria.
+
+
+**Response:**
+
+Correct, and it is a real omission: only exclusion criteria were given. The inclusion criteria are being written by the clinical team. The analysis-side filters that act on top of them are already documented and will be stated in the same place, because they determine which images enter which analysis: an image enters the segmentation training set if it has a usable annotation, and it enters the millimetre analysis only if it is a high smile line with a clinical reference measurement (n = 145). Duplicate photographs of the same participant were reduced to one image per participant before partitioning.
+
+**Changes in the manuscript:** Methods 2.1 — inclusion criteria added beside the exclusion criteria
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/tables/dataset_counts.md`
+
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+
+### R3-Methods-3 — Sample size belongs in Methods; the numbers of patients and images in Results
+
+> 3. The sample size calculation should only be presented only in the Methods section. However,
+the numbers of patients and images used in the study should be reported in the Results section.
+An explanation of why this number of patients was selected could be provided in the Discussion
+section.
+
+
+**Response:**
+
+Accepted, and the change is larger than a move. The G*Power calculation is removed altogether rather than relocated, because it does not determine the data requirement of a segmentation model (item R2-3); the Methods instead describe how data adequacy was assessed empirically, with the learning curve, and how the precision of the agreement analysis was justified. The counts of participants and images move to the Results, where the reviewer asks for them, and the Discussion carries the interpretation of that number rather than a justification of it.
+
+**Changes in the manuscript:** Methods 2.1 — power calculation removed, empirical data-adequacy assessment described; Results — participant and image counts; Discussion — interpretation of the cohort size
+
+**Status:** READY
+
+Outputs: `outputs/07_report/tables/learning_curve.md`, `outputs/07_report/tables/dataset_counts.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+
+### R3-Methods-4 — Why 1,315 patients and not another number
+
+> 4. Could you please explain why you decided to include 1315 patients? You could have included
+(for example 1000 patients), but why were 1315 selected?
+
+
+**Response:**
+
+The number was not chosen. The cohort is every photograph in the centre's archive that met the criteria over the recruitment window, so 1,315 is what the archive contained rather than a target that was set (the recruitment window itself is stated by the clinical team, item Methods 1). What we can do, and now do, is say whether that number was enough, and we answer it with evidence rather than assertion: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant, and mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (val/segm_mAP_50 gain 25→50 %: +0.0269; 75→100 %: +0.0274). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. In other words, the honest answer to 'why 1,315' is that 1,315 is what was available and that more would probably still help; we no longer claim the cohort is sufficient.
+
+**Changes in the manuscript:** Methods 2.1 / Discussion — the cohort described as the available archive, with the learning curve as the data-adequacy evidence
+
+**Status:** READY
+
+Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.csv -->
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+
 ### R3-Methods-5 — Unequal numbers of patients per smile-line group; equal gender distribution requested
 
-> Please clarify why different numbers of patients were included in the low, medium, and high
+> 5. Please clarify why different numbers of patients were included in the low, medium, and high
 smile-line groups. These groups should contain equal numbers of patients and have an equal
 gender distribution.
 
@@ -311,11 +620,30 @@ Outputs: `outputs/07_report/tables/demographics.md`, `outputs/07_report/tables/d
 <!-- source: outputs/07_report/tables/demographics.csv -->
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 
+### R3-Methods-6 — Was the periodontal probe in Figure 1 used for calibration? The method is not described
+
+> 6. In Figure 1 a periodontal probe is visible. Did you use the periodontal probe for image
+calibration. However, this procedure is not described in the manuscript. Please clarify whether
+the probe was used for calibration. If so, describe the calibration method in the Materials and
+Methods section.
+
+
+**Response:**
+
+Yes, the probe was used, and the reviewer is right that the procedure was missing from the manuscript. It is now described in full. A Hu-Friedy UNC periodontal probe is visible in every photograph. For the clinical reference the image was opened in ImageJ at 2698×1799, two consecutive 1 mm marks on the probe were selected, and the scale was set with Set Scale (1 mm), per image; the gingival display was then measured at six tooth sites on that scale. The pipeline does not read the probe. It applies a single global scale of 16.84 px/mm, fitted by regression through the origin on the development subset only (R² 0.716, residual SD 0.77 mm; leave-one-out mean 16.84, SD 0.069 px/mm), applied unchanged to every other image, because the photographs were taken at a fixed camera-to-subject distance with a fixed setup. The per-image ratio of pixels to reference millimetres has a coefficient of variation of 0.33, which includes the reference's own calibration noise: with a 1 mm probe interval of about 17 px, a one-pixel marking error is roughly 6 % of the scale. The two scales are therefore reported separately and neither is presented as the other: the reference is per-image and probe-based, the pipeline is a single fitted constant, and the agreement between the two is what the millimetre results measure. The individual per-image probe scales were not stored at the time, which is stated as a limitation; the three experts of the agreement study enter their own probe scale per image, which will give an independent estimate of that calibration's precision.
+
+**Changes in the manuscript:** Methods 2.4 (calibration) — new subsection: probe, ImageJ Set Scale, per-image reference scale vs the pipeline's single fitted scale; Limitations — per-image probe scales not stored
+
+**Status:** READY
+
+Outputs: `outputs/03_oracle/scale_estimation.md`, `outputs/04_expert/scale_agreement.md`
+
+<!-- source: outputs/03_oracle/scale_estimation.md -->
+
 ### R3-Methods-7 — Why low and average smile-line images were needed
 
-> Explain why images showing low and average smile lines were needed for the measurement of
-gingival display. Were they used only for machine learning and the development of the AI
-model?
+> 7. Explain why images showing low and average smile lines were needed for the measurement of
+gingival display. Were they used only for machine learning and the development of the AI model?
 
 
 **Response:**
@@ -331,11 +659,87 @@ Outputs: `outputs/09_final_rfdetr/boundary_by_set.md`, `outputs/07_report/tables
 <!-- source: outputs/09_final_rfdetr/boundary_by_set.csv -->
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 
-### R3-Results-1 — Ethnicity and pigmentation of skin and gingiva
+### R3-Methods-8 — Cut-off and clinically acceptable error; 0, 1 and 3 mm would not be called a gummy smile
 
-> The ethnicity of the patients may play a role, as some patients have pigmentation of the
-skin and gingiva. Could this affect the segmentation of the lips and gingiva and,
-consequently, the performance of the AI model?
+> 8. What was the cut-off (millimetric measurement and clinically acceptable error) for gingival
+display in your study? Measurements of 0, 1, and 3 mm are all below 4 mm and would not be
+considered a gingival smile, in my opinion.
+
+
+**Response:**
+
+Two questions here, and we answer both with numbers. **What error is clinically acceptable.** The decision boundaries of Table 1 are at 3, 4, 6 and 8 mm, so the tolerance is not a single number: an error matters only where it can cross a boundary. The measurement error is 0.52 mm on average (95 % limits of agreement -1.07 to 1.60 mm), and the reference images are stratified below by how far the reference value sits from the nearest boundary. Agreement with the reference class is 100 % for images more than 2 mm from a boundary and 60 % for images within 0.5 mm of one, while the mean absolute error is essentially the same in every stratum (0.40 to 0.63 mm). 94 % of all class disagreements occur within 1 mm of a boundary, and 47 % of the cohort sits that close to one. So the measurement is not worse near a boundary; the boundary is simply close, and a sub-millimetre error is enough to cross it. That is a property of Table 1's spacing, not of the measurement, and it is now stated as such: the system reports the millimetre value with its uncertainty and, near a boundary, more than one candidate category. **Whether 0, 1 and 3 mm should be called a gummy smile.** We agree with the reviewer, and this is a terminology problem in the submitted manuscript rather than a disagreement. The quantity measured is *gingival display in millimetres*, which is defined at any value including zero; 'gummy smile' is a clinical judgement that is not made by the measurement and is not made by the system. In this cohort 113 of 145 images have a reference value below 4 mm. The revision uses 'gingival display' for the measured quantity throughout, reserves 'high smile line' for the group, and does not describe any value as a gummy smile. Where Table 1 assigns a category below 4 mm it is reporting a candidate etiology for an observed display, not asserting that the case requires treatment — which is the reviewer's Methods 10a, answered there.
+
+**Changes in the manuscript:** Methods 2.8 — the acceptable-error question answered against the Table-1 boundaries; [Results — new table: class agreement by distance to a boundary]; terminology corrected throughout
+
+**Status:** READY
+
+Outputs: `outputs/07_report/tables/threshold_margin.md`, `outputs/07_report/tables/measurement_accuracy.md`
+
+<!-- source: outputs/07_report/tables/threshold_margin.csv -->
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
+
+### R3-Methods-9 — Was a systematic search used to synthesise the evidence behind Table 1?
+
+> 9. Table 1 is used as an evidence-based clinical reference for the study. Did you conduct a
+systematic search to synthesize the evidence from references 14–23? Could you describe the
+method used?
+
+
+**Response:**
+
+No, a systematic search was not performed, and the manuscript should not have implied otherwise. Table 1 is a narrative synthesis of the thresholds used in references 14-23, assembled by the clinical authors from the literature they work with. The revision says exactly that: it describes the table as a literature-derived, non-systematic synthesis, states the criterion by which each threshold was taken, and lists the source of every band, so that a reader can see which numbers are widely used and which are one group's convention. The clinical team will supply the description of how the references were gathered. If the editors prefer, the table can instead be presented as the pre-specified rule set this study evaluates, with its provenance given and no claim of evidence synthesis attached to it.
+
+**Changes in the manuscript:** Methods — Table 1 described as a narrative, literature-derived synthesis with the source of each band; no claim of a systematic search
+
+**Status:** CLINICAL
+
+Outputs: 
+
+
+### R3-Methods-10 — Table 1 has clinical deficiencies (a: is < 4 mm a problem; b: aetiology from millimetres alone; c: short upper lip needs a lip measurement)
+
+> 10. Table 1 has some clinical deficiencies: a. Is a gingival display of less than 4 mm a
+problem? Is a 1 mm gingival display, which is less than 4 mm, a problem, and should it be
+treated? b. I cannot understand how the aetiology of gingival display can be diagnosed based
+only on the amount of gingival display, without clinical assessment or other assessments, such
+as cephalometric analysis. c. The diagnosis of a short upper lip requires measurement of the
+length of upper lip. Upper-lip measurements may differ according to gender, age, and ethnicity.
+
+
+**Response:**
+
+Two reviewers make this objection — Reviewer 3 in Methods 10 (a, b and c) and Reviewer 4 in his second fundamental problem — and they are right on the substance. The clinical framing is the clinical team's to write; what the technical side can state, and what the design already does, is this. **The system does not diagnose.** It measures gingival display in millimetres and applies a published threshold table to produce one or more *candidate* etiologies with the treatments associated with them in the literature. The output field is named `treatment_alternatives`, not 'treatment'. **Overlapping bands are reported as overlaps, not resolved.** The bands of Table 1 overlap by construction (E1 below 4 mm, E2 from 3 to 6, E3 from 4 to 8, E4 above 8), so a 5 mm display returns the combined label E2-E3 and both sets of candidates rather than a single answer. The engine has no metadata-based tie-breaking and never picks one etiology from a measurement alone — which is precisely the reviewers' point, built into the rule set rather than argued against it. **On 10a specifically:** a display below 4 mm is not asserted to be a problem. The rule returns a category for an observed display; it does not assert an indication, and a value of 0 mm returns `NO_VISIBLE_GINGIVA` rather than a class. **On 10c and the short upper lip:** we agree that the diagnosis requires a lip measurement and that lip length varies with sex, age and ethnicity. The system does not measure lip length and therefore cannot diagnose a short lip; where the band admits that etiology it is listed as a candidate to be confirmed clinically. The revision says so in the Methods, in the Table 1 caption and in the Limitations. **And this is exactly what the expert study measures.** Three clinicians assign the etiology from their own clinical judgement, blinded to the table and to each other; the linear-weighted κ between their majority and the rule output is the quantity that says how far a millimetre-only rule can go. Whatever that number turns out to be, it is the honest measure of this limitation, and it is reported either way.
+
+**Changes in the manuscript:** Methods 2.8 and the Table 1 caption — the rule set described as a generator of candidate etiologies, not a diagnosis; overlapping bands and their combined labels made explicit; Limitations — lip length, cephalometry and periodontal findings are not inputs; Discussion — the expert agreement as the measure of this limit
+
+**Status:** CLINICAL
+
+Outputs: `docs/Uzman_degerlendirme_protokolu.md`, `outputs/07_report/tables/expert_agreement.md`
+
+
+### R3-Methods-11 — Abbreviations such as YOLO must be expanded at first mention
+
+> 11. Abbreviations such as YOLO should be explained when first time mentioned in the text.
+
+
+**Response:**
+
+Accepted. Every abbreviation is expanded at first mention in the revision — YOLO (You Only Look Once), RF-DETR (Receptive Field enhanced Detection Transformer), mAP (mean average precision), IoU (intersection over union), MAE, RMSE, ICC and LoA — and a definitions list is added where the journal allows one.
+
+**Changes in the manuscript:** Whole manuscript — abbreviations expanded at first mention
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-Results-1 — Demographics not reported; ethnicity and pigmentation of skin and gingiva may affect segmentation
+
+> 1. The study did not report the demographic characteristics of the sample. The mean age should
+be reported with the standard deviation. The ethnicity of the patients may play a role, as some
+patients have pigmentation of the skin and gingiva. Could this affect the segmentation of the
+lips and gingiva and, consequently, the performance of the AI model?
 
 
 **Response:**
@@ -353,9 +757,9 @@ Outputs: `outputs/09_final_rfdetr/boundary_by_set.md`, `outputs/09_final_rfdetr/
 
 ### R3-Results-2 — Exact number of participants and images for training, validation and testing
 
-> It was difficult to understand how many participants/images were used in the study.
-Different numbers are mentioned (1315 and 3403). Could you please clarify the exact numbers
-of participants and images used for training, validation, and testing?
+> 2. It was difficult to understand how many participants/images were used in the study. Different
+numbers are mentioned (1315 and 3403). Could you please clarify the exact numbers of
+participants and images used for training, validation, and testing?
 
 
 **Response:**
@@ -370,13 +774,31 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`
 
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 
-### R3-Results-4 — What "performance" means; sensitivity/specificity; false positives and false negatives
+### R3-Results-3 — Section 3.5 belongs in Methods; only the validation results belong in Results
 
-> In Section 3.1 (Model selection and segmentation performance), the study states that (the
-YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3%)....).
-What is meant by (performance)in this context? Is it sensitivity or specificity? Did you
-calculate false-positive and false-negative predictions when evaluating the performance of
-the AI model?
+> 3. Section 3.5 (Clinical threshold-based classification) should be included in the Materials and
+Methods section. The actual validation results should be reported in the Results section.
+
+
+**Response:**
+
+Accepted; the reviewer has identified a genuine structural error. Section 3.5 describes the threshold-based classification rule, which is a method, and in the revision it moves to the Methods, where the bands of Table 1, the combined labels for overlapping bands and the handling of zero and missing values are defined once. What stays in the Results is the validation that follows from it, and that part is now substantive rather than descriptive: the agreement between the class derived from the measurement and the class derived from the clinical reference (76 %, linear-weighted κ 0.72 [0.63, 0.80] on the 145 out-of-fold images), its dependence on the distance to a boundary, and the agreement with independent clinical assessment from the expert study.
+
+**Changes in the manuscript:** Section 3.5 moved to Methods 2.8; Results keeps only the validation results of the classification
+
+**Status:** READY
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`, `outputs/07_report/tables/threshold_margin.md`
+
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
+<!-- source: outputs/07_report/tables/threshold_margin.csv -->
+
+### R3-Results-4 — What 'performance' means; sensitivity/specificity; false positives and false negatives
+
+> 4. In Section 3.1 (Model selection and segmentation performance), the study states that (the
+YOLOv11 model demonstrated superior performance in terms of mAP@50 (79.3%)....). What is meant
+by (performance)in this context? Is it sensitivity or specificity? Did you calculate
+false-positive and false-negative predictions when evaluating the performance of the AI model?
 
 
 **Response:**
@@ -394,8 +816,8 @@ Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`, `outputs/05_pr
 
 ### R3-Results-5 — Distinguish segmentation performance from millimetre measurement ability
 
-> The study should distinguish between evaluating the segmentation performance of the AI
-model and evaluating its ability to calculate gingival display in millimetres.
+> 5. The study should distinguish between evaluating the segmentation performance of the AI model
+and evaluating its ability to calculate gingival display in millimetres.
 
 
 **Response:**
@@ -412,9 +834,80 @@ Outputs: `outputs/07_report/tables/segmentation_metrics_test.md`, `outputs/09_fi
 <!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 <!-- source: outputs/09_final_rfdetr/error_decomposition.csv -->
 
+### R3-Discussion-1 — The discussion repeats literature that belongs in the introduction
+
+> 1. The discussion repeats findings from the literature that should be presented only in the
+introduction.
+
+
+**Response:**
+
+Accepted. Three reviewers make the same point — the Discussion is long, repeats the literature and draws conclusions the study did not test — and it is rewritten around this study's own results: the measurement accuracy against the clinical reference, the boundary analysis that explains where the error comes from, the controlled architecture comparison, the learning curve that has not plateaued, and the agreement of the decision layer with independent clinical assessment. Literature that belongs to the rationale moves to the Introduction, the general passages are cut, and the conclusions are restricted to what was measured.
+
+**Changes in the manuscript:** Discussion — shortened and restructured around this study's results; repeated literature moved to the Introduction; general conclusions removed
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-Discussion-2 — The discussion should focus on this study's results and discuss the model's validity
+
+> 2. The discussion should focus on the results of this study, support them with evidence from
+previous studies, compare the findings, and discuss the validity of the AI model.
+
+
+**Response:**
+
+Accepted. Three reviewers make the same point — the Discussion is long, repeats the literature and draws conclusions the study did not test — and it is rewritten around this study's own results: the measurement accuracy against the clinical reference, the boundary analysis that explains where the error comes from, the controlled architecture comparison, the learning curve that has not plateaued, and the agreement of the decision layer with independent clinical assessment. Literature that belongs to the rationale moves to the Introduction, the general passages are cut, and the conclusions are restricted to what was measured.
+
+**Changes in the manuscript:** Discussion — shortened and restructured around this study's results; repeated literature moved to the Introduction; general conclusions removed
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
+### R3-Discussion-3 — Limitations must include selection bias, one examiner and demographic bias
+
+> 3. The limitations should include potential selection bias, the use of only one examiner, and
+demographic bias.
+
+
+**Response:**
+
+Accepted; all three go into the Limitations, and two of them are quantified rather than merely named. **Selection bias:** the cohort is a single centre's archive over one recruitment window, photographed with one device and one setup, so it is a convenience sample and no claim of external validity is made; the learning curve, which has not plateaued, is reported alongside as evidence that the dataset is not at its ceiling either. **One examiner:** the clinical reference and the annotations come from a single observer, so only intra-observer reliability is currently available for them (tooth-site ICC(2,1) 0.995 [0.994, 0.997], SD 0.167 mm; image-mean ICC(2,1) 0.998 [0.995, 0.999]). The inter-observer component is being collected in the expert study, where three blinded clinicians remeasure the gingival display at each of the six tooth sites (item R2-7). **Demographic bias:** the demographic coverage of the cohort is reported per group rather than asserted, including how many records carry an age and a sex at all, and skin and gingival pigmentation were not recorded, which is stated as a gap rather than glossed over.
+
+**Changes in the manuscript:** Limitations — rewritten: selection bias, single observer with its ICC, demographic coverage and the unrecorded pigmentation
+
+**Status:** READY
+
+Outputs: `outputs/07_report/tables/demographics.md`, `outputs/03_oracle/intra_observer.md`, `outputs/07_report/tables/learning_curve.md`
+
+<!-- source: outputs/07_report/tables/demographics.csv -->
+<!-- source: outputs/03_oracle/intra_observer.md -->
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+
+### R3-Discussion-4 — A conclusion appears twice: at the end of the discussion and as its own section
+
+> 4. A conclusion is presented at the end of the discussion, followed by a separate Conclusion
+section.
+
+
+**Response:**
+
+Accepted; this is an editing error. The revision keeps one Conclusion section and removes the concluding paragraph at the end of the Discussion.
+
+**Changes in the manuscript:** Discussion — the closing conclusion paragraph removed; one Conclusion section kept
+
+**Status:** CLINICAL
+
+Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+
 ### R3-Discussion-5 — Conclusion must not state the model is clinically validated
 
-> The conclusion should not that the AI model has been clinically validated or is as this
+> 5. The conclusion should not that the AI model has been clinically validated or is as this
 aspect was not evaluated in the study.
 
 
@@ -431,20 +924,58 @@ Outputs: `outputs/07_report/MANUSCRIPT_EDITS.md`
 <!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
 <!-- source: outputs/09_final_rfdetr/per_image_results.csv -->
 
+### R3-References-1 — Why reference 11 was used in the sample size calculation
+
+> clarify why reference (11) was used in the sample size calculation. Did you use any outcomes
+from that study in the power analysis? If so, this should be explained in detail.
+
+
+**Response:**
+
+The question is well placed and the answer is that no outcome from reference 11 entered the calculation. The effect size used in G*Power (w = 0.30) is Cohen's conventional 'medium' value, not an estimate taken from that study; reference 11 was cited as context for the clinical problem and its presence beside the calculation implied a derivation that was never made. Rather than correct the citation we remove the calculation: it does not determine the data requirement of a segmentation model, and the revision replaces it with the empirical learning curve and, for the agreement analysis, a precision-based justification (With n = 145 reference images, an ICC of 0.86 has a 95 % CI half-width of ≈ 0.044 (Bonett 2002, k = 2); each Bland–Altman limit of agreement has a half-width of ≈ 0.20 mm for the observed between-method SD of 0.72 mm (Bland & Altman 1999).). The misleading citation disappears with the paragraph.
+
+**Changes in the manuscript:** Methods 2.1 and Appendix A — the power calculation and the reference-11 citation beside it removed
+
+**Status:** READY
+
+Outputs: `outputs/07_report/tables/learning_curve.md`, `docs/Istatistik_analiz_plani.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+
 ## Reviewer 4
 
-### R4-1 — The etiology-treatment module is not validated; no comparison with clinicians
+### R4-1 — The etiology-treatment module is not validated; no clinical gold standard, no agreement with clinicians
 
-> However, a fundamental difference exists between constructing a decision rule and validating
-a clinical decision tool. The article reasonably demonstrates that it can segment
-structures; it does not yet demonstrate that it can infer etiologies or recommend
-treatments in a clinically valid manner. [...] The authors present no patient cohort in
-which periodontists, orthodontists, or surgeons independently establish the true cause of
-gingival exposure and a treatment plan to compare with the algorithm's recommendations.
-Consequently, there are no measures of sensitivity, specificity, concordance, accuracy,
-Cohen's κ, agreement between the system and experts, or therapeutic error analysis. The only
-thing demonstrated is that, given a measurement, the software knows how to apply a table.
-This is a computational implementation of rules, not a validation of clinical
+> However, a fundamental difference exists between constructing a decision rule and validating a
+clinical decision tool. The article reasonably demonstrates that it can segment structures; it
+does not yet demonstrate that it can infer etiologies or recommend treatments in a clinically
+valid manner.
+
+
+**Response:**
+
+We agree that comparing the E/T class derived from a measurement with the class derived from the same measurement is circular. The revised validation is therefore against independent clinical judgement: three blinded clinicians each assign the class from their own clinical assessment (without seeing the threshold table) and measure the gingival display at each of the six tooth sites on their own calibrated scale; the majority class is the reference standard, the primary statistic is the linear-weighted κ with bootstrap confidence intervals, and the primary set is the 145 reference images with out-of-fold model predictions (the fixed test subset is secondary). Model values are reported uncorrected (primary) and with the mask-level correction (secondary). [PENDING — the expert forms are being completed; the numbers will be inserted from `outputs/04_expert/manuscript_numbers.md` (κ, per-class sensitivity/specificity, inter-expert Fleiss κ, ICC of millimetre values).] Note that the E4 class (> 8 mm) has no case among the reference images (maximum mean gingival display 7.53 mm; n(E4) = 0); the E4 branch of the decision table is therefore not validated and this is stated.
+
+**Changes in the manuscript:** [Section 2.x — new: expert evaluation protocol]; [Results 3.x — to be inserted]; [Table — model vs expert agreement] `tables/expert_agreement.md`
+
+**Status:** PENDING
+
+Outputs: `outputs/04_expert/expert_summary.md`, `outputs/07_report/tables/expert_agreement.md`, `docs/Uzman_degerlendirme_protokolu.md`
+
+<!-- source: outputs/07_report/report_status.md -->
+<!-- source: outputs/09_final_rfdetr/per_image_results.csv -->
+
+### R4-1b — No cohort in which clinicians independently establish the cause and the plan; no sensitivity, specificity or kappa
+
+> Therefore, in my opinion, the article should not be accepted due to the lack of clinical
+validation of the study’s central objective. The system proposes etiologies and treatments, but
+no clinical gold standard exists for those etiologies or treatments. The authors present no
+patient cohort in which periodontists, orthodontists, or surgeons independently establish the
+true cause of gingival exposure and a treatment plan to compare with the algorithm’s
+recommendations. Consequently, there are no measures of sensitivity, specificity, concordance,
+accuracy, Cohen’s κ, agreement between the system and experts, or therapeutic error analysis.
+The only thing demonstrated is that, given a measurement, the software knows how to apply a
+table. This is a computational implementation of rules, not a validation of clinical
 decision-making.
 
 
@@ -461,15 +992,24 @@ Outputs: `outputs/04_expert/expert_summary.md`, `outputs/07_report/tables/expert
 <!-- source: outputs/07_report/report_status.md -->
 <!-- source: outputs/09_final_rfdetr/per_image_results.csv -->
 
-### R4-2 — Overlap with the authors' J Dent 2026 study; redundant publication
+### R4-2 — Overlap with the authors' J Dent 2026 study, same ethics number; originality and redundant publication
 
-> The previously published article reports 1,748 photographs from the same project. This
-strongly suggests significant overlap in the study population and possibly in the images
-between the two studies. This is not necessarily a problem if it is a clearly distinct
-secondary analysis. Still, the authors must state exactly how many participants/images
-appear in both articles, which data are new, which training/validation/test sets are
-reused, and why the present study does not constitute redundant publication. Until this is
-clarified, it is impossible to assess the actual originality properly.
+> The originality of the segmentation component is low to moderate. As early as 2022, automatic
+segmentation of teeth, gums, and facial structures for digital smile design was published. In
+2024, the Journal of Dentistry published a “smile index” based on peri-oral segmentation to
+automate smile classification. More importantly, the authors themselves published the
+aforementioned study on gingival exposure segmentation with clinical validation just a few
+months ago. They explicitly acknowledge that the novelty of the new manuscript does not lie in
+improving measurement accuracy, but rather in linking that measurement to a system of clinical
+interpretation. Another issue needs clarification. The previous study used the same ethics
+approval number, E-77082166-604.01-881629, which appears in this manuscript. The previously
+published article reports 1,748 photographs from the same project. This strongly suggests
+significant overlap in the study population and possibly in the images between the two studies.
+This is not necessarily a problem if it is a clearly distinct secondary analysis. Still, the
+authors must state exactly how many participants/images appear in both articles, which data are
+new, which training/validation/test sets are reused, and why the present study does not
+constitute redundant publication. Until this is clarified, it is impossible to assess the actual
+originality properly.
 
 
 **Response:**
@@ -487,16 +1027,15 @@ Outputs: `docs/Klinik_ekip_kararlari_15Eylul.md`, `outputs/01_data/OZET.md`
 
 ### R4-3 — Figure 6 — v3_yolo vs v1_xgboost give radically different measurements
 
-> Figure 6 is particularly concerning. In the same patients, two methods—"v3_yolo" and
-"v1_xgboost"—yield radically different measurements: for example, approximately 8.13 versus
-4.36 mm in one case and 9.49 versus 4.91 mm in another. These differences also lead to
-completely different recommendations, ranging from a Le Fort I osteotomy to labial
-repositioning or orthodontic treatment. The "v1_xgboost" method is not even adequately
-integrated into the methodology of the submitted manuscript. If the figure truly represents
-the system's output, it precisely highlights the clinical risk that the article should
-address before proposing it as a therapeutic aid. This figure must be explained in detail
-and, above all, the correct measurement must be demonstrated using an independent clinical
-standard.
+> Figure 6 is particularly concerning. In the same patients, two methods—“v3_yolo” and
+“v1_xgboost”—yield radically different measurements: for example, approximately 8.13 versus 4.36
+mm in one case and 9.49 versus 4.91 mm in another. These differences also lead to completely
+different recommendations, ranging from a Le Fort I osteotomy to labial repositioning or
+orthodontic treatment. The “v1_xgboost” method is not even adequately integrated into the
+methodology of the submitted manuscript. If the figure truly represents the system’s output, it
+precisely highlights the clinical risk that the article should address before proposing it as a
+therapeutic aid. This figure must be explained in detail and, above all, the correct measurement
+must be demonstrated using an independent clinical standard.
 
 
 **Response:**
@@ -515,15 +1054,14 @@ Outputs: `outputs/02_measure/v3_vs_v4.md`, `outputs/07_report/figures/measuremen
 
 ### R4-4 — Millimetre-level accuracy not demonstrated (MAE, RMSE, Bland-Altman, ICC)
 
-> The third key problem is that the article does not demonstrate the accuracy of the new
-model's millimeter-level measurements. It provides mAP, precision, recall, and
-F1—segmentation metrics—but not MAE, RMSE, Bland–Altman plots, or ICC compared with
-clinical measurements. The clinical model relies on thresholds of 3, 4, 6, and 8 mm;
-therefore, an error of even 1–2 mm can completely alter the etiology and treatment
-recommendation. It is essential to report the measurement error in millimeters and
-demonstrate agreement with a clinical standard. The previous article by the same authors
-did precisely that validation. The present study cannot automatically assume that a
-different architecture maintains the same level of precision.
+> The third key problem is that the article does not demonstrate the accuracy of the new model’s
+millimeter-level measurements. It provides mAP, precision, recall, and F1—segmentation
+metrics—but not MAE, RMSE, Bland–Altman plots, or ICC compared with clinical measurements. The
+clinical model relies on thresholds of 3, 4, 6, and 8 mm; therefore, an error of even 1–2 mm can
+completely alter the etiology and treatment recommendation. It is essential to report the
+measurement error in millimeters and demonstrate agreement with a clinical standard. The
+previous article by the same authors did precisely that validation. The present study cannot
+automatically assume that a different architecture maintains the same level of precision.
 
 
 **Response:**
@@ -542,12 +1080,12 @@ Outputs: `outputs/09_final_rfdetr/prediction_summary.md`, `outputs/07_report/tab
 
 ### R4-5 — Pixel-to-millimetre conversion not described
 
-> Relatedly, the manuscript states that measurements are calculated geometrically from
-pixel-level masks, but the main text does not describe how the pixel-to-millimeter
-conversion is performed. This step is essential. The registry for the same project
-describes using a periodontal probe shown in the photograph to obtain the
-pixel-to-millimeter conversion factor. If this is also the procedure used here, the authors
-must describe it explicitly; if it is different, they must detail and validate it.
+> Relatedly, the manuscript states that measurements are calculated geometrically from pixel-level
+masks, but the main text does not describe how the pixel-to-millimeter conversion is performed.
+This step is essential. The registry for the same project describes using a periodontal probe
+shown in the photograph to obtain the pixel-to-millimeter conversion factor. If this is also the
+procedure used here, the authors must describe it explicitly; if it is different, they must
+detail and validate it.
 
 
 **Response:**
@@ -569,11 +1107,11 @@ Outputs: `outputs/03_oracle/scale_estimation.md`, `outputs/09_final_rfdetr/offse
 ### R4-6 — Validation-set metrics reported as final results instead of test-set metrics
 
 > The fourth serious issue concerns the AI methodology. The authors claim to have maintained a
-fixed test set, but then report metrics from the validation set—not the test set—as the
-final results. After selecting the architecture, size, and multiple hyperparameters based
-on the validation data, the only non-optimistic performance estimate must come from a
-completely independent test set used only once. Without those results, the key figures in
-the article may have been indirectly optimized on the validation set.
+fixed test set, but then report metrics from the validation set—not the test set—as the final
+results. After selecting the architecture, size, and multiple hyperparameters based on the
+validation data, the only non-optimistic performance estimate must come from a completely
+independent test set used only once. Without those results, the key figures in the article may
+have been indirectly optimized on the validation set.
 
 
 **Response:**
@@ -597,8 +1135,8 @@ split; the initial set of 1,315 images is transformed during optimization into a
 3,403 images. The authors must clearly explain which images are original and which are
 augmented, how the count increases from 1,315 to 3,403, how many independent patients each
 dataset contains, and ensure that all images from the same participant remain in a single
-partition. CLAIM 2024 specifically recommends specifying the partitioning level—patient,
-study, or image—to prevent leakage.
+partition. CLAIM 2024 specifically recommends specifying the partitioning level—patient, study,
+or image—to prevent leakage.
 
 
 **Response:**
@@ -614,42 +1152,14 @@ Outputs: `outputs/07_report/tables/dataset_counts.md`, `outputs/01_data/manifest
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 <!-- source: outputs/01_data/manifest_summary.md -->
 
-### R4-external-validity — Sample size does not establish external validity; no external testing
-
-> Finally, the sample size calculation in G*Power based on a χ² of correct/incorrect
-detections does not show that the dataset is sufficient to train a segmentation model, much
-less that it provides "external validity." The manuscript even claims that 1,315 images
-support external validity. This is conceptually incorrect: external validity is assessed by
-demonstrating performance on external data—ideally from another center, device, population,
-or clinical setting—not simply by increasing the size of a single-center cohort. The
-specific guidelines for dental AI highlight the problems that arise from a lack of external
-testing and evaluation based exclusively on internal data.
-
-
-*(Conveyed to the authors separately; not in docs/Hakem_revizyonları.docx.)*
-
-**Response:**
-
-We agree with the reviewer on both points and have removed the claim. External validity cannot be established by the size of a single-centre cohort, and the χ² calculation addressed a comparison of correct and incorrect detections that this study never performs; it therefore says nothing about the data requirement of a segmentation model either. The calculation, the appendix containing it and the sentence claiming that the cohort size supports external validity have all been removed. Data adequacy is now shown empirically instead: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant: mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (val/segm_mAP_50 gain 25→50 %: +0.0269; 75→100 %: +0.0274). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. The curve was drawn from a single training run per point (one seed), so the run-to-run spread was not measured and no error bars are given; this is why the ordering of two adjacent points is not read as a result on its own. We note that this result runs with the reviewer's argument rather than against it: the curve does not establish that the present cohort is sufficient, and we do not use it to claim so. It says that the segmentation model has not exhausted what more data of this kind could give it, which is one more reason for the larger and more varied datasets the reviewer asks for. We also accept the reviewer's point about external testing and we do not attempt to disguise it: no external data were available, so the study reports an internal estimate only. The Limitations state: "All images were acquired at a single centre with a single smartphone model under a standardised protocol; the reported performance therefore represents an internal estimate, and external validation on images from other centres, devices and populations is required before clinical deployment." We have not performed external validation and we do not claim it; it is named as the necessary next step rather than as a limitation in passing.
-
-**Changes in the manuscript:** Methods 2.1 — sample-size paragraph and Appendix A removed; 'supports the reliability and external validity' sentence deleted; [Supplementary Figure S1 — learning curve]; Limitations — single centre / single device / internal estimate
-
-**Status:** READY
-
-Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
-
-<!-- source: outputs/07_report/tables/learning_curve.csv -->
-<!-- source: outputs/07_report/tables/learning_curve.md -->
-<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->
-
 ### R4-8 — Architecture comparison is not fair (different dataset versions)
 
 > The fifth issue is that the architecture comparison is not entirely fair: RF-DETR-Seg is
-evaluated using dataset v1, YOLO26 using v2, and YOLO11 using v3. Although the authors
-indicate they start from the same baseline, a comparison intended to conclude that one
-architecture is superior should use the same training, validation, and test sets, as well
-as the same preprocessing, so that the architecture is the only variable. Otherwise, part
-of the difference may be attributable to the dataset or the pipeline.
+evaluated using dataset v1, YOLO26 using v2, and YOLO11 using v3. Although the authors indicate
+they start from the same baseline, a comparison intended to conclude that one architecture is
+superior should use the same training, validation, and test sets, as well as the same
+preprocessing, so that the architecture is the only variable. Otherwise, part of the difference
+may be attributable to the dataset or the pipeline.
 
 
 **Response:**
@@ -667,3 +1177,55 @@ Outputs: `outputs/08_architecture/PROTOCOL.md`, `outputs/08_architecture/PROTOCO
 <!-- source: outputs/09_final_rfdetr/error_decomposition.csv -->
 <!-- source: outputs/06_prediction/error_decomposition.csv -->
 <!-- source: outputs/09_final_rfdetr/boundary_by_set.csv -->
+
+### R4-9 — The etiology of a gummy smile cannot be derived from millimetres alone; this contradicts the logic of Table 1
+
+> The second problem is even more fundamental: the etiology of a gummy smile cannot be derived
+solely from the number of millimeters of visible gum tissue. The authors themselves acknowledge
+that a definitive diagnosis requires cephalometry, lip morphology, and a periodontal
+examination. This statement partially contradicts the logic of Table 1. A patient with 5 mm of
+exposure may present with lip hypermobility, maxillary vertical excess, altered passive
+eruption, dentoalveolar extrusion, or combinations thereof. Similarly, diagnosing a “short upper
+lip” requires measuring the lip; diagnosing VME requires facial/skeletal assessment; diagnosing
+altered passive eruption requires evaluating coronal dimensions and the dentogingival
+relationship; and establishing an indication for orthognathic surgery cannot be based solely on
+exposure exceeding 8 mm. The matrix can help generate a differential diagnosis, but it should
+not be used as a treatment tool without independent clinical validation.
+
+
+**Response:**
+
+Two reviewers make this objection — Reviewer 3 in Methods 10 (a, b and c) and Reviewer 4 in his second fundamental problem — and they are right on the substance. The clinical framing is the clinical team's to write; what the technical side can state, and what the design already does, is this. **The system does not diagnose.** It measures gingival display in millimetres and applies a published threshold table to produce one or more *candidate* etiologies with the treatments associated with them in the literature. The output field is named `treatment_alternatives`, not 'treatment'. **Overlapping bands are reported as overlaps, not resolved.** The bands of Table 1 overlap by construction (E1 below 4 mm, E2 from 3 to 6, E3 from 4 to 8, E4 above 8), so a 5 mm display returns the combined label E2-E3 and both sets of candidates rather than a single answer. The engine has no metadata-based tie-breaking and never picks one etiology from a measurement alone — which is precisely the reviewers' point, built into the rule set rather than argued against it. **On 10a specifically:** a display below 4 mm is not asserted to be a problem. The rule returns a category for an observed display; it does not assert an indication, and a value of 0 mm returns `NO_VISIBLE_GINGIVA` rather than a class. **On 10c and the short upper lip:** we agree that the diagnosis requires a lip measurement and that lip length varies with sex, age and ethnicity. The system does not measure lip length and therefore cannot diagnose a short lip; where the band admits that etiology it is listed as a candidate to be confirmed clinically. The revision says so in the Methods, in the Table 1 caption and in the Limitations. **And this is exactly what the expert study measures.** Three clinicians assign the etiology from their own clinical judgement, blinded to the table and to each other; the linear-weighted κ between their majority and the rule output is the quantity that says how far a millimetre-only rule can go. Whatever that number turns out to be, it is the honest measure of this limitation, and it is reported either way.
+
+**Changes in the manuscript:** Methods 2.8 and the Table 1 caption — the rule set described as a generator of candidate etiologies, not a diagnosis; overlapping bands and their combined labels made explicit; Limitations — lip length, cephalometry and periodontal findings are not inputs; Discussion — the expert agreement as the measure of this limit
+
+**Status:** CLINICAL
+
+Outputs: `docs/Uzman_degerlendirme_protokolu.md`, `outputs/07_report/tables/expert_agreement.md`
+
+
+### R4-external-validity — The G*Power calculation does not establish sufficiency or external validity
+
+> Finally, the sample size calculation in G*Power based on a χ² of correct/incorrect detections
+does not show that the dataset is sufficient to train a segmentation model, much less that it
+provides “external validity.” The manuscript even claims that 1,315 images support external
+validity. This is conceptually incorrect: external validity is assessed by demonstrating
+performance on external data—ideally from another center, device, population, or clinical
+setting—not simply by increasing the size of a single-center cohort. The specific guidelines for
+dental AI highlight the problems that arise from a lack of external testing and evaluation based
+exclusively on internal data.
+
+
+**Response:**
+
+We agree with the reviewer on both points and have removed the claim. External validity cannot be established by the size of a single-centre cohort, and the χ² calculation addressed a comparison of correct and incorrect detections that this study never performs; it therefore says nothing about the data requirement of a segmentation model either. The calculation, the appendix containing it and the sentence claiming that the cohort size supports external validity have all been removed. Data adequacy is now shown empirically instead: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition (211 to 846 images) with the validation set held constant: mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) was 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images respectively (val/segm_mAP_50 gain 25→50 %: +0.0269; 75→100 %: +0.0274). Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. The curve was drawn from a single training run per point (one seed), so the run-to-run spread was not measured and no error bars are given; this is why the ordering of two adjacent points is not read as a result on its own. We note that this result runs with the reviewer's argument rather than against it: the curve does not establish that the present cohort is sufficient, and we do not use it to claim so. It says that the segmentation model has not exhausted what more data of this kind could give it, which is one more reason for the larger and more varied datasets the reviewer asks for. We also accept the reviewer's point about external testing and we do not attempt to disguise it: no external data were available, so the study reports an internal estimate only. The Limitations state: "All images were acquired at a single centre with a single smartphone model under a standardised protocol; the reported performance therefore represents an internal estimate, and external validation on images from other centres, devices and populations is required before clinical deployment." We have not performed external validation and we do not claim it; it is named as the necessary next step rather than as a limitation in passing.
+
+**Changes in the manuscript:** Methods 2.1 — sample-size paragraph and Appendix A removed; 'supports the reliability and external validity' sentence deleted; [Supplementary Figure S1 — learning curve]; Limitations — single centre / single device / internal estimate
+
+**Status:** READY
+
+Outputs: `outputs/07_report/figures/learning_curve.png`, `outputs/07_report/tables/learning_curve.md`, `outputs/07_report/MANUSCRIPT_EDITS.md`
+
+<!-- source: outputs/07_report/tables/learning_curve.csv -->
+<!-- source: outputs/07_report/tables/learning_curve.md -->
+<!-- source: docs/Guc_analizi_hakem_cevabi_ve_metin.md -->

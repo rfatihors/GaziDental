@@ -377,3 +377,60 @@ def estimator_sensitivity(oracle_dir: Path, selected_combo: str, px_per_mm: floa
     st["note"] = ("the method and the scale were selected here, once, on GROUND-TRUTH masks on the dev subset; "
                   "they were never re-selected or re-fitted on predicted masks (outputs/09_final_rfdetr/PLAN.md 5 and Amendment 1)")
     return df, st
+
+
+def threshold_margin(stage6_dir: Path, bounds: Sequence[float] = (3.0, 4.0, 6.0, 8.0),
+                     edges: Sequence[float] = (0.5, 1.0, 2.0)) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    """Class agreement as a function of how close the reference value sits to a Table-1 boundary.
+
+    Reviewer 3 (Methods 8) asks what error is clinically acceptable, and Reviewer 4 makes the same
+    point from the other side: with decision boundaries at 3, 4, 6 and 8 mm, an error of 1-2 mm can
+    change the category. Mean absolute error alone cannot answer that, because an error only matters
+    where it can cross a boundary. This table stratifies the reference images by their distance to the
+    nearest boundary and reports, in each stratum, how often the measured class equals the reference
+    class. It is the quantitative form of the answer: the error is harmless away from a boundary and
+    is exactly where the disagreements live near one.
+    """
+    p = stage6_dir / "per_image_results.csv"
+    if not p.exists():
+        return None, {"status": "pending", "needs": f"{p} — run scripts/run_prediction_eval.py"}
+    d = pd.read_csv(p)
+    need = {"ref_mm", "selected_mm", "ref_label", "selected_label"}
+    if not need <= set(d.columns):
+        return None, {"status": "pending", "needs": f"{p} lacks {sorted(need - set(d.columns))}"}
+    d = d[np.isfinite(d["ref_mm"]) & np.isfinite(d["selected_mm"])].copy()
+    d["margin_mm"] = [min(abs(float(v) - b) for b in bounds) for v in d["ref_mm"]]
+    d["agree"] = d["selected_label"].astype(str) == d["ref_label"].astype(str)
+    d["abs_err_mm"] = (d["selected_mm"] - d["ref_mm"]).abs()
+    cuts = list(edges) + [float("inf")]
+    labels = [f"< {edges[0]:.1f}"] + [f"{a:.1f}–{b:.1f}" for a, b in zip(edges, edges[1:])] + [f"> {edges[-1]:.1f}"]
+    rows = []
+    lo = 0.0
+    for lab, hi in zip(labels, cuts):
+        m = (d["margin_mm"] >= lo) & (d["margin_mm"] < hi)
+        part = d[m]
+        rows.append({"distance to the nearest boundary, mm": lab, "n": int(len(part)),
+                     "share of images": float(len(part) / len(d)) if len(d) else float("nan"),
+                     "MAE, mm": float(part["abs_err_mm"].mean()) if len(part) else float("nan"),
+                     "class agreement": float(part["agree"].mean()) if len(part) else float("nan"),
+                     "disagreements": int((~part["agree"]).sum())})
+        lo = hi
+    rows.append({"distance to the nearest boundary, mm": "all", "n": int(len(d)), "share of images": 1.0,
+                 "MAE, mm": float(d["abs_err_mm"].mean()), "class agreement": float(d["agree"].mean()),
+                 "disagreements": int((~d["agree"]).sum())})
+    df = pd.DataFrame(rows)
+    near = d[d["margin_mm"] < edges[0]]
+    far = d[d["margin_mm"] >= edges[-1]]
+    st: Dict[str, Any] = {
+        "status": "done", "source": str(p), "boundaries_mm": ", ".join(f"{b:.0f}" for b in bounds),
+        "n": int(len(d)),
+        "share_within_0_5_mm_of_a_boundary": f"{100 * len(near) / len(d):.0f} %" if len(d) else "?",
+        "agreement_near_a_boundary": f"{100 * near['agree'].mean():.0f} %" if len(near) else "n/a",
+        "agreement_away_from_a_boundary": f"{100 * far['agree'].mean():.0f} %" if len(far) else "n/a",
+        "share_of_disagreements_within_1_mm_of_a_boundary":
+            (f"{100 * (d.loc[~d['agree'], 'margin_mm'] < edges[1]).mean():.0f} %" if int((~d['agree']).sum()) else "n/a"),
+        "reference_below_4_mm": f"{int((d['ref_mm'] < 4).sum())} of {len(d)} images",
+        "note": ("the strata are formed on the REFERENCE value, so the grouping does not depend on the model; "
+                 "agreement is between the class of the measured value and the class of the reference value"),
+    }
+    return df, st

@@ -1,6 +1,6 @@
 # Aşama 7 — Türkçe özet
 
-- `scripts/build_report.py` mevcut verilerle 14 öge üretti, 1 öge bekliyor (`report_status.md`: ne gerektiği yazıyor). Veri gelince aynı komut yeniden çalıştırılır.
+- `scripts/build_report.py` mevcut verilerle 15 öge üretti, 1 öge bekliyor (`report_status.md`: ne gerektiği yazıyor). Veri gelince aynı komut yeniden çalıştırılır.
 - Hazır:
   - Figure: system block diagram (Reviewer 1)
   - Figure: segmentation examples GT vs prediction (Reviewer 1)
@@ -13,6 +13,7 @@
   - Table: Demographic coverage (Reviewer 3)
   - Table: Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)
   - Table: Measurement-method sensitivity: every regioning x estimator combination (Appendix)
+  - Table: Class agreement by distance to a Table-1 boundary (Reviewer 3 Methods 8, Reviewer 4)
   - Table: Segmentation metrics on the fixed test set (pooled over the classes by this model's own evaluator)
   - Table: Learning curve points (Supplementary S1)
   - Table: intra-observer reliability of the reference

@@ -103,6 +103,9 @@ def main() -> int:
     apair = pd.read_csv(oA / "paired_comparisons.csv") if (oA / "paired_comparisons.csv").exists() else None
     amodel = pd.read_csv(oA / "by_model.csv").set_index("model") if (oA / "by_model.csv").exists() else None
     ares = pd.read_csv(oA / "resolution_controls.csv") if (oA / "resolution_controls.csv").exists() else None
+    TMS = {k: T._md_meta(tab / "threshold_margin.md", k) for k in
+           ("boundaries_mm", "share_within_0_5_mm_of_a_boundary", "agreement_near_a_boundary",
+            "agreement_away_from_a_boundary", "share_of_disagreements_within_1_mm_of_a_boundary", "reference_below_4_mm")}
     ESENS = {k: T._md_meta(tab / "estimator_sensitivity.md", k) for k in
              ("n_combinations", "selected", "selected_px_per_mm", "selection_rule", "regioning_fallback",
               "regioning_fallback_predicted_masks", "fallback_check", "fallback_reeval_threshold")}
@@ -178,7 +181,9 @@ def main() -> int:
     S = {"dc": sfile(tab / "dataset_counts.csv"), "dem": sfile(tab / "demographics.csv"), "seg": sfile(tab / "segmentation_metrics_test.csv"),
          "tm": sfile(o5 / "test_metrics.json"), "lc": sfile(tab / "learning_curve.csv"), "acc": sfile(o6 / "measurement_accuracy.csv"),
          "est3": sfile(o3 / "estimator_comparison.csv"), "bset": sfile(o6 / "boundary_by_set.csv"), "intra": sfile(o3 / "intra_observer.md"),
-         "env": train_src, "off": sfile(o6 / "offset_correction.md"), "cfg": "configs/config.yaml"}
+         "env": train_src, "off": sfile(o6 / "offset_correction.md"), "cfg": "configs/config.yaml",
+         "scale": sfile(o3 / "scale_estimation.md"), "tmargin": sfile(tab / "threshold_margin.csv"),
+         "lcmd": sfile(tab / "learning_curve.md")}
 
     def f(x, d=2, sign=False):
         return f"{x:+.{d}f}" if sign else f"{x:.{d}f}"
@@ -373,6 +378,74 @@ def main() -> int:
          "Terminology decision of the clinical team (15 September).",
          "terminology", [])
 
+    # ---- items the full reviewer letter added (docs/Hakem_Yorumları.docx)
+    edit("manuscript", "2.1 Study design (design and inclusion criteria)", "A total of 1,315 frontal smiling photographs",
+         "ADD before this sentence: a statement of the design and of who entered the study. Suggested shape, with the clinical team supplying the bracketed parts: "
+         "\"This was a retrospective, cross-sectional analysis of standardised frontal smile photographs and the accompanying clinical records of patients attending [department] between [start] and [end], under ethics approval E-77082166-604.01-881629. "
+         "Consecutive patients were included if [inclusion criteria — clinical team]; the exclusion criteria are given below.\" "
+         "Then state the analysis-side filters explicitly, because they decide which image enters which analysis: an image enters segmentation training if it carries a usable annotation; it enters the millimetre analysis only if it is a high smile line with a clinical reference measurement "
+         f"(n = {int(dc.loc['high', 'kept'])}); and duplicate photographs of the same participant were reduced to one image per participant before partitioning.",
+         "The submitted Methods give only exclusion criteria and never state the design, the recruitment window or whether sampling was consecutive. Reviewer 3 asks for all three, and the later question about selection bias cannot be answered without them.",
+         "R3-Methods-1, R3-Methods-2", [S["dc"]])
+    edit("manuscript", "2.x Calibration (new subsection)", "All measurements were performed using image analysis software (ImageJ, National Institutes of Health, Bethesda, MD, USA)",
+         "EXPAND into its own subsection, because the pixel-to-millimetre step is currently invisible and two reviewers ask for it. Suggested content: "
+         "\"A Hu-Friedy UNC periodontal probe was placed in the field of view of every photograph. For the clinical reference measurement each image was opened in ImageJ at 2698x1799 px, two consecutive 1 mm graduations on the probe were selected, and the scale was set with Set Scale (known distance 1 mm), per image; gingival display was then measured at six tooth sites on that scale. "
+         f"The automated pipeline does not read the probe: it applies a single global scale of {ms.get('selected_px_per_mm', f'{k:.2f}')} px/mm, fitted by regression through the origin on the development subset only and applied unchanged to every other image, the photographs having been acquired at a fixed camera-to-subject distance with a fixed setup.\" "
+         "State that the individual per-image probe scales were not stored, as a limitation, and that the three experts of the agreement study enter their own per-image probe scale, which will give an independent estimate of that calibration's precision.",
+         "Reviewer 3 (Methods 6) saw the probe in Figure 1 and asks whether it was used for calibration; Reviewer 4 makes the same point. The submitted text names the software but never the calibration procedure, and never distinguishes the reference's per-image scale from the pipeline's single fitted constant.",
+         "R3-Methods-6, R4-5", [S["scale"]])
+    edit("manuscript", "2.8 Clinical threshold-based classification (moved from Results 3.5)", "Clinical threshold-based classification",
+         "MOVE this section from the Results to the Methods. In the Methods it defines the rule: the bands of Table 1 (E1 < 4 mm, E2 3-6, E3 4-8, E4 > 8), the combined labels that overlapping bands produce (E1-E2, E2-E3), the handling of 0 mm (NO_VISIBLE_GINGIVA) and of a missing measurement (UNCLASSIFIED), and the fact that the output is a list of candidate etiologies with their associated treatments rather than a diagnosis. "
+         "What stays in the Results is only what was measured: the agreement between the class derived from the measurement and the class derived from the clinical reference"
+         + (f" ({100 * P['threshold_agreement']:.0f} %, linear-weighted kappa {f(P['threshold_kappa_linear'], 2)} [{f(P['threshold_kappa_linear_ci_low'], 2)}, {f(P['threshold_kappa_linear_ci_high'], 2)}], n = {int(P['n'])})" if 'threshold_agreement' in P else "")
+         + ", its dependence on the distance to a boundary, and the agreement with independent clinical assessment.",
+         "Reviewer 3 (Results 3) is right that a rule definition is a method, not a result. Splitting it this way also separates the rule from its validation, which is what Reviewer 4 asks for.",
+         "R3-Results-3, R4-1", [S["acc"]])
+    edit("manuscript", "2.8 Clinical threshold-based classification (acceptable error)", "Clinical threshold-based classification",
+         "ADD a paragraph answering what measurement error is clinically acceptable, since the decision boundaries are at "
+         + (TMS["boundaries_mm"] or "3, 4, 6 and 8") + " mm. Suggested content, all of it measured: "
+         + (f"the mean absolute error is {f(P['mae'])} mm (95 % limits of agreement {f(P['ba_loa_low'])} to {f(P['ba_loa_high'])} mm); agreement with the reference class is "
+            f"{TMS['agreement_away_from_a_boundary']} for images more than 2 mm from a boundary and {TMS['agreement_near_a_boundary']} for images within 0.5 mm of one, while the error itself is the same in every stratum; "
+            f"{TMS['share_of_disagreements_within_1_mm_of_a_boundary']} of all class disagreements fall within 1 mm of a boundary, and {TMS['share_within_0_5_mm_of_a_boundary']} of the cohort sits that close to one. "
+            if TMS.get("agreement_near_a_boundary") else "[PENDING — tables/threshold_margin.md.] ")
+         + "State the conclusion the table supports: the measurement is not less accurate near a boundary, the boundary is simply close, so near a boundary the system reports more than one candidate category rather than a single one. "
+         "Separately, correct the terminology throughout: the measured quantity is gingival display in millimetres, defined at any value including zero; 'gummy smile' is a clinical judgement the system does not make, and no value is described as one"
+         + (f" ({TMS['reference_below_4_mm']} in this cohort have a reference value below 4 mm)" if TMS.get("reference_below_4_mm") else "") + ".",
+         "Reviewer 3 (Methods 8) asks for the cut-off and the clinically acceptable error and objects that 0, 1 and 3 mm would not be called a gummy smile; Reviewer 4 makes the quantitative half of the same point. A mean error alone does not answer it, because an error matters only where it can cross a boundary.",
+         "R3-Methods-8, R4-4", [S["acc"], S["tmargin"]], action="add paragraph")
+    edit("manuscript", "2.9 Statistical analysis (ICC type)", "Agreement was evaluated using intraclass correlation coefficients (ICCs) and paired t-tests",
+         "Replace with: \"Agreement was evaluated with the intraclass correlation coefficient ICC(2,1), a two-way random-effects, absolute-agreement, single-measurement model, reported with its 95 % confidence interval, together with Bland-Altman bias and 95 % limits of agreement. "
+         + (f"Intra-observer reliability of the clinical reference was ICC(2,1) {t_row[2] if t_row else '?'} at tooth-site level and {i_row[2] if i_row else '?'} at image-mean level.\" "
+            if t_row and i_row else "\" ")
+         + "Remove the paired t-test and the p-value as evidence of agreement: a significant ICC only rejects zero, and a non-significant t-test is not evidence of equivalence.",
+         "Reviewer 2 (item 12) asks for the ICC value, its 95 % confidence interval and its type, none of which the submitted text gives; it reports only 'high ICC values and no significant difference', which is not an agreement argument.",
+         "R2-12, R4-4", [S["intra"]])
+    edit("manuscript", "Abstract (Limitations)", "Conclusions: The proposed framework enables objective quantification of gingival display",
+         "ADD a limitations sentence to the Abstract, before the conclusions: \"Limitations: single-centre, single-device data with no external validation; the clinical reference was measured by one examiner"
+         + (f", with intra-observer ICC(2,1) {t_row[2] if t_row else '?'} and a tooth-site standard deviation of {t_row[6] if t_row else '?'} mm" if t_row else "")
+         + "; and the etiological and treatment layer was compared with independent clinical assessment as an agreement analysis rather than validated as a decision tool.\"",
+         "Reviewer 3 (Abstract 2) asks for the single-centre design, the single examiner and the absence of clinical assessment to be stated in the Abstract itself, not only in the Discussion.",
+         "R3-Abstract-2, R2-7", [S["intra"]])
+    edit("manuscript", "Discussion (duplicate conclusion)", "In conclusion, the multi-stage artificial intelligence model developed in this study demonstrates",
+         "DELETE this closing paragraph of the Discussion. The manuscript carries a separate Conclusion section, so the conclusion appears twice; keep the section and remove the paragraph.",
+         "Reviewer 3 (Discussion 4) points out the duplication.",
+         "R3-Discussion-4", [])
+    edit("manuscript", "Limitations", "This study has several limitations.",
+         "REWRITE the limitations paragraph so that each limitation is named and, where possible, quantified: "
+         "(i) selection bias — a single centre's archive over one recruitment window, one camera and one setup, so the cohort is a convenience sample and no external validity is claimed; "
+         + (f"the learning curve had not plateaued ({LC['label']} {LC['points']} at {LC['sizes']} training images), so more and more varied data could still help; " if not LC["plateau"] else "")
+         + "(ii) a single examiner produced both the annotations and the clinical reference, so only intra-observer reliability is currently available"
+         + (f" (tooth-site ICC(2,1) {t_row[2] if t_row else '?'}, SD {t_row[6] if t_row else '?'} mm)" if t_row else "")
+         + ", and the inter-observer component is being collected in the expert study; "
+         "(iii) demographic bias — the demographic coverage is reported per group rather than assumed, and skin and gingival pigmentation were not recorded at all; "
+         "(iv) the etiological layer takes only the millimetre value as input: lip length, cephalometric and periodontal findings are not inputs, so its output is a list of candidates, not a diagnosis.",
+         "Reviewer 3 (Discussion 3) asks for selection bias, the single examiner and demographic bias; Reviewers 3 and 4 both object that an etiology cannot follow from millimetres alone, which belongs here as a stated limit of the design.",
+         "R3-Discussion-3, R3-Methods-10, R4-9, R2-7", [S["dem"], S["intra"], S["lcmd"]], action="replace whole paragraph")
+    edit("manuscript", "Abbreviations", "Objectives: The aim of this study was to develop and evaluate an artificial intelligence (AI)-based framework",
+         "Expand every abbreviation at first mention throughout: YOLO (You Only Look Once), RF-DETR (Receptive Field enhanced DEtection TRansformer), mAP (mean average precision), IoU (intersection over union), MAE (mean absolute error), RMSE (root mean square error), ICC (intraclass correlation coefficient), LoA (limits of agreement). Add a definitions list if the journal allows one. "
+         "In the same sentence, state one primary objective and list the secondary objectives separately, as Reviewer 3 asks in Introduction 3.",
+         "Reviewer 3 (Methods 11) notes that abbreviations such as YOLO are never expanded, and (Introduction 3) that several objectives are presented at once.",
+         "R3-Methods-11, R3-Intro-3", [])
     edit("Appendix B", "B.1", "The raw dataset consisted of 1,315 original images obtained for gingival display analysis",
          f"The raw dataset consisted of {int(dc.loc['total', 'images_roboflow_export'])} original images (high {int(dc.loc['high', 'images_roboflow_export'])}, average {int(dc.loc['normal', 'images_roboflow_export'])}, low {int(dc.loc['low', 'images_roboflow_export'])}). "
          f"After removal of same-participant duplicates, high-smile-line images without a clinical reference measurement and one ambiguous record, {int(dc.loc['total', 'kept'])} images remained and were partitioned at participant level "

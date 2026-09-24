@@ -113,6 +113,8 @@ def main() -> int:
     df, st = T.estimator_sensitivity(oracle_dir, sel_combo, float(cfg["measurement"]["px_per_mm"]),
                                      predicted_oracle_dir=prediction_eval_dir / "oracle")
     emit("estimator_sensitivity", df, st, "Measurement-method sensitivity: every regioning x estimator combination (Appendix)")
+    df, st = T.threshold_margin(prediction_eval_dir)
+    emit("threshold_margin", df, st, "Class agreement by distance to a Table-1 boundary (Reviewer 3 Methods 8, Reviewer 4)")
     df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir)
     # the two evaluators do not produce the same table: Ultralytics gives a row per class, a COCO
     # evaluation gives metric/value rows pooled over the classes. The heading says which one this is.

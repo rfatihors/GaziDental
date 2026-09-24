@@ -13,6 +13,7 @@
 | Table: Demographic coverage (Reviewer 3) | done |  | data/manifest/dataset_manifest.csv | outputs/07_report/tables/demographics.md |
 | Table: Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement) | done |  | outputs/03_oracle | outputs/07_report/tables/measurement_accuracy.md |
 | Table: Measurement-method sensitivity: every regioning x estimator combination (Appendix) | done |  | outputs/03_oracle/estimator_comparison.csv | outputs/07_report/tables/estimator_sensitivity.md |
+| Table: Class agreement by distance to a Table-1 boundary (Reviewer 3 Methods 8, Reviewer 4) | done |  | outputs/09_final_rfdetr/per_image_results.csv | outputs/07_report/tables/threshold_margin.md |
 | Table: Segmentation metrics on the fixed test set (pooled over the classes by this model's own evaluator) | done |  | outputs/08_architecture/rfdetr_metrics_rfdetr-seg-large_s42.json | outputs/07_report/tables/segmentation_metrics_test.md |
 | Table: Learning curve points (Supplementary S1) | done |  | outputs/09_final_rfdetr/learning_curve.csv | outputs/07_report/tables/learning_curve.md |
 | Table: Model vs expert agreement (Reviewer 4: clinical validity) | pending | real expert forms (current outputs are a synthetic dry run) |  | outputs/07_report/tables/expert_agreement.md |

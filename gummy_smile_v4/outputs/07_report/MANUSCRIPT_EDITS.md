@@ -4,7 +4,7 @@
 
 Source files: `docs/Makale_gonderilmis_hali.docx`, `docs/Appendix_B-Dataset_Preparation_and_Preprocessing.docx`, `docs/Appendix_C-Dataset_Versioning_and_Preprocessing_Pipeline.docx`, `docs/Appendix_D-Detailed_Training_and_Hyperparameter_Optimization.docx`, `docs/Appendix_E-Training_configuration_and_hyperparameter_search_strategy.docx`, `docs/Appendix_F-Comparison_of_Three_Segmentation_Models_for_Gingival_Display_Analysis.docx`.
 
-35 edits; the current sentence was located for 35 of them. Reviewer items refer to `RESPONSE_TO_REVIEWERS.md`. There is one set of measurement results: no post-hoc calibration is applied, so no number quoted below is fitted on the clinical reference (`outputs/09_final_rfdetr/PLAN.md`, Amendment 3).
+44 edits; the current sentence was located for 44 of them. Reviewer items refer to `RESPONSE_TO_REVIEWERS.md`. There is one set of measurement results: no post-hoc calibration is applied, so no number quoted below is fitted on the clinical reference (`outputs/09_final_rfdetr/PLAN.md`, Amendment 3).
 
 ## manuscript
 
@@ -387,6 +387,146 @@ Replace 'gummy smile' and 'excessive gingival display' with 'high smile line' th
 **Why:** Terminology decision of the clinical team (15 September).
 
 **Reviewer item:** terminology
+
+### manuscript · 2.1 Study design (design and inclusion criteria)
+
+**Current (replace):**
+
+> Methods: A total of 1,315 frontal smiling photographs were categorized according to smile line.
+
+**Proposed:**
+
+ADD before this sentence: a statement of the design and of who entered the study. Suggested shape, with the clinical team supplying the bracketed parts: "This was a retrospective, cross-sectional analysis of standardised frontal smile photographs and the accompanying clinical records of patients attending [department] between [start] and [end], under ethics approval E-77082166-604.01-881629. Consecutive patients were included if [inclusion criteria — clinical team]; the exclusion criteria are given below." Then state the analysis-side filters explicitly, because they decide which image enters which analysis: an image enters segmentation training if it carries a usable annotation; it enters the millimetre analysis only if it is a high smile line with a clinical reference measurement (n = 145); and duplicate photographs of the same participant were reduced to one image per participant before partitioning.
+
+**Why:** The submitted Methods give only exclusion criteria and never state the design, the recruitment window or whether sampling was consecutive. Reviewer 3 asks for all three, and the later question about selection bias cannot be answered without them.
+
+**Reviewer item:** R3-Methods-1, R3-Methods-2
+
+<!-- source: outputs/07_report/tables/dataset_counts.csv -->
+
+### manuscript · 2.x Calibration (new subsection)
+
+**Current (replace):**
+
+> All measurements were performed using image analysis software (ImageJ, National Institutes of Health, Bethesda, MD, USA).
+
+**Proposed:**
+
+EXPAND into its own subsection, because the pixel-to-millimetre step is currently invisible and two reviewers ask for it. Suggested content: "A Hu-Friedy UNC periodontal probe was placed in the field of view of every photograph. For the clinical reference measurement each image was opened in ImageJ at 2698x1799 px, two consecutive 1 mm graduations on the probe were selected, and the scale was set with Set Scale (known distance 1 mm), per image; gingival display was then measured at six tooth sites on that scale. The automated pipeline does not read the probe: it applies a single global scale of 16.84 px/mm, fitted by regression through the origin on the development subset only and applied unchanged to every other image, the photographs having been acquired at a fixed camera-to-subject distance with a fixed setup." State that the individual per-image probe scales were not stored, as a limitation, and that the three experts of the agreement study enter their own per-image probe scale, which will give an independent estimate of that calibration's precision.
+
+**Why:** Reviewer 3 (Methods 6) saw the probe in Figure 1 and asks whether it was used for calibration; Reviewer 4 makes the same point. The submitted text names the software but never the calibration procedure, and never distinguishes the reference's per-image scale from the pipeline's single fitted constant.
+
+**Reviewer item:** R3-Methods-6, R4-5
+
+<!-- source: outputs/03_oracle/scale_estimation.md -->
+
+### manuscript · 2.8 Clinical threshold-based classification (moved from Results 3.5)
+
+**Current (replace):**
+
+> - Clinical threshold-based classification
+
+**Proposed:**
+
+MOVE this section from the Results to the Methods. In the Methods it defines the rule: the bands of Table 1 (E1 < 4 mm, E2 3-6, E3 4-8, E4 > 8), the combined labels that overlapping bands produce (E1-E2, E2-E3), the handling of 0 mm (NO_VISIBLE_GINGIVA) and of a missing measurement (UNCLASSIFIED), and the fact that the output is a list of candidate etiologies with their associated treatments rather than a diagnosis. What stays in the Results is only what was measured: the agreement between the class derived from the measurement and the class derived from the clinical reference (76 %, linear-weighted kappa 0.72 [0.63, 0.80], n = 145), its dependence on the distance to a boundary, and the agreement with independent clinical assessment.
+
+**Why:** Reviewer 3 (Results 3) is right that a rule definition is a method, not a result. Splitting it this way also separates the rule from its validation, which is what Reviewer 4 asks for.
+
+**Reviewer item:** R3-Results-3, R4-1
+
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv -->
+
+### manuscript · 2.8 Clinical threshold-based classification (acceptable error)
+
+**Current (add paragraph):**
+
+> - Clinical threshold-based classification
+
+**Proposed:**
+
+ADD a paragraph answering what measurement error is clinically acceptable, since the decision boundaries are at 3, 4, 6, 8 mm. Suggested content, all of it measured: the mean absolute error is 0.52 mm (95 % limits of agreement -1.07 to 1.60 mm); agreement with the reference class is 100 % for images more than 2 mm from a boundary and 60 % for images within 0.5 mm of one, while the error itself is the same in every stratum; 94 % of all class disagreements fall within 1 mm of a boundary, and 47 % of the cohort sits that close to one. State the conclusion the table supports: the measurement is not less accurate near a boundary, the boundary is simply close, so near a boundary the system reports more than one candidate category rather than a single one. Separately, correct the terminology throughout: the measured quantity is gingival display in millimetres, defined at any value including zero; 'gummy smile' is a clinical judgement the system does not make, and no value is described as one (113 of 145 images in this cohort have a reference value below 4 mm).
+
+**Why:** Reviewer 3 (Methods 8) asks for the cut-off and the clinically acceptable error and objects that 0, 1 and 3 mm would not be called a gummy smile; Reviewer 4 makes the quantitative half of the same point. A mean error alone does not answer it, because an error matters only where it can cross a boundary.
+
+**Reviewer item:** R3-Methods-8, R4-4
+
+<!-- source: outputs/09_final_rfdetr/measurement_accuracy.csv; outputs/07_report/tables/threshold_margin.csv -->
+
+### manuscript · 2.9 Statistical analysis (ICC type)
+
+**Current (replace):**
+
+> Agreement was evaluated using intraclass correlation coefficients (ICCs) and paired t-tests, demonstrating excellent reliability with high ICC values and no significant differences (p > 0.05).
+
+**Proposed:**
+
+Replace with: "Agreement was evaluated with the intraclass correlation coefficient ICC(2,1), a two-way random-effects, absolute-agreement, single-measurement model, reported with its 95 % confidence interval, together with Bland-Altman bias and 95 % limits of agreement. Intra-observer reliability of the clinical reference was ICC(2,1) 0.995 [0.994, 0.997] at tooth-site level and 0.998 [0.995, 0.999] at image-mean level." Remove the paired t-test and the p-value as evidence of agreement: a significant ICC only rejects zero, and a non-significant t-test is not evidence of equivalence.
+
+**Why:** Reviewer 2 (item 12) asks for the ICC value, its 95 % confidence interval and its type, none of which the submitted text gives; it reports only 'high ICC values and no significant difference', which is not an agreement argument.
+
+**Reviewer item:** R2-12, R4-4
+
+<!-- source: outputs/03_oracle/intra_observer.md -->
+
+### manuscript · Abstract (Limitations)
+
+**Current (replace):**
+
+> Conclusions: The proposed framework enables objective quantification of gingival display and translates these measurements into structured clinical decision support for etiological interpretation and treatment planning.
+
+**Proposed:**
+
+ADD a limitations sentence to the Abstract, before the conclusions: "Limitations: single-centre, single-device data with no external validation; the clinical reference was measured by one examiner, with intra-observer ICC(2,1) 0.995 [0.994, 0.997] and a tooth-site standard deviation of 0.167 mm; and the etiological and treatment layer was compared with independent clinical assessment as an agreement analysis rather than validated as a decision tool."
+
+**Why:** Reviewer 3 (Abstract 2) asks for the single-centre design, the single examiner and the absence of clinical assessment to be stated in the Abstract itself, not only in the Discussion.
+
+**Reviewer item:** R3-Abstract-2, R2-7
+
+<!-- source: outputs/03_oracle/intra_observer.md -->
+
+### manuscript · Discussion (duplicate conclusion)
+
+**Current (replace):**
+
+> In conclusion, the multi-stage artificial intelligence model developed in this study demonstrates that smile analysis can be transformed from a purely quantitative measurement level into a structured clinical workflow incorporating etiological classification and treatment guidance.
+
+**Proposed:**
+
+DELETE this closing paragraph of the Discussion. The manuscript carries a separate Conclusion section, so the conclusion appears twice; keep the section and remove the paragraph.
+
+**Why:** Reviewer 3 (Discussion 4) points out the duplication.
+
+**Reviewer item:** R3-Discussion-4
+
+### manuscript · Limitations
+
+**Current (replace whole paragraph):**
+
+> This study has several limitations.
+
+**Proposed:**
+
+REWRITE the limitations paragraph so that each limitation is named and, where possible, quantified: (i) selection bias — a single centre's archive over one recruitment window, one camera and one setup, so the cohort is a convenience sample and no external validity is claimed; the learning curve had not plateaued (mask mAP@50 over both classes (COCO, `val/segm_mAP_50`) 0.760, 0.787, 0.776 and 0.804 at 211, 423, 635 and 846 training images), so more and more varied data could still help; (ii) a single examiner produced both the annotations and the clinical reference, so only intra-observer reliability is currently available (tooth-site ICC(2,1) 0.995 [0.994, 0.997], SD 0.167 mm), and the inter-observer component is being collected in the expert study; (iii) demographic bias — the demographic coverage is reported per group rather than assumed, and skin and gingival pigmentation were not recorded at all; (iv) the etiological layer takes only the millimetre value as input: lip length, cephalometric and periodontal findings are not inputs, so its output is a list of candidates, not a diagnosis.
+
+**Why:** Reviewer 3 (Discussion 3) asks for selection bias, the single examiner and demographic bias; Reviewers 3 and 4 both object that an etiology cannot follow from millimetres alone, which belongs here as a stated limit of the design.
+
+**Reviewer item:** R3-Discussion-3, R3-Methods-10, R4-9, R2-7
+
+<!-- source: outputs/07_report/tables/demographics.csv; outputs/03_oracle/intra_observer.md; outputs/07_report/tables/learning_curve.md -->
+
+### manuscript · Abbreviations
+
+**Current (replace):**
+
+> Objectives: The aim of this study was to develop and evaluate an artificial intelligence (AI)-based framework for quantitative assessment of gingival display from smile photographs and subsequent etiological interpretation and treatment planning.
+
+**Proposed:**
+
+Expand every abbreviation at first mention throughout: YOLO (You Only Look Once), RF-DETR (Receptive Field enhanced DEtection TRansformer), mAP (mean average precision), IoU (intersection over union), MAE (mean absolute error), RMSE (root mean square error), ICC (intraclass correlation coefficient), LoA (limits of agreement). Add a definitions list if the journal allows one. In the same sentence, state one primary objective and list the secondary objectives separately, as Reviewer 3 asks in Introduction 3.
+
+**Why:** Reviewer 3 (Methods 11) notes that abbreviations such as YOLO are never expanded, and (Introduction 3) that several objectives are presented at once.
+
+**Reviewer item:** R3-Methods-11, R3-Intro-3
 
 ## Appendix B
 
