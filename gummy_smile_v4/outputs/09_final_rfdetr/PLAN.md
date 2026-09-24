@@ -266,3 +266,87 @@ architecture comparison or the primary outcome of §5 depends on it.
 **Unchanged.** §3 itself: the same subsets, the same validation set, the same 100 % point reused rather
 than retrained, one evaluator and one split for all four points. Reporting a curve that does not
 plateau is what §3 pre-registered as one of its two possible outcomes.
+
+## Amendment 5 — 24 Sep 2026: seed spread of the reported measurement (pre-registration)
+
+**Written and committed before any of these runs.** Nothing below was known when it was written.
+
+### A5.1 The gap this closes
+
+Every measurement number in the manuscript comes from one seed. The final model is the seed-42 run
+of the architecture comparison (§1) and the five fold models that produce the out-of-fold masks were
+all trained with seed 42. The architecture comparison did measure a between-seed spread — three
+seeds per architecture, SD of the mean absolute error 0.011 mm for RF-DETR-Seg Large and 0.089 mm
+for YOLOv11x-seg — but on 29 images, on the comparison's own single-model predictions, not on the
+five-fold out-of-fold pipeline the manuscript reports. The reported ICC, Bland–Altman bias and class
+agreement have no measured run-to-run spread at all. A reviewer is entitled to ask what happens if
+the seed changes, and at the moment we cannot answer.
+
+### A5.2 What is run
+
+The five-fold out-of-fold pipeline of §2, unchanged in every respect except the seed, repeated for
+**seed 43** and **seed 44**: ten trainings, about 30 hours. The same fold assignments
+(`data/manifest/splits.json`), the same datasets, the same resolution 624, the same published
+defaults, the same early stopping, the same measurement method `C_p25` at 16.84 px/mm, the same 145
+reference images.
+
+Each seed writes to its own directory — `outputs/05_predictions/oof_rfdetr_s43` and `…_s44` — so no
+run can accumulate into another's table. Seed 42's existing masks in `outputs/05_predictions/oof_rfdetr`
+are not touched, not re-run and not regenerated.
+
+### A5.3 What this analysis may and may not do
+
+Fixed now, because this is the point at which a seed study turns into seed shopping:
+
+* **The purpose is to report the variability of the measurement result from seed to seed. Nothing else.**
+* **The final model stays seed 42.** It is the protocol's first seed and it was fixed before the
+  architecture comparison ran. No model selection, no configuration change, no change of measurement
+  method, scale or offset follows from this analysis, whatever it shows. If seed 43 or 44 turns out
+  to give a lower error, that is a number in the spread table and nothing more — it does not become
+  the reported model, and the reported model is not re-chosen on this evidence.
+* **The result is reported whichever way it comes out**, including a spread large enough to weaken
+  the architecture conclusion.
+* No analysis in this amendment touches the fixed test set. The 29-image test subset appears only
+  where it already appears in §5, as a labelled subset of the out-of-fold table.
+
+### A5.4 What is reported
+
+**Primary.** For each of the three seeds, on the same 145 out-of-fold reference images: mean absolute
+error, RMSE, ICC(2,1), Bland–Altman bias and limits of agreement, threshold-label agreement and
+linear-weighted κ. Reported per seed and as **mean ± SD over the three seeds**, which is the number
+that answers the "single seed" objection.
+
+**Secondary.** The paired difference between each pair of seeds on the shared images, with its 95 %
+bootstrap confidence interval, computed by the same `paired_difference` used for the architecture
+comparison, so that the seed spread and the architecture difference are measured the same way and
+can be put side by side.
+
+**The comparison that gives it meaning.** The between-seed spread is reported against the
+architecture lead of **0.293 mm [0.150, 0.439]** that changed the final model. Fixed now, before the
+numbers exist:
+
+* if the largest paired between-seed difference is small relative to 0.293 mm and its interval
+  contains zero, the architecture conclusion stands as written and the seed spread is reported as
+  evidence that it does;
+* if the between-seed spread is **of the same order as 0.293 mm**, that is written into the
+  Limitations as a limitation of the architecture comparison — that a difference of this size cannot
+  be cleanly separated from run-to-run variation in the five-fold pipeline — and the architecture
+  result is reported with that caveat attached wherever it is quoted. The architecture comparison is
+  not re-run and its conclusion is not reversed on this evidence: it was decided under its own
+  pre-registered rule, on its own three seeds per architecture, and this is a different measurement.
+
+**Where it is used.** As the answer to a reviewer's "all your results come from one seed" objection,
+in the Limitations, and beside the architecture comparison wherever the 0.293 mm lead is quoted.
+
+### A5.5 Integrity
+
+The class check (`scripts/check_mask_classes.py`) runs after every prediction and a mismatch aborts
+the run, as in `train_final_rfdetr.sh`. This is not optional here: the label-space fault of
+`outputs/08_architecture/PROTOCOL.md` Amendment 2 was invisible in the segmentation metrics and
+visible only in the measurement, which is exactly the quantity this amendment reports.
+
+### A5.6 What is unchanged
+
+§1 to §9 of this plan, Amendments 1 to 4, the primary outcome, the sensitivity analysis, the method
+and the scale of Stage 3, and every number already reported. This amendment adds a table; it removes
+and replaces nothing.

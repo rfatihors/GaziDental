@@ -78,4 +78,6 @@ Images are read from `../gummy_smile_v3/data/coco_dataset/` (path set once in
 | 4 | Expert-agreement analysis | done on synthetic forms — `scripts/run_expert_analysis.py [--synthetic]` |
 | 5 | Training pipeline | written + dry-run; run `scripts/train_all.sh` on the workstation (`scripts/README_TRAINING.md`) |
 | 6 | Accuracy on predicted masks | done for YOLOv11x — `scripts/run_prediction_eval.py`; repeated with RF-DETR in `outputs/09_final_rfdetr/` (method and scale stay C_p25 / 16.84 px/mm) |
-| 7 | Reporting | local part done — `scripts/build_report.py --stage6 09_final_rfdetr` (pending items fill in on re-run) |
+| 7 | Reporting | done except the expert table — `scripts/build_report.py --stage6 09_final_rfdetr` (re-run when the expert forms arrive) |
+| 8 | Architecture comparison | done — `scripts/run_architecture_comparison.py`; pre-registered in `outputs/08_architecture/PROTOCOL.md`, decision rule triggered, final model changed to RF-DETR-Seg Large |
+| 9 | Seed spread | pre-registered in `outputs/09_final_rfdetr/PLAN.md` Amendment 5; run `scripts/train_seed_spread.sh` on the workstation, then `scripts/run_seed_spread.py` |

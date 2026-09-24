@@ -403,3 +403,59 @@ evaluator that belongs to those masks — Ultralytics `val()` for YOLO, RF-DETR'
 not run, `segmentation_metrics.md` stays empty and says what to run. The YOLOv11x numbers remain
 available as rows explicitly marked `[reference] YOLOv11x (previous final model)`, computed on its
 own masks and never merged into the new model's rows.
+
+## 9. Seed spread of the reported measurement (PLAN.md Amendment 5)
+
+**Read `outputs/09_final_rfdetr/PLAN.md`, Amendment 5, first.** It is the pre-registration and it was
+committed before any of these runs. The short version: this measures how much the reported millimetre
+result moves when only the seed changes, and it decides nothing. **The final model stays seed 42**,
+whatever these runs show — no model, configuration, method or scale is selected here.
+
+Ten trainings, about 30 hours: the five-fold out-of-fold pipeline of PLAN.md §2 repeated with seed 43
+and seed 44. Seed 42 is not re-run; its masks in `outputs/05_predictions/oof_rfdetr` are the reported
+ones and are left untouched.
+
+```bash
+tmux new -s spread
+bash scripts/train_seed_spread.sh 2>&1 | tee -a logs/seed_spread.out
+```
+
+The script is restartable: every step is skipped when `runs/rfdetr/<name>/DONE` exists, so an
+interrupted run is resumed by re-running the same command. Each seed writes to its own directory
+(`outputs/05_predictions/oof_rfdetr_s43`, `…_s44`) through the new `--masks-out` flag of
+`rfdetr_train_predict.py` — the folds of one seed accumulate into one table and two seeds must never
+accumulate into the same one. `scripts/check_mask_classes.py` runs after every prediction and a
+mismatch aborts the script; that is not optional here, because the label-space fault of
+`outputs/08_architecture/PROTOCOL.md` Amendment 2 was invisible in the segmentation metrics and
+visible only in the measurement, which is exactly the quantity this produces.
+
+One fold can also be run by hand, for example to redo a single failure:
+
+```bash
+.venv-rfdetr/bin/python scripts/rfdetr_train_predict.py --variant fold2 --seed 43 \
+    --masks-out outputs/05_predictions/oof_rfdetr_s43
+python scripts/check_mask_classes.py --masks outputs/05_predictions/oof_rfdetr_s43 --n 6
+```
+
+Then, in the training venv (not `.venv-rfdetr`):
+
+```bash
+python scripts/run_seed_spread.py --seeds 42 43 44      # -> outputs/10_seed_spread/
+```
+
+It measures every seed's out-of-fold masks with the same fixed method and scale as everything else
+(nothing is selected or fitted), and writes `per_seed.csv`, `summary.csv` (mean ± SD over the seeds),
+`paired_seeds.csv` (the paired difference between each pair of seeds, by the same `paired_difference`
+the architecture comparison used, so the two spreads are comparable), `per_image_by_seed.csv`,
+`RESULTS.md` and `OZET.md`. `RESULTS.md` applies the reading that Amendment 5 A5.4 fixed in advance:
+the spread is put against the 0.293 mm architecture lead, and if it is of the same order, that becomes
+a stated limitation of the architecture comparison rather than a reversal of it.
+
+The script refuses to report a run that shows the label-space signature (instances dropped for having
+no role, or no lip mask anywhere), refuses a directory holding more than one seed, and refuses to run
+at all if a post-hoc offset has been re-enabled in the config.
+
+**What to commit afterwards:** `outputs/10_seed_spread/` (small CSV/MD/PNG) and the per-seed
+prediction tables `outputs/05_predictions/oof_rfdetr_s4*/oof_predictions.csv`. The mask PNGs of
+seeds 43 and 44 are intermediate — they are the input to one table and are rebuilt by re-running the
+folds — and `.gitignore` already excludes them; the reported seed-42 masks stay versioned.

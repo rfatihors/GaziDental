@@ -222,7 +222,12 @@ def run_prediction(model, ds: Path, out: Path, spec: dict, tag: str, seed: int, 
     if args.no_predict or not spec.get("masks"):
         print(f"[rfdetr] no prediction for variant {args.variant} (it contributes a metric, not masks)")
         return
-    masks = ROOT / spec["masks"]
+    # --masks-out keeps a second seed's out-of-fold set in its own directory: the folds of one seed
+    # accumulate into one table, and two seeds must never accumulate into the same one
+    # (outputs/09_final_rfdetr/PLAN.md, Amendment 5).
+    masks = Path(args.masks_out) if args.masks_out else ROOT / spec["masks"]
+    if not masks.is_absolute():
+        masks = ROOT / masks
     csv_path = masks / spec["csv"]
     uid_filter = Path(args.uid_filter) if args.uid_filter else (out / "arch_test_high_uids.csv" if args.variant == "main" and (out / "arch_test_high_uids.csv").exists() else None)
     predict(model, ds, masks, csv_path, tag, seed, model_label, uid_filter=uid_filter, fold=spec.get("fold"))
@@ -235,6 +240,9 @@ def main() -> int:
     ap.add_argument("--dataset", default=None, help="default data/rfdetr_dataset[_<variant>]")
     ap.add_argument("--no-predict", action="store_true", help="train and evaluate only (learning-curve subsets)")
     ap.add_argument("--uid-filter", default=None, help="CSV with a uid column; predict only those images")
+    ap.add_argument("--masks-out", default=None,
+                    help="write the masks and the prediction table here instead of the variant's default directory; "
+                         "the seed-spread runs of PLAN.md Amendment 5 give each seed its own out-of-fold directory")
     ap.add_argument("--out", default="outputs/08_architecture")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--epochs", type=int, default=EPOCHS)

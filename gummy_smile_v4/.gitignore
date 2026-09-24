@@ -25,6 +25,10 @@ outputs/05_predictions/smoke/
 # architecture-comparison masks are intermediate (about 500 files); the tables and the
 # protocol are versioned, the masks are rebuilt by re-running the comparison
 outputs/08_architecture/masks/
+# seed-spread masks (PLAN.md Amendment 5) are intermediate in the same way: the reported seed-42
+# masks stay versioned, seeds 43/44 are rebuilt by re-running their folds. Their prediction tables
+# are small and ARE versioned, because the spread table is read from them.
+outputs/05_predictions/oof_rfdetr_s*/*.png
 data/rfdetr_dataset/
 logs/
 # Generated YOLO dataset (symlinks + labels) is rebuilt from the manifest

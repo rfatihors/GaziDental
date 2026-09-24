@@ -1,3 +1,4 @@
+import importlib.util
 import json
 
 import pytest
@@ -156,3 +157,25 @@ def test_estimator_sensitivity_is_a_sensitivity_table_not_a_selection(tmp_path):
     assert st2["regioning_fallback_predicted_masks"] == "19 % (27 of 145 images)"
     assert "30 %" in st2["fallback_reeval_threshold"] and "not reached" in st2["fallback_reeval_threshold"]
 
+
+_spread_spec = importlib.util.spec_from_file_location(
+    "run_seed_spread", Path(__file__).resolve().parent.parent / "scripts" / "run_seed_spread.py")
+run_seed_spread = importlib.util.module_from_spec(_spread_spec)
+_spread_spec.loader.exec_module(run_seed_spread)
+
+
+def _oof(seed, n=3, n_ignored=0, n_lip=1):
+    return pd.DataFrame({"uid": [f"high/i{i}" for i in range(n)], "image": [f"i{i}" for i in range(n)],
+                         "seed": seed, "n_ignored": n_ignored, "n_lip": n_lip})
+
+
+def test_seed_spread_refuses_what_it_cannot_report():
+    run_seed_spread.check_seed_directory(_oof(43), 43, "d")           # the good case raises nothing
+    with pytest.raises(SystemExit, match="each seed needs its own directory"):
+        run_seed_spread.check_seed_directory(pd.concat([_oof(43), _oof(44)]), 43, "d")
+    with pytest.raises(SystemExit, match="expected"):
+        run_seed_spread.check_seed_directory(_oof(42), 43, "d")
+    with pytest.raises(SystemExit, match="label-space fault"):        # an instance dropped for having no role
+        run_seed_spread.check_seed_directory(_oof(43, n_ignored=1), 43, "d")
+    with pytest.raises(SystemExit, match="no image has a lip mask"):
+        run_seed_spread.check_seed_directory(_oof(43, n_lip=0), 43, "d")
