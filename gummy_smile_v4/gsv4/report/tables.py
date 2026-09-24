@@ -232,8 +232,13 @@ def learning_curve_facts(tab: Path, fallback_md: Path) -> Dict[str, Any]:
     here assumes which; the plateau wording downstream follows the verdict in the file, never the other
     way round.
     """
-    df = pd.read_csv(tab / "learning_curve.csv")
     meta = tab / "learning_curve.md"
+    if meta.exists() and "PENDING — needs:" in meta.read_text(encoding="utf-8"):
+        # the CSV beside it is then the previous model's curve, left behind by an earlier build
+        raise SystemExit(f"{meta} is pending: {meta.read_text(encoding='utf-8').split('needs:')[-1].strip()}\n"
+                         "The rebuttal is not written from another model's learning curve; produce that file and "
+                         "re-run scripts/build_report.py first.")
+    df = pd.read_csv(tab / "learning_curve.csv")
     metric = _md_meta(meta, "metric") or ("diseti_seg_map50" if "diseti_seg_map50" in df.columns else "")
     if metric not in df.columns:
         raise SystemExit(f"{tab / 'learning_curve.csv'} carries no readable curve metric ({metric!r}); "

@@ -114,6 +114,12 @@ def main() -> int:
     if len(evals) != 1:
         raise SystemExit(f"the points come from different evaluators {sorted(evals)} — one curve, one evaluator (PLAN.md 4).")
     split, evaluator = splits.pop(), evals.pop()
+    # The subset runs predate the evaluator field (PLAN.md Amendment 2), so for them the one-evaluator
+    # rule is an assumption rather than a check. Say how many points actually recorded it.
+    n_recorded = int(df["evaluator"].notna().sum())
+    evaluator_note = ("" if n_recorded == len(df) else
+                      f" Recorded by {n_recorded} of the {len(df)} points; the others were written before the metrics "
+                      "file carried the field, so for them one evaluator is an assumption, not a check.")
 
     counts = {"lc25": "lc25_train.txt", "lc50": "lc50_train.txt", "lc75": "lc75_train.txt", "final (reused)": "main_train.txt"}
     df["n_train_images"] = [len([ln for ln in (lists / counts[r]).read_text().splitlines() if ln.strip()])
@@ -138,13 +144,14 @@ def main() -> int:
     for _, r in df.iterrows():
         ax.annotate(f"{r[metric]:.3f}", (r["fraction"] * 100, r[metric]), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8)
     ax.set_xlabel("training subset, % of the training partition"); ax.set_ylabel(f"{metric} ({split} split)")
-    ax.set_title(f"RF-DETR-Seg Large @624 learning curve — {metric} on {split}, seed {args.seed} — {verdict}", fontsize=9)
+    ax.set_title(f"RF-DETR-Seg Large @624 learning curve — {verdict}\n{metric} on the {split} split, seed {args.seed}", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False); ax.grid(axis="y", color="0.9", lw=0.6); ax.set_axisbelow(True)
+    ax.margins(y=0.15)                            # headroom for the value printed above the last point
     fig.tight_layout(); fig.savefig(out_dir / "learning_curve.png", dpi=PLOT_DPI); plt.close(fig)
 
     text = f"""# Learning curve — RF-DETR-Seg Large @624 (PLAN.md 3)
 
-Model: **RF-DETR-Seg Large @624, seed {args.seed}**; evaluator: **{evaluator}**; split: **{split}**; metric: **{metric}**.
+Model: **RF-DETR-Seg Large @624, seed {args.seed}**; evaluator: **{evaluator}**; split: **{split}**; metric: **{metric}**.{evaluator_note}
 Each point is that training run's own COCO evaluation (`{args.metrics_dir}/rfdetr_metrics_*.json`); the 100 % point is the
 final model of PLAN.md 1, reused rather than retrained and evaluated on the same split as the subsets. The YOLOv11x
 learning curve is not mixed in here: it belongs to the previous final model and stays in the appendix.
