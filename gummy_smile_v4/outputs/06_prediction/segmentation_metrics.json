@@ -1,0 +1,158 @@
+{
+ "model": "yolo11x-seg @640",
+ "masks": "outputs/05_predictions/test",
+ "evaluator": "Ultralytics val() (box/mask P, R, F1, mAP@50, mAP@50-95)",
+ "source": "outputs/05_predictions/test_metrics.json",
+ "available": true,
+ "metrics": {
+  "weights": "/home/fatihors/Projects/GaziDental/gummy_smile_v4/runs/final/weights/best.pt",
+  "split": "test",
+  "n_images": 192,
+  "per_class": {
+   "diseti": {
+    "box_precision": 0.6666666666666666,
+    "box_recall": 0.684931506849315,
+    "box_f1": 0.6756756756756757,
+    "box_map50": 0.5724084053379436,
+    "box_map50_95": 0.2565326933005132,
+    "seg_precision": 0.53,
+    "seg_recall": 0.5445205479452054,
+    "seg_f1": 0.5371621621621622,
+    "seg_map50": 0.41451204464984426,
+    "seg_map50_95": 0.15881590370916226
+   },
+   "dudak": {
+    "box_precision": 0.9895287958115183,
+    "box_recall": 0.9947368421052631,
+    "box_f1": 0.9921259842519685,
+    "box_map50": 0.9917894736842102,
+    "box_map50_95": 0.731505326504651,
+    "seg_precision": 0.9842931937172775,
+    "seg_recall": 0.9894736842105263,
+    "seg_f1": 0.9868766404199475,
+    "seg_map50": 0.9813002392344495,
+    "seg_map50_95": 0.6919370491922113
+   },
+   "all": {
+    "box_map50": 0.7820989395110769,
+    "box_map50_95": 0.4940190099025822,
+    "box_precision": 0.8280977312390925,
+    "box_recall": 0.839834174477289,
+    "seg_map50": 0.6979061419421468,
+    "seg_map50_95": 0.4253764764506867,
+    "seg_precision": 0.7571465968586388,
+    "seg_recall": 0.7669971160778659
+   }
+  },
+  "speed_ms": {
+   "preprocess": 0.6004869842399785,
+   "inference": 4.349766484513869,
+   "loss": 0.00029252047776632634,
+   "postprocess": 0.439363036245292
+  },
+  "confusion_matrix": [
+   [
+    419.0,
+    0.0,
+    181.0
+   ],
+   [
+    1.0,
+    190.0,
+    0.0
+   ],
+   [
+    164.0,
+    0.0,
+    0.0
+   ]
+  ],
+  "boundary_n_images": 192,
+  "boundary_summary": {
+   "gingiva_mask_iou": {
+    "mean": 0.507549446288959,
+    "median": 0.5484873692045007
+   },
+   "gingiva_boundary_iou": {
+    "mean": 0.274948538085851,
+    "median": 0.2886046511627907
+   },
+   "gingiva_n_columns_gt": {
+    "mean": 368.7291666666667,
+    "median": 279.5
+   },
+   "gingiva_n_columns_pred": {
+    "mean": 371.9583333333333,
+    "median": 302.0
+   },
+   "gingiva_n_columns_both": {
+    "mean": 327.8333333333333,
+    "median": 244.0
+   },
+   "gingiva_columns_missed_frac": {
+    "mean": 0.1662224343612395,
+    "median": 0.05775017824938137
+   },
+   "gingiva_columns_spurious_frac": {
+    "mean": 0.14835944181091895,
+    "median": 0.047344674981320764
+   },
+   "gingiva_top_edge_mae_px": {
+    "mean": 5.068004309661419,
+    "median": 3.698883283887066
+   },
+   "gingiva_top_edge_median_px": {
+    "mean": 4.467105263157895,
+    "median": 3.0
+   },
+   "gingiva_top_edge_bias_px": {
+    "mean": 0.27262704680664346,
+    "median": -0.5314111579934364
+   },
+   "gingiva_bottom_edge_mae_px": {
+    "mean": 11.154076921752528,
+    "median": 10.110105580693816
+   },
+   "gingiva_bottom_edge_median_px": {
+    "mean": 10.447368421052632,
+    "median": 10.0
+   },
+   "gingiva_bottom_edge_bias_px": {
+    "mean": 9.707042849889088,
+    "median": 9.288041638456331
+   },
+   "gingiva_thickness_mae_px": {
+    "mean": 12.041576674710479,
+    "median": 10.641917730779461
+   },
+   "lip_mask_iou": {
+    "mean": 0.7855372942288855,
+    "median": 0.8160770057949238
+   },
+   "lip_boundary_iou": {
+    "mean": 0.2210306077438452,
+    "median": 0.22204402349970626
+   }
+  },
+  "boundary_by_group": {
+   "high": {
+    "gingiva_mask_iou": 0.7634131680388595,
+    "gingiva_boundary_iou": 0.28118889849067286,
+    "gingiva_top_edge_mae_px": 5.458826124524501,
+    "gingiva_bottom_edge_mae_px": 12.719360789270844
+   },
+   "low": {
+    "gingiva_mask_iou": 0.279535685568267,
+    "gingiva_boundary_iou": 0.22839912453544722,
+    "gingiva_top_edge_mae_px": 2.84621333974878,
+    "gingiva_bottom_edge_mae_px": 8.903837970143911
+   },
+   "normal": {
+    "gingiva_mask_iou": 0.492330827592235,
+    "gingiva_boundary_iou": 0.2836455724842604,
+    "gingiva_top_edge_mae_px": 5.317406327184866,
+    "gingiva_bottom_edge_mae_px": 11.086726261557388
+   }
+  }
+ }
+}

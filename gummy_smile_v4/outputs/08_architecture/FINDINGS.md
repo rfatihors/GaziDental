@@ -46,8 +46,8 @@ geometry already had and a part the segmentation adds:
 
 | final model | pipeline MAE vs clinical reference | same method on GT masks | what the model adds | lower gingival edge bias |
 |---|---|---|---|---|
-| RF-DETR-Seg Large @624 (current) | 0.52 mm | 0.54 mm | ≈ 0 | +0.08 mm |
-| YOLOv11x-seg @640 (previous) | 0.84 mm | 0.54 mm | +0.30 mm | +0.66 mm |
+| RF-DETR-Seg Large @624 (current) | 0.52 mm | 0.55 mm | ≈ 0 | +0.07 mm |
+| YOLOv11x-seg @640 (previous) | 0.84 mm | 0.55 mm | +0.29 mm | +0.66 mm |
 
 This is the result that gives the architecture comparison its clinical meaning. With RF-DETR the
 pipeline measures gingival display as accurately as the annotation itself allows: the remaining error

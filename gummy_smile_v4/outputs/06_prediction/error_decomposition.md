@@ -4,20 +4,20 @@ total = pipeline − reference = (pipeline − GT-mask measurement) + (GT-mask m
 
 | component | bias, mm | MAE, mm | SD, mm | RMSE, mm |
 |---|---|---|---|---|
-| total (pipeline − reference) | +0.684 | 0.839 | 0.730 | 0.999 |
-| segmentation (pipeline − GT-mask) | +0.534 | 0.580 | 0.407 | 0.671 |
-| geometry (GT-mask − reference) | +0.150 | 0.544 | 0.746 | 0.759 |
+| total (pipeline − reference) | +0.684 | 0.839 | 0.730 | 0.998 |
+| segmentation (pipeline − GT-mask) | +0.530 | 0.577 | 0.406 | 0.667 |
+| geometry (GT-mask − reference) | +0.154 | 0.549 | 0.750 | 0.763 |
 
-Variance of the total error: 31 % segmentation, 104 % geometry, -36 % covariance (r between the two components -0.31).
+Variance of the total error: 31 % segmentation, 106 % geometry, -37 % covariance (r between the two components -0.32).
 
 ## Segmentation-induced error vs boundary metrics of the same image
 Pixel metrics converted to mm; slope in mm of measurement error per mm (or per unit) of the metric.
 
 | metric | n | r | r_p | slope | intercept |
 |---|---|---|---|---|---|
-| gingiva_mask_iou | 144 | -0.175 | 0.036 | -0.771 | 1.123 |
-| gingiva_top_edge_bias_mm | 144 | -0.307 | 0.000 | -0.340 | 0.589 |
-| gingiva_bottom_edge_bias_mm | 144 | 0.435 | 0.000 | 0.403 | 0.267 |
-| gingiva_thickness_mae_mm | 144 | 0.355 | 0.000 | 0.570 | 0.122 |
-| gingiva_columns_missed_frac | 144 | 0.103 | 0.218 | 0.661 | 0.511 |
-| gingiva_columns_spurious_frac | 144 | -0.069 | 0.410 | -1.130 | 0.551 |
+| gingiva_mask_iou | 144 | -0.184 | 0.027 | -0.812 | 1.150 |
+| gingiva_top_edge_bias_mm | 144 | -0.313 | 0.000 | -0.346 | 0.586 |
+| gingiva_bottom_edge_bias_mm | 144 | 0.438 | 0.000 | 0.405 | 0.262 |
+| gingiva_thickness_mae_mm | 144 | 0.369 | 0.000 | 0.590 | 0.103 |
+| gingiva_columns_missed_frac | 144 | 0.107 | 0.203 | 0.682 | 0.506 |
+| gingiva_columns_spurious_frac | 144 | -0.063 | 0.451 | -1.033 | 0.545 |

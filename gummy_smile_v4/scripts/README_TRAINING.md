@@ -404,6 +404,38 @@ not run, `segmentation_metrics.md` stays empty and says what to run. The YOLOv11
 available as rows explicitly marked `[reference] YOLOv11x (previous final model)`, computed on its
 own masks and never merged into the new model's rows.
 
+## 8b. Re-measure the architecture comparison (PLAN.md Amendment 6)
+
+**Do this first, before the seed-spread runs.** A tie between two exactly equally deep zenith
+candidates used to be broken by an unstable sort inside `find_peaks`, so the same masks measured on a
+machine with a different numpy gave a different answer on a few images. It is fixed
+(`gsv4.measure.regions.select_by_distance`) and Stage 3 and both Stage-6 runs have been regenerated,
+but the architecture comparison's masks are git-ignored and could not be re-measured off the
+workstation. Its `selected_mm` columns still carry the old tie order and the old scale
+(16.8397 rather than 16.8422 px/mm), so:
+
+```bash
+git pull
+python scripts/run_architecture_comparison.py --measure-only    # re-measures the five configurations
+python scripts/run_architecture_comparison.py --aggregate-only  # rebuilds RESULTS.md from them
+git add outputs/08_architecture && git commit -m "architecture comparison re-measured after the zenith tie fix" && git push
+```
+
+No training is involved; it reads `outputs/08_architecture/masks/` and takes minutes. The expected
+effect is far below the reported precision (Amendment 6 A6.6 states why, before the run), but the
+re-measured tables replace the current ones whatever they show.
+
+Anywhere a stored result table sits next to the masks it came from, this checks that one follows from
+the other:
+
+```bash
+python scripts/verify_measurement_reproducible.py                                  # Stage 6, RF-DETR
+python scripts/verify_measurement_reproducible.py --stage6 03_oracle --oof-masks gt # Stage 3
+python scripts/verify_measurement_reproducible.py --stage6 06_prediction --oof-masks outputs/05_predictions/oof
+```
+
+It exits non-zero on any difference and names the images.
+
 ## 9. Seed spread of the reported measurement (PLAN.md Amendment 5)
 
 **Read `outputs/09_final_rfdetr/PLAN.md`, Amendment 5, first.** It is the pre-registration and it was

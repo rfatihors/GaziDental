@@ -350,3 +350,131 @@ visible only in the measurement, which is exactly the quantity this amendment re
 §1 to §9 of this plan, Amendments 1 to 4, the primary outcome, the sensitivity analysis, the method
 and the scale of Stage 3, and every number already reported. This amendment adds a table; it removes
 and replaces nothing.
+
+## Amendment 6 — 24 Sep 2026: the measurement was not reproducible across machines, and why
+
+**This was found while validating the seed-spread script of Amendment 5 against the existing seed-42
+masks, before any seed-spread run.** It is a defect in our own code, it is fixed, and everything it
+touched has been regenerated. Nothing here was chosen after seeing which way it would move a result.
+
+### A6.1 The symptom
+
+Re-measuring `outputs/05_predictions/oof_rfdetr` with the committed code gave a `C_p25` value for
+`high/IMG_6724_jpg` of 26.083 px, while the committed Stage-6 table beside those masks said 26.667 px
+— 0.035 mm apart. The mask had not changed (same commit), the measurement code had not changed
+(`git log` over `gsv4/measure`, `gsv4/masks` and `gsv4/eval/oracle.py` since the Stage-6 run is empty),
+and three repeated runs on this machine gave the same answer every time. Same code, same input,
+different answer — on a different machine.
+
+### A6.2 The cause, located exactly
+
+Method C takes the local minima of the smoothed thickness profile as zenith candidates and enforces a
+minimum separation through `scipy.signal.find_peaks(distance=…)`. For this image the candidates at
+columns 943 and 992 are both zero-thickness plateaus, so their depth is *exactly* equal — 130.0 and
+130.0, not nearly equal — and they are 49 columns apart against a minimum separation of 81. Exactly
+one of the two can survive, and `find_peaks` decides which by ordering the candidates with
+`np.argsort(priority)`, whose default sort is **not stable**. With an exact tie the survivor is
+therefore chosen by the sort implementation, not by the data:
+
+| priority | survivors |
+|---|---|
+| 943 and 992 exactly tied | 992 |
+| 943 deeper by 1e-9 | 943 |
+| 992 deeper by 1e-9 | 992 |
+
+The workstation runs numpy 2.3.5 (`outputs/08_architecture/rfdetr_environment.json`) and this machine
+numpy 1.26.4; the two sort implementations break the tie the other way round. Regioning B has the same
+defect in two places: the same `distance` filter, and `np.argsort(prom)[::-1]` when more papillae are
+found than needed. Regioning A (equal splits) is unaffected and never differed.
+
+Exact ties are not rare here: both regionings key on plateaus of a profile quantised to whole pixels,
+and any two stretches with no gingiva are *exactly* equally deep.
+
+### A6.3 How wide it was
+
+`scripts/verify_measurement_reproducible.py` re-measures a stored table from the masks beside it and
+reports every difference. Against the pre-fix code:
+
+| stored table | masks | images differing (of 145) | of them, the reported method `C_p25` | largest difference |
+|---|---|---|---|---|
+| `outputs/03_oracle/` (Stage 3, GT masks) | COCO annotations | **0** | 0 | — |
+| `outputs/09_final_rfdetr/` (Stage 6) | `oof_rfdetr` | 10 | 1 | 0.31 mm (`B_median`), 0.035 mm in `C_p25` |
+
+That split is itself the proof: Stage 3 was run on this machine and reproduces bit for bit, Stage 6
+was run on the workstation and does not. It is an environment difference, not staleness and not
+non-determinism within one machine.
+
+### A6.4 The fix
+
+`gsv4.measure.regions.select_by_distance` now performs the minimum-separation filter. The greedy is
+scipy's own, step for step, so nothing but the tie can move; what is new is that the order among
+*equal* priorities is stated instead of inherited from a sort:
+
+* **zeniths (C):** on an exact tie the candidate **nearer the dental midline** is kept — the criterion
+  method C already uses to choose its zeniths, and symmetric about the midline, so it favours neither
+  side of the arch;
+* **papillae (B):** on an exact tie the **leftmost** is kept, left to right across the arch. The rest
+  of `regions_festoon` now reproduces `find_peaks`' own order explicitly (all maxima → separation on
+  the profile height → prominence threshold on the survivors), because `find_peaks` applies `distance`
+  before `prominence` and a re-ordering there would have changed more than the tie.
+
+Three tests hold this: the same mask measured four times must give identical bits, not close numbers;
+`select_by_distance` must match `find_peaks(distance=…)` exactly on 50 random signals with no ties;
+and the tie rules must pick the documented candidate and mirror when the profile is mirrored.
+
+### A6.5 What it changed, and what it did not
+
+Stage 3 was re-run with `--write-config`, because the selection rule of Stage 3 has to be executed by
+the code that measures. **The pre-registered method is unchanged: `C_p25`**, still the lowest dev MAE,
+still the only combination within the 0.02 mm simplicity tolerance. The scale moved from **16.8397 to
+16.8422 px/mm** (0.015 %). Stage 6 was then re-run for both final models, and every Stage-7 table,
+figure, rebuttal answer and manuscript edit regenerated from them.
+
+The reported millimetre results are unchanged at the precision they are reported in:
+
+| quantity | before | after |
+|---|---|---|
+| primary, out-of-fold, MAE / ICC(2,1) / bias / κ | 0.521 / 0.877 / +0.270 / 0.72 | 0.521 / 0.877 / +0.270 / 0.72 |
+| test set with the final model, MAE | 0.671 | 0.671 |
+| pre-registered sensitivity (116 images), MAE | 0.506 | 0.506 |
+
+What did move, all of it on the **annotated** masks, where exact ties are commoner:
+
+| quantity | before | after |
+|---|---|---|
+| GT masks, all 145 reference images, MAE | 0.542 | 0.546 |
+| GT masks, Stage-3 holdout, MAE | 0.518 | 0.527 |
+| GT masks, ICC(2,1) all / holdout | 0.868 / 0.858 | 0.867 / 0.857 |
+| what the segmentation adds (current model) | −0.02 mm | −0.03 mm |
+| what the segmentation adds (previous model) | +0.30 mm | +0.29 mm |
+| lower gingival edge bias, current model | +0.08 mm | +0.07 mm |
+| zenith fallback rate, GT masks | 19 % (28 of 145) | 19 % (27 of 145) |
+
+None of it changes a conclusion: the segmentation still adds essentially nothing with RF-DETR and
+about 0.3 mm with YOLOv11x, and the decision rule of `outputs/08_architecture/PROTOCOL.md` §8 was
+triggered by a 0.293 mm lead that these shifts are two orders of magnitude below.
+
+### A6.6 One thing still to redo, and it is named here rather than left implicit
+
+The architecture comparison measured its five configurations on the workstation, from masks that are
+not versioned (`outputs/08_architecture/masks/`, git-ignored), so it cannot be re-measured here. Its
+`selected_mm` columns therefore still carry the old tie order and the old scale, and
+`run_architecture_comparison.py --measure-only` has to be re-run on the workstation. Two reasons this
+does not put the comparison's conclusion in question, stated before that run rather than after:
+
+* the scale changed by 0.015 %, which multiplies every configuration's error by the same factor and
+  leaves a paired difference of 0.293 mm at 0.293 mm;
+* the tie affected 1 of 145 predicted-mask images in `C_p25`, by 0.035 mm; even two affected images
+  among the 29 would move a configuration's mean absolute error by about 0.005 mm, against a lead of
+  0.293 mm with a 95 % interval of [0.150, 0.439]. The comparison is also paired and was measured for
+  all five configurations by one machine, so a tie that flips affects every configuration alike.
+
+The re-measured tables replace the current ones whatever they show, and `RESULTS.md` is regenerated
+from them.
+
+### A6.7 What is unchanged
+
+Every pre-registered decision of this plan and of `PROTOCOL.md`: the primary outcome of §5 and its
+sensitivity analysis, the offset rule of §6 and its outcome in Amendment 3, the fallback rule of §7,
+the learning-curve reading of Amendment 4, and the seed-spread pre-registration of Amendment 5, whose
+runs have not started.

@@ -6,10 +6,10 @@ Same function as on the workstation (`gsv4.eval.boundary.boundary_report`, bound
 
 | set | model | n | n_gt_gingiva | n_both | n_missed | n_spurious | n_neither | gingiva_mask_iou_n | gingiva_mask_iou_mean | gingiva_mask_iou_median | gingiva_boundary_iou_mean | gingiva_top_edge_mae_mm_mean | gingiva_top_edge_mae_mm_median | gingiva_top_edge_bias_mm_mean | gingiva_bottom_edge_mae_mm_mean | gingiva_bottom_edge_mae_mm_median | gingiva_bottom_edge_bias_mm_mean | gingiva_thickness_mae_mm_mean | gingiva_columns_missed_frac_mean | gingiva_columns_spurious_frac_mean | gingiva_n_columns_gt_median | lip_mask_iou_mean | lip_mask_iou_median |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| (a) OOF, 145 reference high | yolo11x-seg @640, 5 fold models | 145 | 145 | 144 | 1 | 0 | 0 | 145 | 0.758 | 0.774 | 0.270 | 0.322 | 0.255 | 0.160 | 0.763 | 0.729 | 0.661 | 0.724 | 0.042 | 0.015 | 935.000 | 0.794 | 0.814 |
+| (a) OOF, 145 reference high | yolo11x-seg @640, 5 fold models | 145 | 145 | 144 | 1 | 0 | 0 | 145 | 0.758 | 0.774 | 0.270 | 0.322 | 0.255 | 0.160 | 0.762 | 0.729 | 0.661 | 0.724 | 0.042 | 0.015 | 935.000 | 0.794 | 0.814 |
 | (b) test high, final model | yolo11x-seg @640 | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.763 | 0.785 | 0.281 | 0.324 | 0.239 | 0.047 | 0.755 | 0.718 | 0.596 | 0.741 | 0.033 | 0.019 | 941.000 | 0.811 | 0.809 |
-| (b') test high, OOF masks | yolo11x-seg @640, 5 fold models | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.767 | 0.787 | 0.267 | 0.307 | 0.276 | 0.151 | 0.750 | 0.680 | 0.652 | 0.720 | 0.038 | 0.015 | 941.000 | 0.808 | 0.814 |
-| (c) test all | yolo11x-seg @640 | 192 | 161 | 152 | 9 | 6 | 25 | 167 | 0.508 | 0.548 | 0.275 | 0.301 | 0.220 | 0.016 | 0.661 | 0.600 | 0.575 | 0.714 | 0.166 | 0.148 | 279.500 | 0.786 | 0.816 |
+| (b') test high, OOF masks | yolo11x-seg @640, 5 fold models | 29 | 29 | 29 | 0 | 0 | 0 | 29 | 0.767 | 0.787 | 0.267 | 0.307 | 0.276 | 0.151 | 0.750 | 0.679 | 0.652 | 0.720 | 0.038 | 0.015 | 941.000 | 0.808 | 0.814 |
+| (c) test all | yolo11x-seg @640 | 192 | 161 | 152 | 9 | 6 | 25 | 167 | 0.508 | 0.548 | 0.275 | 0.301 | 0.220 | 0.016 | 0.661 | 0.599 | 0.575 | 0.714 | 0.166 | 0.148 | 279.500 | 0.786 | 0.816 |
 | (c) test low | yolo11x-seg @640 | 45 | 24 | 17 | 7 | 1 | 20 | 25 | 0.280 | 0.344 | 0.229 | 0.169 | 0.160 | -0.033 | 0.527 | 0.522 | 0.484 | 0.562 | 0.300 | 0.052 | 16.000 | 0.762 | 0.798 |
 | (c) test normal | yolo11x-seg @640 | 118 | 108 | 106 | 2 | 5 | 5 | 113 | 0.493 | 0.542 | 0.284 | 0.316 | 0.227 | 0.016 | 0.657 | 0.596 | 0.584 | 0.731 | 0.148 | 0.217 | 309.500 | 0.788 | 0.822 |
 

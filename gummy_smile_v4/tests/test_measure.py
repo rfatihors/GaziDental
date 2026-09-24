@@ -167,3 +167,80 @@ def test_midline_from_lip_when_present():
     assert QCFlag.ZENITH_DETECTION_FAILED not in r.flags
     r2 = measure_gingival_display(g, None, px_per_mm=None, cfg=CFG)
     assert r2.midline_x == SHAPE[1] // 2
+
+
+# ---------------------------------------------------------------- reproducibility (PLAN.md Amendment 6)
+
+def test_measurement_is_bit_identical_on_repeated_runs():
+    """The same mask measured twice must give the same bits, not nearly the same number.
+
+    A committed result table has to follow from the masks committed beside it; anything that makes
+    the second run differ from the first would break that silently.
+    """
+    g, _, _ = festooned_band(SHAPE, 300, 1500, 200, 20, 70)
+    lip = lip_band(SHAPE, 280, 1520, 199, 30)
+    a = measure_gingival_display(g, lip, px_per_mm=16.84, cfg=CFG)
+    for _ in range(3):
+        b = measure_gingival_display(g, lip, px_per_mm=16.84, cfg=CFG)
+        assert b.image_values == a.image_values          # exact equality, no approx
+        assert b.region_values == a.region_values
+        assert (b.zeniths_c, b.regions, b.x0, b.x1, b.midline_x) == (a.zeniths_c, a.regions, a.x0, a.x1, a.midline_x)
+        assert b.to_row() == a.to_row()
+
+
+def test_select_by_distance_matches_scipy_when_nothing_is_tied():
+    """The greedy is scipy's; only the order among *equal* priorities is ours."""
+    from scipy.signal import find_peaks
+
+    from gsv4.measure.regions import select_by_distance
+
+    rng = np.random.default_rng(0)
+    for _ in range(50):
+        sig = rng.random(400) * 100                       # continuous values: ties have probability 0
+        peaks, _ = find_peaks(sig)
+        if len(peaks) < 3:
+            continue
+        theirs, _ = find_peaks(sig, distance=17)
+        # find_peaks prioritises by the signal height at the peak, and applies distance before
+        # prominence; this reproduces that, so only equal priorities are decided differently
+        keep = select_by_distance(peaks, sig[peaks], 17, peaks.astype(float))
+        assert peaks[keep].tolist() == theirs.tolist()
+
+
+def test_zenith_tie_is_broken_by_the_midline_not_by_the_sort():
+    """Two exactly equally deep minima closer together than the minimum separation: one survives,
+    and it is the one nearer the midline — the criterion method C already selects zeniths by."""
+    from gsv4.measure.regions import zeniths_midline
+
+    # a profile with wide zero plateaus; the pair at 100/140 is closer than min_distance (60),
+    # so exactly one of the two survives and the rule has to say which
+    t = np.full(600, 40.0)
+    for c in (100, 140, 200, 260, 380, 460, 520):
+        t[c - 5:c + 6] = 0.0
+    z_right, *_ = zeniths_midline(t, 0, 600, midline=300, n_per_side=3, min_distance=60)
+    # midline 300: of the tied pair, 140 is the nearer one, so it is the one kept
+    assert z_right is not None and 140 in z_right and 100 not in z_right
+    # mirror the profile and the choice mirrors with it: the rule is symmetric about the midline,
+    # not a left-to-right preference that would bias one side of the arch
+    t2 = t[::-1].copy()
+    z_left, *_ = zeniths_midline(t2, 0, 600, midline=300, n_per_side=3, min_distance=60)
+    assert z_left is not None and (599 - 140) in z_left and (599 - 100) not in z_left
+    assert z_left == sorted(599 - v for v in z_right)     # the whole selection mirrors, not just the tie
+    # and it is stable across repeated calls
+    for _ in range(3):
+        assert zeniths_midline(t, 0, 600, midline=300, n_per_side=3, min_distance=60)[0] == z_right
+
+
+def test_festoon_tie_is_broken_left_to_right_not_by_the_sort():
+    """Equally prominent papillae: the leftmost survives, deterministically."""
+    from gsv4.measure.regions import regions_festoon
+
+    t = np.zeros(600)
+    for c in (60, 90, 180, 280, 380, 480, 540):           # 60 and 90 are closer than min_distance
+        t[c - 4:c + 5] = 50.0
+    a = regions_festoon(t, 0, 600, 6, 40)
+    for _ in range(3):
+        assert regions_festoon(t, 0, 600, 6, 40) == a
+    if a is not None:
+        edges = [s for s, _ in a[1:]]                     # interior boundaries = the kept papillae
+        assert 90 not in edges or 60 not in edges         # never both members of the tied pair

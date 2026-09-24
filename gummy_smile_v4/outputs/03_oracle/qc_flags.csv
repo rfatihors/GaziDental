@@ -1,7 +1,7 @@
 uid,split,qc_flags,n_components,n_gingiva_instances
 high/IMG_7307_jpg,holdout,zenith_detection_failed,1,1
 high/IMG_6921_jpg,dev,,1,1
-high/IMG_2843_jpg,holdout,zenith_detection_failed,1,1
+high/IMG_2843_jpg,holdout,,1,1
 high/IMG_8575_jpg,holdout,,1,1
 high/IMG_6842_jpg,dev,,1,1
 high/IMG_7304_jpg,dev,,1,1

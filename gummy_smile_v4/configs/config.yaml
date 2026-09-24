@@ -84,7 +84,7 @@ thresholds:
   boundaries_mm: [3.0, 4.0, 6.0, 8.0]
 
 measurement:
-  px_per_mm: 16.8397          # global scale, fitted on the oracle dev subset (Stage 3)
+  px_per_mm: 16.8422          # global scale, fitted on the oracle dev subset (Stage 3)
   # Post-hoc calibration: NONE (0) since the final model became RF-DETR-Seg Large @624
   # (23 Sep 2026, outputs/09_final_rfdetr/PLAN.md Amendment 3). The -13 px mask-level offset
   # adopted on 16 Sep 2026 was estimated for the YOLOv11x pipeline, which drew the lower gingiva
