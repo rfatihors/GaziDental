@@ -4,7 +4,7 @@
 
 Source files: `docs/Makale_gonderilmis_hali.docx`, `docs/Appendix_B-Dataset_Preparation_and_Preprocessing.docx`, `docs/Appendix_C-Dataset_Versioning_and_Preprocessing_Pipeline.docx`, `docs/Appendix_D-Detailed_Training_and_Hyperparameter_Optimization.docx`, `docs/Appendix_E-Training_configuration_and_hyperparameter_search_strategy.docx`, `docs/Appendix_F-Comparison_of_Three_Segmentation_Models_for_Gingival_Display_Analysis.docx`.
 
-33 edits; the current sentence was located for 33 of them. Reviewer items refer to `RESPONSE_TO_REVIEWERS.md`. Measurement results are quoted uncorrected (primary); the post-hoc correction appears only where it is labelled secondary.
+35 edits; the current sentence was located for 35 of them. Reviewer items refer to `RESPONSE_TO_REVIEWERS.md`. There is one set of measurement results: no post-hoc calibration is applied, so no number quoted below is fitted on the clinical reference (`outputs/09_final_rfdetr/PLAN.md`, Amendment 3).
 
 ## manuscript
 
@@ -486,6 +486,22 @@ Replace with the instance counts of the original annotation: 3,938 gingiva and 1
 
 <!-- source: outputs/07_report/tables/dataset_counts.csv -->
 
+### Appendix D · New supplementary appendix — measurement-method sensitivity
+
+**Current (add new appendix):**
+
+> D.1 | Detailed training and hyperparameter optimization
+
+**Proposed:**
+
+ADD a new supplementary appendix, "Sensitivity of the gingival-display measurement to the choice of estimator", containing Table S_x: all 36 combinations of tooth regioning (A equal splits, B lip-referenced, C zenith-based) and column-wise estimator (p05, p10, p25, median, min, max, each with and without lip anchoring), each with its development-subset MAE, its holdout MAE, its ICC(2,1) and its Bland–Altman bias on both subsets. The accompanying text must state, explicitly: (i) the measurement method (C_p25) and the pixel-to-millimetre scale (16.84 px/mm) were selected once, on ground-truth masks, on the development subset of the reference images, and were then applied unchanged everywhere else — they were never re-selected, re-fitted or re-tuned on predicted masks, so no reported accuracy figure is optimised on the segmentation model or on the clinical reference; (ii) the selection rule was fixed in advance: selection on dev MAE (n = 87); best dev MAE = 0.557 mm; 1 combination(s) within 0.02 mm of it (C_p25); the simplest of those is chosen (A > B > C, gingiva thickness > lip-anchored, p25 > median > p10 > p05 > min > max) — the holdout columns are reported for completeness and played no part in the choice; (iii) the zenith-based regioning of the selected method falls back to equal splits when six zeniths cannot be placed, on 19 % (28 of 145 images) of the reference images with ground-truth masks and on 19 % (27 of 145 images) with the model's out-of-fold masks, where the value it returns is identical to the equal-split method (on the 72 dev images where the regioning succeeded, dev MAE 0.512 mm for C_p25 against 0.597 mm for A_p25); the pre-registered fallback rate above which the method would have been re-evaluated against the equal-split alternative, 30 % (PLAN.md 7), not reached; (iv) the table is a sensitivity analysis, not a selection: it shows how little the reported accuracy depends on which combination is used, and it must not be read as a menu from which the best-performing row was taken.
+
+**Why:** The reviewers ask what the millimetre measurement actually is and how it was calibrated. A single selected estimator with no sensitivity analysis invites the suspicion that the method was chosen to fit the reference; the table removes that suspicion, and the text states in plain words that the choice was made once, on annotated masks, and never revisited.
+
+**Reviewer item:** R4-3, R4-4, R4-5
+
+<!-- source: outputs/03_oracle/estimator_comparison.csv; outputs/07_report/tables/estimator_sensitivity.md -->
+
 ## Appendix E
 
 ### Appendix E · E.1
@@ -519,3 +535,19 @@ Reword to: these screening results, obtained with platform default settings on s
 **Why:** Same objection as in the main text: the comparison does not isolate the architecture.
 
 **Reviewer item:** R4-8
+
+### Appendix F · F.1 (replacement: controlled comparison)
+
+**Current (replace whole appendix):**
+
+> F.1 | Comparison of three segmentation models for gingival display analysis
+
+**Proposed:**
+
+REPLACE the appendix with the controlled comparison, reported in full. Suggested content: (1) the pre-registration — a protocol fixed and committed before any run, stating what is held identical (images and annotations, the participant-level partition and the fixed test set, the epoch budget and the early-stopping rule, the evaluation protocol and the measurement pipeline) and what is deliberately left to each architecture's published defaults (optimiser, schedule, augmentation, loss), the primary outcome (millimetre error of gingival display against the clinical reference, paired over the 29 high-smile-line test images that carry one), the three seeds, and the decision rule with its 0.15 mm threshold fixed in advance; (2) the result — rfdetr-seg-large 0.664 ± 0.011 mm; yolo11x-seg 0.957 ± 0.089 mm; yolo26x-seg 1.001 ± 0.016 mm (mean ± SD over seeds); yolo26x-seg against yolo11x-seg, -0.046 mm [-0.097, 0.005] (the interval contains zero and the between-seed SD, 0.089 mm, exceeds the difference); rfdetr-seg-large led yolo11x-seg by 0.293 mm [0.150, 0.439]; the two pre-registered resolution controls kept it (yolo11x-seg against rfdetr-seg-large@432, 0.285 mm [0.167, 0.396]; yolo11x-seg@1024 against rfdetr-seg-large, 0.243 mm [0.120, 0.366]); (3) the consequence — the pre-registered rule triggered, so the final model of the manuscript is the architecture the rule selected and Stage 6 was repeated with it; (4) the declared limits — published defaults on one dataset and one centre, unequal pretrained starting points, early-stopping criteria that are the same rule on metrics that are not the same function, and the note that once each model's own bias is removed the architectures are indistinguishable in scatter, so what differs between them is a constant, not precision; (5) the transparency note — the class-mapping fault of the first RF-DETR run, its cause, the regeneration of the predictions from the saved checkpoints and the integrity check that now screens every run.
+
+**Why:** The submitted appendix reports a screening run as an architecture comparison. The reviewer's objection is answered by replacing it with a comparison that isolates the architecture, and by reporting the outcome — including that it changed the final model — rather than only conceding the point.
+
+**Reviewer item:** R4-8
+
+<!-- source: outputs/08_architecture/RESULTS.md; outputs/08_architecture/PROTOCOL.md -->

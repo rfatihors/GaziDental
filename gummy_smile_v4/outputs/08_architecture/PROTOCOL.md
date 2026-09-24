@@ -242,3 +242,68 @@ published RF-DETR benchmarks.
 The decision rule of §8, its 0.15 mm threshold, the primary and secondary outcomes, the seeds, the
 paired analysis and the declared mask-resolution bias are all unchanged. This amendment was written
 before any comparison run.
+
+---
+
+## Amendment 2 — 23 September 2026, after the first RF-DETR runs, before any result was reported
+
+§9 requires a run that fails its integrity check to be withdrawn and repeated rather than reported.
+This amendment records the one time that happened, why, and what was changed so that it cannot
+happen again unnoticed.
+
+### A2.1 What the first RF-DETR runs showed
+
+All three seeds produced a gingival edge error that was *perfectly* systematic: top-edge MAE
+6.153 mm with bias −6.153 mm, bottom-edge 4.590 mm with bias −4.590 mm, i.e. every image displaced
+by the same amount in the same direction. `n_lip` was 0 on 29 of 29 images and `n_gingiva` exactly
+1.00, while both YOLO families gave `n_lip` ≈ 1.0 and `n_gingiva` 1.2 to 1.7 with no image missing a
+lip mask. An error whose mean absolute value equals its bias is not a segmentation weakness; it is a
+constant, and a constant of that size on both edges is a class substitution.
+
+RF-DETR's own mask mAP for the same runs was 0.80. The model was right; our reading of its output
+was wrong. That is exactly why the fault was invisible in the segmentation metrics and visible only
+in the measurement.
+
+### A2.2 The cause
+
+`rfdetr` renumbers its label space. `CocoDetection` builds `cat2label` over the categories that
+`filter_parent_categories` keeps, which drops the unannotated Roboflow grouping category, and
+`detr.py` returns class ids as `dict(enumerate(model.class_names))`. Our export is 0 `dudak-diseti`
+(grouping, never annotated), 1 `diseti`, 2 `dudak`, so the trained model emits 0 for gingiva and 1
+for lip. `rfdetr_train_predict.py` built its id → name map from the *dataset's* category table
+instead: id 0 resolved to the grouping name and was silently dropped, id 1 (lip) was written into
+the gingiva mask, and no lip mask was written at all. Reproduced exactly in a unit test.
+
+### A2.3 What was done
+
+The predictions were regenerated from the saved checkpoints (`checkpoint_best_total.pth`,
+`--predict-only`), which takes minutes; **nothing was retrained**, so the runs the results come from
+are the runs this protocol pre-registered, with the same weights, the same seeds and the same budget.
+No number from the faulty pass was reported anywhere: it was caught at aggregation, before the
+results table left the repository.
+
+Three safeguards now run automatically, because the fault's whole character was that it hid:
+
+* the class list comes from the model (`dict(enumerate(model.class_names))`) and `check_label_space()`
+  refuses to predict unless it equals the list the dataset implies, derived with `rfdetr`'s own
+  `filter_parent_categories`;
+* an instance whose class id maps to no role is counted (`ClassMasks.n_ignored_instances`) and, under
+  `strict=True`, aborts the run instead of vanishing; `n_ignored` is written into every prediction table;
+* `integrity_check()` screens every run for the three traces at once — no lip mask on any image,
+  instances dropped for having no role, and an edge error whose MAE equals its |bias| — writes
+  `integrity_check.csv`, and puts a banner on `RESULTS.md` naming any run that must be withdrawn.
+  `scripts/check_mask_classes.py` cross-matches each predicted class against both annotated classes
+  and exits non-zero on a mismatch; it runs after every prediction in `scripts/train_final_rfdetr.sh`.
+
+`integrity_check.csv` is clean for all five configurations of the reported comparison.
+
+### A2.4 What did not change
+
+Nothing in §2 to §8: the same data, the same budget, the same seeds, the same primary outcome, the
+same decision rule and the same 0.15 mm threshold. The YOLO comparison was never affected — its
+label handling was already correct, and the `yolo26x-seg` against `yolo11x-seg` result (−0.046 mm,
+paired interval [−0.097, +0.005] containing zero) was reported unchanged from before the fix.
+
+This amendment is written into the record rather than into a footnote because the reviewers are
+entitled to know that the comparison's first pass was wrong, how it was caught, and that what is
+reported comes from a corrected reading of the same trained models.

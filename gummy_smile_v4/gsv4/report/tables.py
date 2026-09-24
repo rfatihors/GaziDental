@@ -325,3 +325,55 @@ def expert_agreement(expert_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[str
             if len(cells) == 4:
                 rows.append({"metric": cells[0], "value": cells[1], "ci95": cells[2], "n": cells[3]})
     return pd.DataFrame(rows), {"status": "done", "source": str(nums)}
+
+
+def estimator_sensitivity(oracle_dir: Path, selected_combo: str, px_per_mm: float,
+                          predicted_oracle_dir: Optional[Path] = None) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    """Every measurement-method × estimator combination of Stage 3, for the appendix.
+
+    This is a *sensitivity* table, not a selection: the method and the scale were chosen once, on
+    ground-truth masks, on the development subset, by the rule recorded in
+    ``outputs/03_oracle/oracle_summary.md``; they were never re-selected or re-fitted on predicted
+    masks. The holdout columns are reported so that a reader can see how little the choice depends
+    on the combination, and they took no part in making it.
+    """
+    p = oracle_dir / "estimator_comparison.csv"
+    if not p.exists():
+        return None, {"status": "pending", "needs": f"{p} — run scripts/run_oracle.py --write-config (Stage 3)"}
+    raw = pd.read_csv(p)
+    cols = {"combo": "combo", "regioning": "regioning", "estimator": "estimator", "anchored": "lip_anchored",
+            "px_per_mm_dev": "px_per_mm (dev fit)", "mae_dev": "MAE dev, mm", "mae_holdout": "MAE holdout, mm",
+            "icc2_1_dev": "ICC(2,1) dev", "icc2_1_holdout": "ICC(2,1) holdout",
+            "ba_bias_dev": "BA bias dev, mm", "ba_bias_holdout": "BA bias holdout, mm"}
+    missing = [c for c in cols if c not in raw.columns]
+    if missing:
+        return None, {"status": "pending", "needs": f"{p} lacks {missing} — re-run Stage 3"}
+    df = raw[list(cols)].rename(columns=cols).sort_values("MAE dev, mm").reset_index(drop=True)
+    df.insert(0, "selected", ["**yes**" if c == selected_combo else "" for c in df["combo"]])
+    st: Dict[str, Any] = {"status": "done", "source": str(p), "n_combinations": int(len(df)),
+                          "selected": selected_combo, "selected_px_per_mm": f"{px_per_mm:.2f}",
+                          "sorted_by": "dev MAE (the quantity the selection used)"}
+    summary = oracle_dir / "oracle_summary.md"
+    if summary.exists():
+        txt = summary.read_text(encoding="utf-8")
+        m = re.search(r"^selection on dev MAE .*$", txt, flags=re.M)
+        if m:
+            st["selection_rule"] = m.group(0).strip().rstrip(".")
+        m = re.search(r"could not be established on (\d+) of (\d+) images \((\d+) %", txt)
+        if m:
+            st["regioning_fallback"] = f"{m.group(3)} % ({m.group(1)} of {m.group(2)} images)"
+        m = re.search(r"dev images where C succeeded \(n = (\d+)\), dev MAE is ([\d.]+) mm for `([A-Z]_\w+)` vs ([\d.]+) mm for `([A-Z]_\w+)`", txt)
+        if m:
+            st["fallback_check"] = (f"on the {m.group(1)} dev images where the regioning succeeded, dev MAE "
+                                    f"{m.group(2)} mm for {m.group(3)} against {m.group(4)} mm for {m.group(5)}")
+    # PLAN.md 7: the fallback rate is re-measured on the predicted masks; above 30 % the choice would
+    # have been re-evaluated against A_p25. Reported here so the appendix carries both rates.
+    if predicted_oracle_dir is not None and (predicted_oracle_dir / "oracle_summary.md").exists():
+        m = re.search(r"could not be established on (\d+) of (\d+) images \((\d+) %",
+                      (predicted_oracle_dir / "oracle_summary.md").read_text(encoding="utf-8"))
+        if m:
+            st["regioning_fallback_predicted_masks"] = f"{m.group(3)} % ({m.group(1)} of {m.group(2)} images)"
+            st["fallback_reeval_threshold"] = "30 % (PLAN.md 7), not reached"
+    st["note"] = ("the method and the scale were selected here, once, on GROUND-TRUTH masks on the dev subset; "
+                  "they were never re-selected or re-fitted on predicted masks (outputs/09_final_rfdetr/PLAN.md 5 and Amendment 1)")
+    return df, st

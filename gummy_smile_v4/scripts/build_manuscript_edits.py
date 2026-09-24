@@ -97,6 +97,15 @@ def main() -> int:
     bset = pd.read_csv(o6 / "boundary_by_set.csv").set_index("set")
     prev_bset = pd.read_csv(prev6 / "boundary_by_set.csv").set_index("set") if (prev6 / "boundary_by_set.csv").exists() else None
     intra = (o3 / "intra_observer.md").read_text(encoding="utf-8")
+    # The controlled architecture comparison (R4-8) and the method-sensitivity appendix. Both are
+    # read from their own output files; when a file is absent the edit says so instead of guessing.
+    oA = outputs / "08_architecture"
+    apair = pd.read_csv(oA / "paired_comparisons.csv") if (oA / "paired_comparisons.csv").exists() else None
+    amodel = pd.read_csv(oA / "by_model.csv").set_index("model") if (oA / "by_model.csv").exists() else None
+    ares = pd.read_csv(oA / "resolution_controls.csv") if (oA / "resolution_controls.csv").exists() else None
+    ESENS = {k: T._md_meta(tab / "estimator_sensitivity.md", k) for k in
+             ("n_combinations", "selected", "selected_px_per_mm", "selection_rule", "regioning_fallback",
+              "regioning_fallback_predicted_masks", "fallback_check", "fallback_reeval_threshold")}
     ms = T.measurement_accuracy(o3, o6)[1]
     k = float(cfg["measurement"]["px_per_mm"])
     off_px = int(cfg["measurement"]["bottom_edge_offset_px"])
@@ -405,6 +414,53 @@ def main() -> int:
          "Same objection as in the main text: the comparison does not isolate the architecture.",
          "R4-8", [])
 
+    # ---- Appendix F becomes the controlled comparison, written from its own result files
+    if apair is not None and amodel is not None:
+        base_a = str(apair["model_a"].mode().iloc[0])
+        lead_a = apair.sort_values("diff_mae_mm", ascending=False).iloc[0]
+        tie_a = apair[~((apair["diff_mae_mm"] > 0.15) & apair["excludes_zero"])]
+        members_a = [m for m in amodel.index if "@" not in str(m)]
+        arch_line = "; ".join(f"{m} {amodel.loc[m, 'mae_mm_mean']:.3f} ± {amodel.loc[m, 'mae_mm_sd']:.3f} mm"
+                              for m in sorted(members_a, key=lambda m: amodel.loc[m, "mae_mm_mean"]))
+        tie_line = "; ".join(f"{r['model_b']} against {r['model_a']}, {r['diff_mae_mm']:+.3f} mm [{r['ci_low']:.3f}, {r['ci_high']:.3f}] "
+                             f"(the interval contains zero and the between-seed SD, {amodel.loc[r['model_a'], 'mae_mm_sd']:.3f} mm, exceeds the difference)"
+                             for _, r in tie_a.iterrows())
+        ctrl_line = ("; the two pre-registered resolution controls kept it ("
+                     + "; ".join(f"{r['model_a']} against {r['model_b']}, {r['diff_mae_mm']:.3f} mm [{r['ci_low']:.3f}, {r['ci_high']:.3f}]"
+                                 for _, r in ares.iterrows()) + ")") if ares is not None else ""
+        edit("Appendix F", "F.1 (replacement: controlled comparison)", "Comparison of Three Segmentation Models for Gingival Display Analysis",
+             "REPLACE the appendix with the controlled comparison, reported in full. Suggested content: "
+             "(1) the pre-registration — a protocol fixed and committed before any run, stating what is held identical (images and annotations, the participant-level partition and the fixed test set, the epoch budget and the early-stopping rule, the evaluation protocol and the measurement pipeline) and what is deliberately left to each architecture's published defaults (optimiser, schedule, augmentation, loss), the primary outcome (millimetre error of gingival display against the clinical reference, paired over the "
+             f"{int(lead_a['n'])} high-smile-line test images that carry one), the three seeds, and the decision rule with its 0.15 mm threshold fixed in advance; "
+             f"(2) the result — {arch_line} (mean ± SD over seeds); {tie_line}; "
+             f"{lead_a['model_b']} led {base_a} by {lead_a['diff_mae_mm']:.3f} mm [{lead_a['ci_low']:.3f}, {lead_a['ci_high']:.3f}]{ctrl_line}; "
+             "(3) the consequence — the pre-registered rule triggered, so the final model of the manuscript is the architecture the rule selected and Stage 6 was repeated with it; "
+             "(4) the declared limits — published defaults on one dataset and one centre, unequal pretrained starting points, early-stopping criteria that are the same rule on metrics that are not the same function, and the note that once each model's own bias is removed the architectures are indistinguishable in scatter, so what differs between them is a constant, not precision; "
+             "(5) the transparency note — the class-mapping fault of the first RF-DETR run, its cause, the regeneration of the predictions from the saved checkpoints and the integrity check that now screens every run.",
+             "The submitted appendix reports a screening run as an architecture comparison. The reviewer's objection is answered by replacing it with a comparison that isolates the architecture, and by reporting the outcome — including that it changed the final model — rather than only conceding the point.",
+             "R4-8", [sfile(oA / "RESULTS.md"), sfile(oA / "PROTOCOL.md")], action="replace whole appendix")
+
+    # ---- new supplementary appendix: how much the measurement method itself matters
+    edit("Appendix D", "New supplementary appendix — measurement-method sensitivity",
+         "Detailed Training and Hyperparameter Optimization",
+         "ADD a new supplementary appendix, \"Sensitivity of the gingival-display measurement to the choice of estimator\", containing "
+         f"Table S_x: all {ESENS['n_combinations'] or '36'} combinations of tooth regioning (A equal splits, B lip-referenced, C zenith-based) and column-wise estimator "
+         "(p05, p10, p25, median, min, max, each with and without lip anchoring), each with its development-subset MAE, its holdout MAE, its ICC(2,1) and its Bland–Altman bias on both subsets. "
+         "The accompanying text must state, explicitly: "
+         f"(i) the measurement method ({ESENS['selected'] or method}) and the pixel-to-millimetre scale ({ESENS['selected_px_per_mm'] or f'{k:.2f}'} px/mm) were selected once, on ground-truth masks, on the development subset of the reference images, "
+         "and were then applied unchanged everywhere else — they were never re-selected, re-fitted or re-tuned on predicted masks, so no reported accuracy figure is optimised on the segmentation model or on the clinical reference; "
+         f"(ii) the selection rule was fixed in advance: {ESENS['selection_rule'] or 'lowest development MAE, with a simplicity tolerance that prefers the simpler combination when the difference is within 0.02 mm'} "
+         "— the holdout columns are reported for completeness and played no part in the choice; "
+         f"(iii) the zenith-based regioning of the selected method falls back to equal splits when six zeniths cannot be placed, on {ESENS['regioning_fallback'] or '19 %'} of the reference images with ground-truth masks"
+         + (f" and on {ESENS['regioning_fallback_predicted_masks']} with the model's out-of-fold masks" if ESENS['regioning_fallback_predicted_masks'] else "")
+         + ", where the value it returns is identical to the equal-split method"
+         + (f" ({ESENS['fallback_check']})" if ESENS['fallback_check'] else "")
+         + (f"; the pre-registered fallback rate above which the method would have been re-evaluated against the equal-split alternative, {ESENS['fallback_reeval_threshold']}" if ESENS['fallback_reeval_threshold'] else "")
+         + "; (iv) the table is a sensitivity analysis, not a selection: it shows how little the reported accuracy depends on which combination is used, and it must not be read as a menu from which the best-performing row was taken.",
+         "The reviewers ask what the millimetre measurement actually is and how it was calibrated. A single selected estimator with no sensitivity analysis invites the suspicion that the method was chosen to fit the reference; the table removes that suspicion, and the text states in plain words that the choice was made once, on annotated masks, and never revisited.",
+         "R4-3, R4-4, R4-5", [sfile(o3 / "estimator_comparison.csv"), sfile(tab / "estimator_sensitivity.md")],
+         action="add new appendix")
+
     # ------------------------------------------------------------------ document
     n_found = sum(1 for e in E if e["current"])
     out = ["# Manuscript edits — submitted version vs revision", "",
@@ -412,7 +468,10 @@ def main() -> int:
            "every number in a proposed sentence is read from the file listed under 'Sources'. Placeholders in square brackets mark text that the clinical team supplies. -->", "",
            f"Source files: {', '.join(f'`docs/{v}`' for v in DOCS.values())}.", "",
            f"{len(E)} edits; the current sentence was located for {n_found} of them. Reviewer items refer to `RESPONSE_TO_REVIEWERS.md`. "
-           "Measurement results are quoted uncorrected (primary); the post-hoc correction appears only where it is labelled secondary.", ""]
+           + ("Measurement results are quoted uncorrected (primary); the post-hoc correction appears only where it is labelled secondary."
+              if corrected else
+              "There is one set of measurement results: no post-hoc calibration is applied, so no number quoted below is fitted on the clinical reference "
+              f"(`outputs/{args.stage6}/PLAN.md`, Amendment 3)."), ""]
     by_doc: Dict[str, List[Dict[str, Any]]] = {}
     for e in E:
         by_doc.setdefault(e["doc"], []).append(e)

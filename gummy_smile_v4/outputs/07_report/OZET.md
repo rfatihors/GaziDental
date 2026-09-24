@@ -1,7 +1,22 @@
 # Aşama 7 — Türkçe özet
 
-- `scripts/build_report.py` mevcut verilerle 13 öge üretti, 1 öge bekliyor (`report_status.md`: ne gerektiği yazıyor). Veri gelince aynı komut yeniden çalıştırılır.
-- Hazır: blok diyagramı, GT overlay, GT-maske ölçüm figürü (Figure 6 yerine), veri seti sayıları, demografi, mm doğruluğu (GT satırları), gözlemci içi.
-- Bekleyen: segmentasyon örnekleri, öğrenme eğrisi, sınır hatası, test metrikleri (iş istasyonu); tahmin maskesi doğruluğu (Aşama 6); uzman uyumu (gerçek formlar).
+- `scripts/build_report.py` mevcut verilerle 14 öge üretti, 1 öge bekliyor (`report_status.md`: ne gerektiği yazıyor). Veri gelince aynı komut yeniden çalıştırılır.
+- Hazır:
+  - Figure: system block diagram (Reviewer 1)
+  - Figure: segmentation examples GT vs prediction (Reviewer 1)
+  - Figure: measurement vs clinical reference, GT masks (replaces Figure 6)
+  - Figure: measurement vs clinical reference, predicted masks (OOF)
+  - Figure: learning curve (Reviewers 2 & 4, Supplementary S1)
+  - Figure: boundary error, upper/lower gingiva edge (Reviewer 2 #10)
+  - Figure: GT overlay examples (Stage 2)
+  - Table: Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4)
+  - Table: Demographic coverage (Reviewer 3)
+  - Table: Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)
+  - Table: Measurement-method sensitivity: every regioning x estimator combination (Appendix)
+  - Table: Segmentation metrics on the fixed test set (pooled over the classes by this model's own evaluator)
+  - Table: Learning curve points (Supplementary S1)
+  - Table: intra-observer reliability of the reference
+- Bekleyen:
+  - Table: Model vs expert agreement (Reviewer 4: clinical validity) — real expert forms (current outputs are a synthetic dry run)
 - `REVIZYON_OZETI.md`: hakem maddesi ↔ çıktı eşlemesi (✅ / ⏳).
 - Hakem cevabı taslağı: `RESPONSE_TO_REVIEWERS.md`, durum tablosu `REBUTTAL_DURUM.md`, Türkçe özet `REBUTTAL_OZET.md` (üretim: `scripts/build_rebuttal.py`).

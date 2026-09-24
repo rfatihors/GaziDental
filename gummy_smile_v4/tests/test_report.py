@@ -112,3 +112,47 @@ def test_segmentation_metrics_facts_refuses_a_pending_table(tmp_path):
     (tmp_path / "segmentation_metrics_test.csv").write_text("class,seg_map50\ndiseti,0.41\n", encoding="utf-8")
     with pytest.raises(SystemExit):
         T.segmentation_metrics_facts(tmp_path)
+
+
+def _estimator_csv(dir_: Path):
+    """An estimator_comparison.csv as scripts/run_oracle.py writes it (three combinations)."""
+    pd.DataFrame({
+        "combo": ["A_p25", "C_p25", "C_max"], "regioning": ["A", "C", "C"], "estimator": ["p25", "p25", "max"],
+        "anchored": [False, False, False], "px_per_mm_dev": [17.04, 16.84, 25.09],
+        "mae_dev": [0.627, 0.557, 0.825], "mae_holdout": [0.537, 0.518, 0.845],
+        "icc2_1_dev": [0.850, 0.873, 0.712], "icc2_1_holdout": [0.843, 0.858, 0.582],
+        "ba_bias_dev": [0.225, 0.173, 0.364], "ba_bias_holdout": [0.187, 0.116, 0.429],
+    }).to_csv(dir_ / "estimator_comparison.csv", index=False)
+
+
+def test_estimator_sensitivity_is_a_sensitivity_table_not_a_selection(tmp_path):
+    assert T.estimator_sensitivity(tmp_path, "C_p25", 16.84)[1]["status"] == "pending"
+    _estimator_csv(tmp_path)
+    (tmp_path / "oracle_summary.md").write_text(
+        "selection on dev MAE (n = 87); best dev MAE = 0.557 mm; 1 combination(s) within 0.02 mm of it (C_p25); "
+        "the simplest of those is chosen (A > B > C).\n\n"
+        "**Fallback transparency.** Regioning C could not be established on 28 of 145 images (19 %, `zenith_detection_failed`); "
+        "there the measurement silently uses the equal-split regions (A) and the value is identical to `A_p25`. "
+        "On the dev images where C succeeded (n = 72), dev MAE is 0.512 mm for `C_p25` vs 0.597 mm for `A_p25` — ok.\n",
+        encoding="utf-8")
+    df, st = T.estimator_sensitivity(tmp_path, "C_p25", 16.8397)
+    assert st["status"] == "done" and st["n_combinations"] == 3 and st["selected"] == "C_p25" and st["selected_px_per_mm"] == "16.84"
+    # sorted by the quantity the selection actually used, and only the configured combination is marked
+    assert list(df["combo"]) == ["C_p25", "A_p25", "C_max"]
+    assert list(df["selected"]) == ["**yes**", "", ""]
+    # every column the appendix promises is present
+    for c in ("MAE dev, mm", "MAE holdout, mm", "ICC(2,1) dev", "ICC(2,1) holdout", "BA bias dev, mm", "BA bias holdout, mm"):
+        assert c in df.columns
+    assert "dev MAE" in st["selection_rule"] and not st["selection_rule"].endswith(".")
+    assert st["regioning_fallback"] == "19 % (28 of 145 images)"
+    assert "0.512" in st["fallback_check"] and "C_p25" in st["fallback_check"]
+    assert "never re-selected" in st["note"]
+    # the predicted-mask rate is only reported when that directory exists
+    assert "regioning_fallback_predicted_masks" not in st
+    pred = tmp_path / "pred_oracle"
+    pred.mkdir()
+    (pred / "oracle_summary.md").write_text("Regioning C could not be established on 27 of 145 images (19 %, x).\n", encoding="utf-8")
+    st2 = T.estimator_sensitivity(tmp_path, "C_p25", 16.8397, predicted_oracle_dir=pred)[1]
+    assert st2["regioning_fallback_predicted_masks"] == "19 % (27 of 145 images)"
+    assert "30 %" in st2["fallback_reeval_threshold"] and "not reached" in st2["fallback_reeval_threshold"]
+

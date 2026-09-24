@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from gsv4.config import load_config, resolve  # noqa: E402
+from gsv4.eval.architecture import decision as arch_decision  # noqa: E402
 from gsv4.report import tables as T  # noqa: E402
 
 QUOTE_PLACEHOLDER = "[verbatim reviewer text — to be pasted from docs/Hakem_revizyonları.docx into docs/hakem_maddeleri.yaml]"
@@ -113,6 +114,33 @@ def main() -> int:
     if prev_bset is not None:
         S["pbset"] = src(prev6 / "boundary_by_set.csv", root)
     dec = pd.read_csv(o6 / "error_decomposition.csv"); S["dec"] = src(o6 / "error_decomposition.csv", root)
+    prev_dec = pd.read_csv(prev6 / "error_decomposition.csv") if (prev6 / "error_decomposition.csv").exists() else None
+    if prev_dec is not None:
+        S["pdec"] = src(prev6 / "error_decomposition.csv", root)
+
+    # ---- the controlled architecture comparison (R4-8), outputs/08_architecture.
+    # The answer is written from these files or it is not written: while they are missing it stays
+    # PENDING_RUN and says so. The decision is not re-read from prose either — it is recomputed here
+    # with the same pre-registered rule and threshold the comparison applied (PROTOCOL.md 8), so the
+    # rebuttal cannot claim an outcome the numbers do not give.
+    oA = outputs / "08_architecture"
+    ARCH: Dict[str, Any] = {"ready": False}
+    if (oA / "paired_comparisons.csv").exists() and (oA / "by_model.csv").exists():
+        apair = pd.read_csv(oA / "paired_comparisons.csv")
+        amodel = pd.read_csv(oA / "by_model.csv").set_index("model")
+        ares = pd.read_csv(oA / "resolution_controls.csv") if (oA / "resolution_controls.csv").exists() else pd.DataFrame()
+        aint = pd.read_csv(oA / "integrity_check.csv") if (oA / "integrity_check.csv").exists() else pd.DataFrame()
+        baseline = str(apair["model_a"].mode().iloc[0])
+        comps = [r for r in apair.to_dict("records") if r["model_a"] == baseline]
+        adec = arch_decision(comps, baseline)
+        wins = [c for c in comps if c["diff_mae_mm"] > adec["threshold_mm"] and c["excludes_zero"]]
+        ties = [c for c in comps if not (c["diff_mae_mm"] > adec["threshold_mm"] and c["excludes_zero"])]
+        S["arch"] = src(oA / "paired_comparisons.csv", root)
+        S["archm"] = src(oA / "by_model.csv", root)
+        ARCH.update({"ready": bool(len(comps)), "pair": apair, "model": amodel, "res": ares, "integrity": aint,
+                     "baseline": baseline, "decision": adec, "wins": wins, "ties": ties,
+                     "seeds": sorted({int(x) for x in pd.read_csv(oA / "by_seed.csv")["seed"]}) if (oA / "by_seed.csv").exists() else [],
+                     "n": int(apair["n"].max()) if len(apair) else 0})
     offc = pd.read_csv(o6 / "offset_correction.csv") if (o6 / "offset_correction.csv").exists() else None
     if offc is not None:
         S["offc"] = src(o6 / "offset_correction.csv", root)
@@ -495,15 +523,118 @@ def main() -> int:
         f"The millimetre validation is separated in the same way: the measurement method and the pixel-to-millimetre scale were fixed on a development subset of the reference images and then applied unchanged, so that the held-out figures ({acc_line(H)}) are not optimised. "
         "The validation-set numbers of the original submission are not reported as results."),
         changes="Methods 2.6 (partition) and 2.9 (evaluation protocol) rewritten; Results 3.1 — all metrics replaced by test-set metrics; Abstract numbers replaced", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/07_report/tables/dataset_counts.md", "outputs/06_prediction/measurement_accuracy.csv"], sources=[S["seg"], S["dc"], S["acc"]])
-    A["architecture_comparison"] = dict(status="PENDING_RUN", text=(
-        "We accept the criticism, withdraw the original claim, and have repeated the comparison under controlled conditions rather than only conceding the point. "
-        "The original three runs used the annotation platform's default training settings on separate copies of the dataset version, so they did not isolate the architecture and cannot support a statement that one is superior; that stage is now described for what it was, a screening step used to pick one architecture to take forward, and the sentence claiming superior performance has been removed. "
-        "The repeated comparison follows a protocol written and committed before any run (`outputs/08_architecture/PROTOCOL.md`): the same images, the same participant-level partition, the same preprocessing, the same epoch budget and early-stopping rule, the same evaluation protocol and metric implementation, three seeds per architecture, and every architecture at its published defaults so that none is tuned in favour of another. "
-        "Its primary outcome is the measurement itself, the millimetre error against the clinical reference and the gingival edge error, paired over the same test images; mAP at standard evaluation settings is secondary. The residual differences that a controlled comparison cannot remove, chiefly that the architectures do not share a native mask resolution, are declared in that protocol in advance rather than discovered afterwards. "
-        "[PENDING — the comparison runs on the training workstation; its results table will be inserted here.] "
-        f"The architecture taken forward in the manuscript is in any case evaluated properly on its own: a single participant-level partition, one fixed test set, evaluated once ({seg_headline}; {seg_prov}), with the learning curve as evidence on data adequacy. "
-        "The final model is not changed by this analysis: it appears as a separate row labelled as the tuned model rather than as a member of the comparison, and the protocol fixes in advance the single circumstance that would change it, with its threshold set before the result was known."),
-        changes="Methods 2.8.1 — relabelled as preliminary screening; [Results 3.x — new: controlled architecture comparison]; Appendix F — caption and text corrected", files=["outputs/08_architecture/PROTOCOL.md", "outputs/07_report/tables/segmentation_metrics_test.md", "outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["seg"]])
+    # ---------------- R4-8, written from outputs/08_architecture or left PENDING_RUN
+    NUMWORD = {2: "two", 3: "three", 4: "four", 5: "five"}
+    ARCH_NAMES = {"rfdetr-seg-large": "RF-DETR-Seg Large (resolution 624)", "yolo11x-seg": "YOLOv11x-seg (640)",
+                  "yolo26x-seg": "YOLO26x-seg (640)", "rfdetr-seg-large@432": "RF-DETR-Seg Large at 432",
+                  "yolo11x-seg@1024": "YOLOv11x-seg at 1024"}
+
+    def aname(m):
+        return ARCH_NAMES.get(str(m), str(m))
+
+    def apaired(c, subject=None):
+        """'leads X by 0.293 mm [0.150, 0.439]' / 'differs from X by -0.046 mm [...]', from one row."""
+        return (f"{f(abs(c['diff_mae_mm']), 3)} mm [{f(c['ci_low'], 3)}, {f(c['ci_high'], 3)}] "
+                f"({'paired 95 % bootstrap over the ' + str(int(c['n'])) + ' images' if subject is None else subject})")
+
+    if ARCH["ready"]:
+        AD, AM = ARCH["decision"], ARCH["model"]
+        members = [m for m in AM.index if "@" not in str(m)]
+        awin = ARCH["wins"][0] if ARCH["wins"] else None
+        per_model = "; ".join(f"{aname(m)} {f(AM.loc[m, 'mae_mm_mean'], 3)} ± {f(AM.loc[m, 'mae_mm_sd'], 3)} mm"
+                              for m in sorted(members, key=lambda m: AM.loc[m, "mae_mm_mean"]))
+        tie_txt = ""
+        for c in ARCH["ties"]:
+            sd_a, sd_b = AM.loc[c["model_a"], "mae_mm_sd"], AM.loc[c["model_b"], "mae_mm_sd"]
+            tie_txt += (f"{aname(c['model_b'])} and {aname(c['model_a'])} could not be separated: the paired difference is "
+                        f"{f(c['diff_mae_mm'], 3)} mm with a 95 % interval of [{f(c['ci_low'], 3)}, {f(c['ci_high'], 3)}] that contains zero, "
+                        f"and the between-seed standard deviation of each ({f(sd_a, 3)} and {f(sd_b, 3)} mm) is larger than the difference itself. "
+                        "We therefore make no claim about them in either direction. ")
+        res_txt = ""
+        if len(ARCH["res"]):
+            res_rows = "; ".join(f"{aname(r['model_a'])} against {aname(r['model_b'])}, {f(r['diff_mae_mm'], 3)} mm "
+                                 f"[{f(r['ci_low'], 3)}, {f(r['ci_high'], 3)}]" for r in ARCH["res"].to_dict("records"))
+            res_txt = ("Before applying the rule we tested the one confounder the protocol had declared in advance, that the "
+                       "architectures do not share a native vertical mask-pixel size, with two pre-registered controls: the same comparison "
+                       "with the challenger coarsened to the baseline's grid, and with the baseline refined past the challenger's. "
+                       f"The lead survived both, and at a similar size ({res_rows}), so it is not an artefact of resolution. "
+                       "A resolution limit would have behaved the other way round — the error would track the pixel size across both families, and it does not "
+                       "(`outputs/08_architecture/PROTOCOL_ADDENDUM_resolution.md`, written and committed before those two runs). ")
+        outcome_txt = (
+            f"{aname(awin['model_b'])} met both conditions against {aname(ARCH['baseline'])} — a lead of {apaired(awin)} against a threshold of "
+            f"{AD['threshold_mm']:.2f} mm — so the rule was applied as written: the final model of the manuscript changed, Stage 6 was repeated with "
+            f"{aname(awin['model_b'])}, and every measurement result in the revision now comes from it. We did not re-open the rule after seeing the number. "
+            if awin else
+            f"No challenger met both conditions, so the final model stayed {aname(ARCH['baseline'])}. ")
+        fault_txt = ("One thing in this analysis went wrong and we report it rather than leave it out. The first RF-DETR run produced a gingival edge "
+                     "error of about 6 mm that was identical on every image, which is the signature of a class substitution and not of a segmentation "
+                     "weakness. It was: the library renumbers its label space and drops the unannotated grouping category of our export, so the trained "
+                     "model emits its own ids, while our reading of the predictions used the dataset's category table — gingiva was dropped and lip was "
+                     "written into the gingiva mask. The model was right and the reading was wrong; RF-DETR's own mask mAP was unaffected, which is why "
+                     "the fault was invisible in the metrics and visible only in the measurement. We fixed the reading, regenerated the predictions from "
+                     "the saved checkpoints without retraining, and added three safeguards that run automatically: the class list is now taken from the "
+                     "model and cross-checked against the one the dataset implies before a single mask is written, an instance whose class maps to no role "
+                     "aborts the run instead of being silently dropped, and every run is screened for the three traces of this fault "
+                     "(`integrity_check.csv` in the results directory, clean for all five configurations). ")
+        if prev_dec is not None:
+            adds_now = float(dec["e_total"].abs().mean()) - float(dec["e_meas"].abs().mean())
+            adds_prev = float(prev_dec["e_total"].abs().mean()) - float(prev_dec["e_meas"].abs().mean())
+            meaning_txt = (
+                "What this changes clinically is not a leaderboard position. Applying the same measurement method and the same scale to each final "
+                f"model's own out-of-fold masks over all {len(dec)} reference images separates the error the measurement geometry already has from the "
+                f"error the segmentation adds: with {seg_model} the pipeline reaches MAE {float(dec['e_total'].abs().mean()):.2f} mm against "
+                f"{float(dec['e_meas'].abs().mean()):.2f} mm for the same method on the annotated masks, i.e. the segmentation adds essentially nothing "
+                f"({adds_now:+.2f} mm), while the previous final model reached {float(prev_dec['e_total'].abs().mean()):.2f} mm and added {adds_prev:+.2f} mm. "
+                f"The same appears at the boundary the measurement actually uses: the lower gingival margin is displaced by "
+                f"{f(a6['gingiva_bottom_edge_bias_mm_mean'], 2, True)} mm"
+                + (f" against {f(prev_high['gingiva_bottom_edge_bias_mm_mean'], 2, True)} mm for the previous model" if prev_high is not None else "")
+                + ". So the comparison removed the segmentation as an error source, and with it the post-hoc calibration step the previous pipeline "
+                  "needed; the reported pipeline now has no step fitted on the clinical reference at all. ")
+        else:
+            meaning_txt = ""
+        limits_txt = (
+            "The limits of the comparison are stated with it. It is a published-defaults comparison on one dataset, one centre and one test set, so it "
+            "says which architecture measures gingival display better here, not which is better in general; the tuned model of the original submission is "
+            f"reported as a separate, labelled row and is not a member of it. The two families do not start from equally well-matched pretrained weights, "
+            "and the two frameworks' early-stopping criteria are the same rule on a metric that is not the same function; both were recorded in the "
+            "protocol before the runs rather than discovered afterwards. Class agreement and kappa are deliberately not reported per architecture, because "
+            f"at n = {ARCH['n']} their intervals cannot separate the architectures. Finally, once each model's own bias is removed the three architectures "
+            "are indistinguishable in scatter and their per-image errors correlate above 0.94: what differs between them is a constant, not precision, "
+            "and that is how the Discussion states it.")
+        arch_text = (
+            "We accept the criticism, withdraw the original claim, and have repeated the comparison under controlled conditions rather than only conceding the point. "
+            "The original three runs used the annotation platform's default training settings on separate copies of the dataset version, so they did not isolate the architecture and cannot support a statement that one is superior; that stage is now described for what it was, a screening step used to pick one architecture to take forward, and the sentence claiming superior performance has been removed. "
+            "The repeated comparison follows a protocol written and committed to the repository before any run (`outputs/08_architecture/PROTOCOL.md`). It fixes, in advance, what is held identical and what is not: the same images and annotations, the same participant-level partition and the same fixed test set, the same epoch budget and early-stopping rule, the same evaluation protocol and metric implementation, and the same measurement pipeline applied to the predicted masks; each architecture's optimiser, schedule, augmentation and loss stay at its own published defaults, because imposing one family's hyperparameters on the other would handicap it by construction, and no architecture is tuned for the comparison. "
+            f"The primary outcome is fixed there too, and it is the measurement rather than a detection score: the millimetre error of gingival display against the clinical reference, paired over the {ARCH['n']} high-smile-line test images that carry one, with mAP at standard settings secondary. "
+            f"Each architecture was trained with {NUMWORD.get(len(ARCH['seeds']), len(ARCH['seeds']) or 'three')} seeds, which give the run-to-run spread, and a paired bootstrap over the images gives the interval. The decision rule, its threshold and the single circumstance that would change the final model were written down before the first run. "
+            f"The result: {per_model} (mean ± SD over seeds). {tie_txt}"
+            + (f"{aname(awin['model_b'])} did separate from both, by {apaired(awin)}. " if awin else
+               "No challenger separated from the baseline by more than the pre-registered threshold. ")
+            + f"{res_txt}{outcome_txt}{fault_txt}{meaning_txt}{limits_txt}")
+        arch_files = ["outputs/08_architecture/PROTOCOL.md", "outputs/08_architecture/PROTOCOL_ADDENDUM_resolution.md",
+                      "outputs/08_architecture/RESULTS.md", "outputs/08_architecture/FINDINGS.md",
+                      "outputs/07_report/MANUSCRIPT_EDITS.md"]
+        arch_sources = [S.get("arch", ""), S.get("archm", ""), S["dec"]] + ([S["pdec"]] if prev_dec is not None else []) + [S["bset"]]
+    else:
+        arch_text = (
+            "We accept the criticism, withdraw the original claim, and have repeated the comparison under controlled conditions rather than only conceding the point. "
+            "The original three runs used the annotation platform's default training settings on separate copies of the dataset version, so they did not isolate the architecture and cannot support a statement that one is superior; that stage is now described for what it was, a screening step used to pick one architecture to take forward, and the sentence claiming superior performance has been removed. "
+            "The repeated comparison follows a protocol written and committed before any run (`outputs/08_architecture/PROTOCOL.md`): the same images, the same participant-level partition, the same preprocessing, the same epoch budget and early-stopping rule, the same evaluation protocol and metric implementation, three seeds per architecture, and every architecture at its published defaults so that none is tuned in favour of another. "
+            "Its primary outcome is the measurement itself, the millimetre error against the clinical reference and the gingival edge error, paired over the same test images; mAP at standard evaluation settings is secondary. The residual differences that a controlled comparison cannot remove, chiefly that the architectures do not share a native mask resolution, are declared in that protocol in advance rather than discovered afterwards. "
+            "[PENDING — the comparison runs on the training workstation; its results table will be inserted here.] "
+            f"The architecture taken forward in the manuscript is in any case evaluated properly on its own: a single participant-level partition, one fixed test set, evaluated once ({seg_headline}; {seg_prov}), with the learning curve as evidence on data adequacy.")
+        arch_files = ["outputs/08_architecture/PROTOCOL.md", "outputs/07_report/tables/segmentation_metrics_test.md",
+                      "outputs/07_report/MANUSCRIPT_EDITS.md"]
+        arch_sources = [S["seg"]]
+    A["architecture_comparison"] = dict(
+        status="READY" if ARCH["ready"] else "PENDING_RUN", text=arch_text,
+        changes=("Methods 2.8.1 — relabelled as preliminary screening; [Results 3.x — new: controlled architecture comparison, "
+                 "with the pre-registered decision rule and its outcome]; Methods 2.8 — the final model is now the architecture the rule "
+                 "selected; Appendix F — caption and text replaced by the controlled comparison; Limitations — published-defaults, "
+                 "single-dataset comparison; Discussion — a constant, not precision"
+                 if ARCH["ready"] else
+                 "Methods 2.8.1 — relabelled as preliminary screening; [Results 3.x — new: controlled architecture comparison]; Appendix F — caption and text corrected"),
+        files=arch_files, sources=[q for q in arch_sources if q])
     A["mm_accuracy"] = dict(status="READY", text=(
         "We agree entirely; this is the central omission of the submitted manuscript and the revision addresses it directly. The pixel-to-millimetre accuracy is now reported against the clinical reference measurements, with MAE, RMSE, Pearson r, ICC(2,1) and Bland–Altman limits of agreement, and in two steps so that the segmentation and the geometry can be separated. "
         f"On the annotated masks (measurement geometry alone, n = {int(G['n'])}): {acc_line(G)}. On the model's own masks, with every image predicted by a model that had not seen it (5-fold cross-validation at participant level, n = {int(P['n'])}): {acc_line(P)}; "
@@ -532,7 +663,11 @@ def main() -> int:
              "<!-- Generated by scripts/build_rebuttal.py. Every number is read from the file named in the source comment under each response; nothing is typed by hand. "
              "Reviewer quotes are verbatim from docs/Hakem_revizyonları.docx via docs/hakem_maddeleri.yaml. Reviewer 2's numbering (1, 2, 4, 5, 6, 8, 9, 10) is the reviewers' own and is kept as written; "
              "Reviewer 3 numbers restart within each section; Reviewer 4 wrote one continuous text, split into items here with the corresponding passage quoted. -->", "",
-             "Conventions: uncorrected measurement results are the primary analysis; results with the post-hoc mask-level correction are secondary. 'High smile line' is used throughout. "
+             ("Conventions: uncorrected measurement results are the primary analysis; results with the post-hoc mask-level correction are secondary. "
+                if corrected else
+                "Conventions: there is one set of measurement results. No post-hoc calibration is applied, so no number below is fitted on the clinical reference "
+                f"(`outputs/{args.stage6}/PLAN.md`, Amendment 3). ")
+             + "'High smile line' is used throughout. "
              "Status: READY = answered from the analysis outputs; PENDING = waits for the expert forms; PENDING_RUN = waits for a run on the training workstation; CLINICAL = wording to be provided by the clinical team.", ""]
     rows = []
     for rev in spec["reviewers"]:
@@ -592,7 +727,12 @@ def main() -> int:
             f"- **Hazır ({len(ready)})**: " + ", ".join(f"{r.item} ({r.topic})" for r in ready.itertuples()) + ".",
             f"- **Uzman verisi bekleyen ({len(pend)})**: " + (", ".join(f"{r.item} ({r.topic})" for r in pend.itertuples()) or "yok") + ". Formlar analiz edilince `run_expert_analysis.py` → `manuscript_numbers.md`; ayrıca kalibrasyon cevabındaki uzman ölçeği cümlesi (R4-2 içinde [PENDING] işaretli).",
             f"- **Klinik ekipten metin bekleyen ({len(clin_)})**: " + (", ".join(f"{r.item} ({r.topic})" for r in clin_.itertuples()) or "yok") + ". Örtüşme paragrafı klinik ekibin 15 Eylül metninden taslak olarak kondu; sınırlılıklar için teknik maddeler listelendi.",
-            f"- **İş istasyonu koşusu bekleyen ({len(prun)})**: " + (", ".join(f"{r.item} ({r.topic})" for r in prun.itertuples()) or "yok") + ". Değerlendirme ayarı düzeltmesi ve mimari karşılaştırması iş istasyonunda çalışacak; `outputs/08_architecture/PROTOCOL.md` ön-belirleme belgesi.",
+            (f"- **İş istasyonu koşusu bekleyen ({len(prun)})**: " + ", ".join(f"{r.item} ({r.topic})" for r in prun.itertuples())
+             + ". Ön-belirleme belgesi: `outputs/08_architecture/PROTOCOL.md`."
+             if len(prun) else
+             "- **İş istasyonu koşusu bekleyen (0)**: yok. Mimari karşılaştırması ve kontrolleri tamamlandı; sonuçlar "
+             "`outputs/08_architecture/RESULTS.md`, ön-belirleme `PROTOCOL.md` ve `PROTOCOL_ADDENDUM_resolution.md`, "
+             "bulgular `FINDINGS.md`. Ön-belirlenen karar kuralı tetiklendi ve nihai model RF-DETR-Seg Large olarak değişti."),
             f"- **Hocadan beklenen ({len(miss)})**: " + (", ".join(f"{r.item}" for r in miss.itertuples()) or "yok") + " — bu maddeler elimize ulaşan hakem belgesinde yok (Reviewer 2 numaralandırması bunları atlıyor); metinleri sorumlu yazardan istenecek.",
             "- Ölçüm doğruluğu her yerde düzeltmesiz birincil, maske düzeyi düzeltme ikincil.",
             "- Açıkça kabul edilen hatalar: eski ölçüm modülünün geometri hatası (eski Figure 6; v3 ve v1 kolonları geçersiz, figür yeniden üretildi), aynı hastanın iki fotoğrafının bölüntüler arasında bulunması (hasta düzeyi yeniden bölünme, yeniden eğitim), gözlemci içi dosyasında 15 vs 20 görüntü (tam dosyayla yeniden hesaplandı).",

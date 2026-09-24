@@ -1,6 +1,6 @@
 # Rebuttal durumu — hakem maddeleri (klinik ekibe)
 
-Üretim: `scripts/build_rebuttal.py`; sayılar `outputs/` altındaki dosyalardan okunur. Durum: READY = analiz çıktılarından cevaplandı; PENDING = uzman formlarını bekliyor; CLINICAL = metni klinik ekip yazacak. Toplam 31 madde: READY 22, PENDING 3 (uzman formları), PENDING_RUN 1 (iş istasyonu koşusu), CLINICAL 3, MISSING 2 (hakem belgesinde bulunmayan maddeler; metni sorumlu yazardan istenecek).
+Üretim: `scripts/build_rebuttal.py`; sayılar `outputs/` altındaki dosyalardan okunur. Durum: READY = analiz çıktılarından cevaplandı; PENDING = uzman formlarını bekliyor; CLINICAL = metni klinik ekip yazacak. Toplam 31 madde: READY 23, PENDING 3 (uzman formları), PENDING_RUN 0 (iş istasyonu koşusu), CLINICAL 3, MISSING 2 (hakem belgesinde bulunmayan maddeler; metni sorumlu yazardan istenecek).
 
 Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.md` (gönderilen makale ve Appendix B–F üzerinden, her madde için mevcut cümle / önerilen cümle / gerekçe / hakem maddesi).
 
@@ -36,6 +36,6 @@ Makale metninde değişmesi gereken yerler ayrı bir dosyada: `MANUSCRIPT_EDITS.
 | R4-6 | Reviewer 4 | Validation-set metrics reported as final results instead of test-set metrics | **READY** | teknik | outputs/07_report/tables/segmentation_metrics_test.md; outputs/07_report/tables/dataset_counts.md; outputs/09_final_rfdetr/measurement_accuracy.csv |
 | R4-7 | Reviewer 4 | Unclear splitting scheme (70/15/15 then 92/4/4), 1,315 to 3,403, patient-level partitioning (CLAIM 2024) | **READY** | teknik | outputs/07_report/tables/dataset_counts.md; outputs/01_data/manifest_summary.md |
 | R4-external-validity | Reviewer 4 | Sample size does not establish external validity; no external testing | **READY** | teknik | outputs/07_report/figures/learning_curve.png; outputs/07_report/tables/learning_curve.md; outputs/07_report/MANUSCRIPT_EDITS.md |
-| R4-8 | Reviewer 4 | Architecture comparison is not fair (different dataset versions) | **PENDING_RUN** | teknik | outputs/08_architecture/PROTOCOL.md; outputs/07_report/tables/segmentation_metrics_test.md; outputs/07_report/MANUSCRIPT_EDITS.md |
+| R4-8 | Reviewer 4 | Architecture comparison is not fair (different dataset versions) | **READY** | teknik | outputs/08_architecture/PROTOCOL.md; outputs/08_architecture/PROTOCOL_ADDENDUM_resolution.md; outputs/08_architecture/RESULTS.md; outputs/08_architecture/FINDINGS.md; outputs/07_report/MANUSCRIPT_EDITS.md |
 
 Not: hakemlerin orijinal metni depoda yok (`docs/Hakem_revizyonları.docx`); madde numaraları ve alıntılar belge geldiğinde `docs/hakem_maddeleri.yaml` üzerinden tamamlanacak. Listedeki maddeler teknik denetim raporu ve görev belgesinden derlendi; belgede başka maddeler varsa eklenecek.

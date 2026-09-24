@@ -108,6 +108,11 @@ def main() -> int:
     df, st = T.dataset_counts(manifest, splits, pairs); emit("dataset_counts", df, st, "Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4)")
     df, st = T.demographics(manifest); emit("demographics", df, st, "Demographic coverage (Reviewer 3)")
     df, st = T.measurement_accuracy(oracle_dir, prediction_eval_dir); emit("measurement_accuracy", df, st, "Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)")
+    mcfg = cfg["measurement"]["method"]
+    sel_combo = f"{mcfg['regioning']}_{mcfg['estimator']}" + ("_lipanchored" if mcfg.get("anchored") else "")
+    df, st = T.estimator_sensitivity(oracle_dir, sel_combo, float(cfg["measurement"]["px_per_mm"]),
+                                     predicted_oracle_dir=prediction_eval_dir / "oracle")
+    emit("estimator_sensitivity", df, st, "Measurement-method sensitivity: every regioning x estimator combination (Appendix)")
     df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir)
     # the two evaluators do not produce the same table: Ultralytics gives a row per class, a COCO
     # evaluation gives metric/value rows pooled over the classes. The heading says which one this is.
@@ -132,6 +137,33 @@ def main() -> int:
         return f"{'✅' if s['status'] == 'done' else '⏳'} `{Path(s.get('path', '?')).relative_to(out) if s.get('path', '?').startswith(str(out)) else s.get('path', '?')}`"
 
     ms = T.measurement_accuracy(oracle_dir, prediction_eval_dir)[1]
+    est_st = find("Table: Measurement-method sensitivity")
+    # R4-8: the controlled architecture comparison. Read from its own result files, so the map cannot
+    # say "pending" for a run that has finished, nor report an outcome the tables do not carry.
+    arch_dir = outputs / "08_architecture"
+    arch_pair, arch_res = arch_dir / "paired_comparisons.csv", arch_dir / "resolution_controls.csv"
+    arch_cell = ("⏳ pre-registered in `08_architecture/PROTOCOL.md`; the comparison has not produced "
+                 "`paired_comparisons.csv` yet")
+    if arch_pair.exists():
+        ap_ = pd.read_csv(arch_pair)
+        base = str(ap_["model_a"].mode().iloc[0])
+        lead = ap_.sort_values("diff_mae_mm", ascending=False).iloc[0]
+        ties = ap_[~((ap_["diff_mae_mm"] > 0.15) & ap_["excludes_zero"])]
+        tie_txt = "; ".join(f"{r['model_b']} vs {r['model_a']} {r['diff_mae_mm']:+.3f} mm [{r['ci_low']:.3f}, {r['ci_high']:.3f}] (contains zero)"
+                            for _, r in ties.iterrows())
+        ctrl = ""
+        if arch_res.exists():
+            rc = pd.read_csv(arch_res)
+            ctrl = ("; both pre-registered resolution controls kept the lead ("
+                    + "; ".join(f"{r['diff_mae_mm']:.3f} mm [{r['ci_low']:.3f}, {r['ci_high']:.3f}]" for _, r in rc.iterrows()) + ")")
+        arch_cell = (f"✅ Repeated under a protocol committed before any run: same images, same participant-level partition, same fixed "
+                     f"test set, same budget and early stopping, three seeds each, every architecture at its published defaults. "
+                     f"Primary outcome mm MAE against the clinical reference on {int(lead['n'])} paired images. "
+                     f"{tie_txt} — not distinguishable. {lead['model_b']} led {base} by {lead['diff_mae_mm']:.3f} mm "
+                     f"[{lead['ci_low']:.3f}, {lead['ci_high']:.3f}]{ctrl}, which triggered the pre-registered 0.15 mm rule, so "
+                     f"**the final model changed to {lead['model_b']}** and Stage 6 was repeated with it. A class-mapping fault in the "
+                     f"first RF-DETR run is recorded in `PROTOCOL.md` Amendment 2; the predictions were regenerated from the saved "
+                     f"checkpoints and every run is screened by `integrity_check.csv`")
     r2_10 = "Boundary IoU and upper (lip-side) / lower (gingival margin) edge distance errors on the test set"
     bset = prediction_eval_dir / "boundary_by_set.csv"
     if bset.exists():
@@ -177,6 +209,8 @@ as such in the architecture appendix and are never merged into the rows above.
 | R4 — circular E/T validation | Blinded three-expert evaluation (majority reference, linear-weighted κ primary, OOF predictions primary set); E4 not validated (no case) | {cell('Table: Model vs expert agreement')} |
 | R4 — overlap with the J Dent 2026 cohort | Name matching: 149 of 216 high-smile-line images have a reference measurement from the earlier study's measurement file; clinical confirmation pending | `{outputs / '01_data' / 'parse_report.md'}` |
 | R4 — external validity claim | Removed; single-centre, single-device limitation stated | manuscript text (Guc_analizi §2) |
+| R4 #8 — architecture comparison not fair (different dataset versions) | {arch_cell} | `{outputs / '08_architecture' / 'RESULTS.md'}`, `{outputs / '08_architecture' / 'PROTOCOL.md'}`, `{outputs / '08_architecture' / 'PROTOCOL_ADDENDUM_resolution.md'}`, `{outputs / '08_architecture' / 'FINDINGS.md'}` |
+| R4 / R2 — is the measurement method itself a free choice? | All {est_st.get('n_combinations', '?')} regioning x estimator combinations with their dev MAE, holdout MAE, ICC(2,1) and Bland-Altman bias. The method ({est_st.get('selected', '?')}) and the scale ({est_st.get('selected_px_per_mm', '?')} px/mm) were selected **once**, on ground-truth masks on the development subset, and were never re-selected or re-fitted on predicted masks; the table shows how little the result depends on that choice. Selection rule: {est_st.get('selection_rule', 'see oracle_summary.md')} Regioning fallback: {est_st.get('regioning_fallback', '?')} on ground-truth masks and {est_st.get('regioning_fallback_predicted_masks', '?')} on the out-of-fold predicted masks (pre-registered re-evaluation threshold {est_st.get('fallback_reeval_threshold', '30 %')}) | {cell('Table: Measurement-method sensitivity')} |
 | Figure 6 inconsistency | Explained as a corrected software error (lip contour top-edge deviation, pixels reported as mm; v3 vs v4 on the same masks) and replaced by the corrected measurement vs reference figure | `{outputs / '02_measure' / 'v3_vs_v4.md'}`, {cell('Figure: measurement vs clinical reference, GT masks')}, {cell('Figure: measurement vs clinical reference, predicted')} |
 | Intra-observer reliability (20 images) | ICC(2,1) 0.995 tooth level / 0.998 image level, SD 0.17 mm | {cell('Table: intra-observer')} |
 | Segmentation performance, clean split | Per-class box/mask mAP@50, mAP@50–95, P, R, F1 and confusion matrix on the fixed test set | {cell('Table: Segmentation metrics')} |
@@ -188,8 +222,10 @@ as such in the architecture appendix and are never merged into the rows above.
     (out / "OZET.md").write_text(f"""# Aşama 7 — Türkçe özet
 
 - `scripts/build_report.py` mevcut verilerle {n_done} öge üretti, {n_pend} öge bekliyor (`report_status.md`: ne gerektiği yazıyor). Veri gelince aynı komut yeniden çalıştırılır.
-- Hazır: blok diyagramı, GT overlay, GT-maske ölçüm figürü (Figure 6 yerine), veri seti sayıları, demografi, mm doğruluğu (GT satırları), gözlemci içi.
-- Bekleyen: segmentasyon örnekleri, öğrenme eğrisi, sınır hatası, test metrikleri (iş istasyonu); tahmin maskesi doğruluğu (Aşama 6); uzman uyumu (gerçek formlar).
+- Hazır:
+{chr(10).join('  - ' + i for i in st_df.loc[st_df["status"] == "done", "item"])}
+- Bekleyen:
+{(chr(10).join('  - ' + i + ' — ' + str(n) for i, n in zip(st_df.loc[st_df["status"] == "pending", "item"], st_df.loc[st_df["status"] == "pending", "needs"] if "needs" in st_df.columns else st_df.loc[st_df["status"] == "pending", "item"])) or "  - yok")}
 - `REVIZYON_OZETI.md`: hakem maddesi ↔ çıktı eşlemesi (✅ / ⏳).
 - Hakem cevabı taslağı: `RESPONSE_TO_REVIEWERS.md`, durum tablosu `REBUTTAL_DURUM.md`, Türkçe özet `REBUTTAL_OZET.md` (üretim: `scripts/build_rebuttal.py`).
 """, encoding="utf-8")
