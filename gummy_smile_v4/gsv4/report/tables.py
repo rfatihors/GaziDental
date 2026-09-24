@@ -185,6 +185,55 @@ def segmentation_metrics(pred_dir: Path, stage6_dir: Optional[Path] = None) -> T
     return df, st
 
 
+def segmentation_metrics_facts(tab: Path) -> Dict[str, Any]:
+    """The test-set segmentation table in whichever shape Stage 7 wrote it, plus its provenance.
+
+    Two evaluators write this table and they do not produce the same quantities:
+
+    * **per_class** — Ultralytics ``val()`` (YOLO): one row per class, box and mask precision, recall
+      and mAP, at the evaluation settings named in the `settings` column;
+    * **coco_pooled** — RF-DETR's own COCO evaluation (pycocotools): ``metric,value`` rows, pooled
+      over the two classes. pycocotools computes a per-category AP internally but ``evaluate()``
+      returns only the pooled summary, so there is **no** per-class mAP in this file.
+
+    The caller must not paper over the difference: ``per_class`` says whether class-level mAP exists,
+    ``evaluator`` and ``format`` say where the numbers come from, and every answer that quotes them is
+    expected to name both. Per-class evidence for a pooled table comes from the framework-independent
+    boundary/IoU table instead (`boundary_by_set.csv`), which is per class by construction.
+    """
+    csv, meta = tab / "segmentation_metrics_test.csv", tab / "segmentation_metrics_test.md"
+    if meta.exists() and "PENDING — needs:" in meta.read_text(encoding="utf-8"):
+        raise SystemExit(f"{meta} is pending: {meta.read_text(encoding='utf-8').split('needs:')[-1].strip()}\n"
+                         "Run Stage 6 for this model and re-run scripts/build_report.py first.")
+    F: Dict[str, Any] = {k: _md_meta(meta, k) for k in ("source", "model", "evaluator", "masks", "note", "settings")}
+    df = pd.read_csv(csv)
+    if "class" in df.columns:
+        if "settings" in df.columns:
+            std = df[df["settings"].astype(str).str.startswith("standard")]
+            block, kind = (std, "standard") if len(std) else (df, str(df["settings"].iloc[0]))
+        else:
+            block, kind = df, "operating_point_legacy"
+        t = block.set_index("class")
+        F.update(format="per_class", per_class=True, settings_kind=kind, table=t,
+                 classes={"gingiva": t.loc["diseti"].to_dict(), "lip": t.loc["dudak"].to_dict()},
+                 pooled=t.loc["all"].to_dict())
+        F["evaluator"] = F["evaluator"] or "Ultralytics val() (box and mask precision, recall, F1, mAP@50, mAP@50-95)"
+    else:
+        v = {str(m): float(x) for m, x in zip(df["metric"], df["value"])}
+
+        def g(name: str) -> float:
+            return next((x for k, x in v.items() if k.rsplit("/", 1)[-1] == name), float("nan"))
+
+        F.update(format="coco_pooled", per_class=False, settings_kind="coco_standard", table=df, classes={},
+                 pooled={"seg_map50": g("segm_mAP_50"), "seg_map50_95": g("segm_mAP_50_95"),
+                         "box_map50": g("mAP_50"), "box_map50_95": g("mAP_50_95"), "box_map75": g("mAP_75"),
+                         "mar": g("mAR"), "precision": g("precision"), "recall": g("recall"), "f1": g("F1")})
+        F["evaluator"] = F["evaluator"] or "the model's own COCO evaluation (pycocotools, iouType='segm')"
+    F["source"] = F["source"] or str(csv)
+    F["provenance"] = f"{F['evaluator']}" + ("" if F["per_class"] else ", pooled over the two classes")
+    return F
+
+
 def learning_curve(pred_dir: Path, producer: str = "gsv4.train.learning_curve --collect on the workstation") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
     """The learning-curve points of whichever model this report is built for.
 

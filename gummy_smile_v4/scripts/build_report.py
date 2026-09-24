@@ -56,7 +56,9 @@ def main() -> int:
     status = []
 
     # ---------------- figures
-    status.append({"item": "Figure: system block diagram (Reviewer 1)", **F.block_diagram(fig_dir / "pipeline_block_diagram.md", fig_dir / "pipeline_block_diagram.png")})
+    status.append({"item": "Figure: system block diagram (Reviewer 1)",
+                   **F.block_diagram(fig_dir / "pipeline_block_diagram.md", fig_dir / "pipeline_block_diagram.png",
+                                     model="\n".join(model_label.split(", ")[:2]) if acc6.exists() else "Instance segmentation model")})
     status.append({"item": "Figure: segmentation examples GT vs prediction (Reviewer 1)",
                    **F.segmentation_examples(cfg, manifest, [pred_dir / "test", pred_dir / "oof"], fig_dir / "segmentation_examples.png")})
     per = oracle_dir / "per_image_results.csv"
@@ -106,7 +108,11 @@ def main() -> int:
     df, st = T.dataset_counts(manifest, splits, pairs); emit("dataset_counts", df, st, "Dataset before/after cleaning and per split (Reviewers 2 #5/#6, 4)")
     df, st = T.demographics(manifest); emit("demographics", df, st, "Demographic coverage (Reviewer 3)")
     df, st = T.measurement_accuracy(oracle_dir, prediction_eval_dir); emit("measurement_accuracy", df, st, "Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)")
-    df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir); emit("segmentation_metrics_test", df, st, "Segmentation metrics on the fixed test set (per class)")
+    df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir)
+    # the two evaluators do not produce the same table: Ultralytics gives a row per class, a COCO
+    # evaluation gives metric/value rows pooled over the classes. The heading says which one this is.
+    emit("segmentation_metrics_test", df, st, "Segmentation metrics on the fixed test set"
+         + (" (per class)" if df is not None and "class" in df.columns else " (pooled over the classes by this model's own evaluator)"))
     # the points come from the same directory as the figure above: the curve of the model this report
     # reports, never the previous final model's curve standing in for it (PLAN.md 4, Amendment 2)
     lc_dir = pred_dir if (args.stage6 == "06_prediction" and not (prediction_eval_dir / "learning_curve.csv").exists()) else prediction_eval_dir

@@ -38,21 +38,6 @@ DOCS = {
 }
 
 
-def read_segmentation_metrics(path):
-    """The reported per-class block of tables/segmentation_metrics_test.csv plus its settings label.
-
-    The table carries one block per evaluation setting since PROTOCOL.md §4; a file written before
-    that has a single, unlabelled block computed at the pipeline operating point.
-    """
-    t = pd.read_csv(path)
-    if "settings" not in t.columns:
-        return t.set_index("class"), "operating_point_legacy"
-    std = t[t["settings"].str.startswith("standard")]
-    if len(std):
-        return std.set_index("class"), "standard"
-    return t.set_index("class"), str(t["settings"].iloc[0])
-
-
 def clean(t: str) -> str:
     """Strip the bold/italic markers the export scattered through the text."""
     t = t.replace("**", "").replace("*", "")
@@ -80,11 +65,14 @@ def find(sents: List[str], anchor: str, span: int = 1) -> Optional[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", default=None)
+    ap.add_argument("--stage6", default="09_final_rfdetr", help="Stage-6 directory of the model the manuscript reports")
+    ap.add_argument("--prev-stage6", default="06_prediction", help="the previous final model's Stage 6; used only where its run covered images this one did not")
     args = ap.parse_args()
     cfg = load_config(args.config)
     root = cfg["_root"]
     outputs = resolve(cfg, cfg["paths"]["outputs"])
-    o3, o5, o6, o7 = outputs / "03_oracle", outputs / "05_predictions", outputs / "06_prediction", outputs / "07_report"
+    o3, o5, o7 = outputs / "03_oracle", outputs / "05_predictions", outputs / "07_report"
+    o6, prev6 = outputs / args.stage6, outputs / args.prev_stage6
     tab = o7 / "tables"
 
     def sfile(p: Path) -> str:
@@ -99,29 +87,71 @@ def main() -> int:
     # ------------------------------------------------------------------ numbers
     dc = pd.read_csv(tab / "dataset_counts.csv").set_index("group")
     dem = pd.read_csv(tab / "demographics.csv").set_index("group")
-    seg, seg_kind = read_segmentation_metrics(tab / "segmentation_metrics_test.csv")
-    tm = json.loads((o5 / "test_metrics.json").read_text())
+    SEG = T.segmentation_metrics_facts(tab)
+    # the Ultralytics test-metrics file (confusion matrix included) belongs to the YOLO runs only
+    tm = json.loads((o5 / "test_metrics.json").read_text()) if ((o5 / "test_metrics.json").exists() and SEG["per_class"]) else {}
     LC = T.learning_curve_facts(tab, o5 / "learning_curve.md")
     lc = LC["df"]
     acc = pd.read_csv(o6 / "measurement_accuracy.csv").set_index("set")
     est3 = pd.read_csv(o3 / "estimator_comparison.csv").set_index("combo")
     bset = pd.read_csv(o6 / "boundary_by_set.csv").set_index("set")
+    prev_bset = pd.read_csv(prev6 / "boundary_by_set.csv").set_index("set") if (prev6 / "boundary_by_set.csv").exists() else None
     intra = (o3 / "intra_observer.md").read_text(encoding="utf-8")
     ms = T.measurement_accuracy(o3, o6)[1]
     k = float(cfg["measurement"]["px_per_mm"])
     off_px = int(cfg["measurement"]["bottom_edge_offset_px"])
     method = f"{cfg['measurement']['method']['regioning']}_{cfg['measurement']['method']['estimator']}"
-    train_args = json.loads((o5 / "final" / "environment.json").read_text())["train_args"]
-    env = json.loads((o5 / "final" / "environment.json").read_text())["environment"]
+    # How the model the manuscript reports was trained. The YOLO final run wrote
+    # outputs/05_predictions/final/environment.json; an RF-DETR run writes a training record beside
+    # its metrics file (rfdetr_train_<tag>.json) plus rfdetr_environment.json. The appendix edits
+    # describe the reported model's own run, never the other one's.
+    yolo_env_path = o5 / "final" / "environment.json"
+    train_args = env = None
+    if SEG["per_class"] and yolo_env_path.exists():
+        rec = json.loads(yolo_env_path.read_text())
+        train_args, env = rec["train_args"], rec["environment"]
+        train_desc = (f"model {cfg['yolo']['model']}; {int(train_args['epochs'])} epochs, batch {int(train_args['batch'])}, image size {int(train_args['imgsz'])}, "
+                      f"{train_args['optimizer']} optimiser, initial learning rate {train_args['lr0']}, final learning-rate fraction {train_args['lrf']}, cosine schedule, "
+                      f"close_mosaic {int(train_args['close_mosaic'])}, patience {int(train_args['patience'])}, seed {int(train_args['seed'])}, deterministic training; "
+                      f"{env.get('torch', '?')} / Ultralytics {env.get('ultralytics', '?')} on an {env.get('gpu', '?')}")
+        train_src = sfile(yolo_env_path)
+    else:
+        tr_path = root / str(SEG["source"]).replace("rfdetr_metrics_", "rfdetr_train_")
+        env_path = outputs / "08_architecture" / "rfdetr_environment.json"
+        if tr_path.exists():
+            r = json.loads(tr_path.read_text())
+            e = json.loads(env_path.read_text()).get("torch", {}) if env_path.exists() else {}
+            stop = r.get("early_stopping") or {}
+            train_desc = (f"model {r.get('variant', SEG['model'])} at resolution {r.get('resolution', '?')}, at the published defaults — nothing tuned; "
+                          f"epoch budget {r.get('epochs_budget', '?')}"
+                          + (f" with early stopping after {stop.get('early_stopping_patience')} epochs without improvement on {r.get('monitored_metric', '?')}" if stop.get("early_stopping") else "")
+                          + f", seed {r.get('seed', '?')}"
+                          + (f"; torch {e.get('version', '?')} on an {e.get('gpu', '?')}" if e else ""))
+            train_src = sfile(tr_path)
+        else:
+            train_desc = f"[PENDING — the training record of {SEG['model']} ({tr_path.name}) is not in outputs/]"
+            train_src = sfile(tr_path)
 
     P = acc.loc["(a) OOF masks, all reference images [PRIMARY]"]
-    Pc = acc.loc["(a) OOF masks, all reference images [PRIMARY] — corrected"]
+    corrected = "(a) OOF masks, all reference images [PRIMARY] — corrected" in acc.index
+    Pc = acc.loc["(a) OOF masks, all reference images [PRIMARY] — corrected"] if corrected else None
     B = acc.loc["(b) final model masks, test high images [secondary set]"]
     G = acc.loc["GT masks, all reference images (Stage 3, same method and scale)"]
     G3 = est3.loc[method]
-    a6 = bset.loc["(a) OOF, 145 reference high"]
+    a6, b6 = bset.loc["(a) OOF, 145 reference high"], bset.loc["(b) test high, final model"]
     low6, norm6 = bset.loc["(c) test low"], bset.loc["(c) test normal"]
-    sg, sl, sa = seg.loc["diseti"], seg.loc["dudak"], seg.loc["all"]
+    pooled_test_covered = bool(pd.notna(low6["gingiva_mask_iou_mean"]) or int(low6["n"]) > 0)
+    if not pooled_test_covered and prev_bset is not None:      # the annotation statistics, from the run that covered the whole test set
+        low6, norm6 = prev_bset.loc["(c) test low"], prev_bset.loc["(c) test normal"]
+    sp = SEG["pooled"]
+    model_label = SEG["model"] or "the final model"
+    # the COCO evaluation covers the whole test split; the count comes from the dataset table, not
+    # from another model's metrics file
+    n_test = int(tm.get("n_images", 0)) or int(dc.loc["total", "test"])
+
+    def segc(cls, key):
+        return SEG["classes"].get(cls, {}).get(key, float("nan"))
+
     cm = np.array(tm.get("confusion_matrix", []))
     g_tp, g_fp, g_fn = (cm[0, 0], cm[0, 2], cm[2, 0] + cm[1, 0]) if cm.shape == (3, 3) else (np.nan,) * 3
     lc25, lc100 = lc[lc.fraction == 0.25].iloc[0], lc[lc.fraction == 1.0].iloc[0]
@@ -139,7 +169,7 @@ def main() -> int:
     S = {"dc": sfile(tab / "dataset_counts.csv"), "dem": sfile(tab / "demographics.csv"), "seg": sfile(tab / "segmentation_metrics_test.csv"),
          "tm": sfile(o5 / "test_metrics.json"), "lc": sfile(tab / "learning_curve.csv"), "acc": sfile(o6 / "measurement_accuracy.csv"),
          "est3": sfile(o3 / "estimator_comparison.csv"), "bset": sfile(o6 / "boundary_by_set.csv"), "intra": sfile(o3 / "intra_observer.md"),
-         "env": sfile(o5 / "final" / "environment.json"), "off": sfile(o6 / "offset_correction.md"), "cfg": "configs/config.yaml"}
+         "env": train_src, "off": sfile(o6 / "offset_correction.md"), "cfg": "configs/config.yaml"}
 
     def f(x, d=2, sign=False):
         return f"{x:+.{d}f}" if sign else f"{x:.{d}f}"
@@ -169,11 +199,16 @@ def main() -> int:
          "The submitted Abstract lets the reader assume that all 1,315 images entered the quantitative analysis and does not state the partition level.",
          "R2-1, R2-5, R2-6, R3-Results-2, R4-7", [S["dc"]])
     edit("manuscript", "Abstract (Results)", "YOLOv11x-seg demonstrated the best overall segmentation performance, with a mask mAP@50 of 0.79369",
-         f"On the fixed, participant-level test set (n = {int(tm.get('n_images', 0))} images, evaluated once) the final YOLOv11x-seg model achieved a mask mAP@50 of {f(sa['seg_map50'])} "
-         f"(gingiva {f(sg['seg_map50'])}, lip {f(sl['seg_map50'])}), mask mAP@50–95 {f(sa['seg_map50_95'])}, mask precision {f(sa['seg_precision'])} and mask recall {f(sa['seg_recall'])}; "
-         f"the corresponding box metrics were mAP@50 {f(sa['box_map50'])}, precision {f(sa['box_precision'])} and recall {f(sa['box_recall'])}. "
-         f"Gingival display measured from the predicted masks agreed with the clinical reference measurements with {fm(P)} on the {int(P['n'])} high-smile-line images predicted out of fold, "
-         f"and {fm(B)} on the fixed test set. In a secondary analysis correcting a systematic displacement of the lower gingival margin, the out-of-fold error fell to MAE {f(Pc['mae'])} mm with a mean difference of {f(Pc['ba_bias'], 2, True)} mm.",
+         f"On the fixed, participant-level test set (n = {n_test} images, evaluated once) the final model ({model_label}) achieved a mask mAP@50 of {f(sp['seg_map50'])} "
+         + (f"(gingiva {f(segc('gingiva', 'seg_map50'))}, lip {f(segc('lip', 'seg_map50'))}), mask mAP@50–95 {f(sp['seg_map50_95'])}, mask precision {f(sp['seg_precision'])} and mask recall {f(sp['seg_recall'])}; "
+            f"the corresponding box metrics were mAP@50 {f(sp['box_map50'])}, precision {f(sp['box_precision'])} and recall {f(sp['box_recall'])}. "
+            if SEG["per_class"] else
+            f"(both classes together; {SEG['evaluator']}) and a mask mAP@50–95 of {f(sp['seg_map50_95'])}, with box mAP@50 {f(sp['box_map50'])}. "
+            f"That evaluation returns no per-class average precision; per-class segmentation quality is reported in the Results as mask IoU and boundary error (gingiva IoU {f(a6['gingiva_mask_iou_mean'])}, lip IoU {f(a6['lip_mask_iou_mean'])}). ")
+         + f"Gingival display measured from the predicted masks agreed with the clinical reference measurements with {fm(P)} on the {int(P['n'])} high-smile-line images predicted out of fold, "
+         + f"and {fm(B)} on the fixed test set."
+         + (f" In a secondary analysis correcting a systematic displacement of the lower gingival margin, the out-of-fold error fell to MAE {f(Pc['mae'])} mm with a mean difference of {f(Pc['ba_bias'], 2, True)} mm." if corrected else
+            " No post-hoc calibration is applied: these are the only measurement results reported."),
          "The submitted numbers are validation-set metrics of a model tuned on that validation set, and mix Box with Mask metrics without labelling them; no millimetre accuracy is reported.",
          "R2-2, R2-8, R3-Results-4, R4-4, R4-6", [S["seg"], S["tm"], S["acc"]], span=2)
     edit("manuscript", "Abstract (Conclusions)", "The proposed framework enables objective quantification of gingival display and translates these measurements",
@@ -248,18 +283,30 @@ def main() -> int:
          "'Superior performance' is not defined and the comparison is not controlled; the reviewer also asks what 'performance' means.",
          "R3-Results-4, R4-8", [], span=2)
     edit("manuscript", "3.1 Model selection (validation metrics)", "The validation results of the final YOLOv11x-seg model were as follows",
-         f"The final YOLOv11x-seg model was evaluated once on the fixed, participant-level test set (n = {int(tm.get('n_images', 0))} images): mask mAP@50 {f(sa['seg_map50'])}, mask mAP@50–95 {f(sa['seg_map50_95'])}, mask precision {f(sa['seg_precision'])}, mask recall {f(sa['seg_recall'])}, mask F1 {f(sg['seg_f1'])} (gingiva) and {f(sl['seg_f1'])} (lip); "
-         f"box mAP@50 {f(sa['box_map50'])}, box mAP@50–95 {f(sa['box_map50_95'])}, box precision {f(sa['box_precision'])}, box recall {f(sa['box_recall'])}. "
-         f"Per class, mask mAP@50 was {f(sg['seg_map50'])} for gingiva and {f(sl['seg_map50'])} for lip. Metric type (Box or Mask) is stated for every value; validation-set metrics are not reported as results.",
+         f"The final model ({model_label}) was evaluated once on the fixed, participant-level test set (n = {n_test} images), by {SEG['evaluator']}: "
+         + (f"mask mAP@50 {f(sp['seg_map50'])}, mask mAP@50–95 {f(sp['seg_map50_95'])}, mask precision {f(sp['seg_precision'])}, mask recall {f(sp['seg_recall'])}, mask F1 {f(segc('gingiva', 'seg_f1'))} (gingiva) and {f(segc('lip', 'seg_f1'))} (lip); "
+            f"box mAP@50 {f(sp['box_map50'])}, box mAP@50–95 {f(sp['box_map50_95'])}, box precision {f(sp['box_precision'])}, box recall {f(sp['box_recall'])}. "
+            f"Per class, mask mAP@50 was {f(segc('gingiva', 'seg_map50'))} for gingiva and {f(segc('lip', 'seg_map50'))} for lip. "
+            if SEG["per_class"] else
+            f"mask mAP@50 {f(sp['seg_map50'])}, mask mAP@50–95 {f(sp['seg_map50_95'])}, box mAP@50 {f(sp['box_map50'])}, box mAP@50–95 {f(sp['box_map50_95'])}, box mAP@75 {f(sp['box_map75'])}, mean average recall {f(sp['mar'])}; "
+            f"precision {f(sp['precision'])}, recall {f(sp['recall'])} and F1 {f(sp['f1'])} as that evaluation returns them, i.e. over both classes and without a box/mask split. "
+            "Average precision is pooled over the two classes and no per-class value is produced by this evaluation; per-class segmentation quality is reported as mask IoU and boundary error in the boundary subsection. ")
+         + "Metric type (Box or Mask) is stated for every value; validation-set metrics are not reported as results.",
          "The submitted figures are validation-set metrics of a model whose hyperparameters were selected on that validation set, and the list mixes Box precision/recall with Mask mAP without labels.",
          "R2-2, R2-8, R4-6", [S["seg"], S["tm"]], span=8, action="replace whole list")
     edit("manuscript", "3.1 (class-wise lip performance)", "lip segmentation showed consistently high performance across all models, with class-wise mAP values ranging from 97.0% to 99.0%",
-         f"On the fixed test set, lip segmentation reached a mask mAP@50 of {f(sl['seg_map50'])} whereas gingiva segmentation reached {f(sg['seg_map50'])}. "
-         f"The difference is examined at the boundary rather than left as an aggregate gap: against the annotated masks of the {int(a6['n'])} reference images, the upper, lip-side gingiva edge is accurate "
+         (f"On the fixed test set, lip segmentation reached a mask mAP@50 of {f(segc('lip', 'seg_map50'))} whereas gingiva segmentation reached {f(segc('gingiva', 'seg_map50'))}. "
+            if SEG["per_class"] else
+            f"On the fixed test set the evaluation of this model reports mask mAP@50 {f(sp['seg_map50'])} over the two classes together and no per-class value, so the lip/gingiva difference is reported where it can be measured per class: "
+            f"mask IoU {f(a6['lip_mask_iou_mean'])} for the lip against {f(a6['gingiva_mask_iou_mean'])} for the gingiva. ")
+         + f"The difference is examined at the boundary rather than left as an aggregate gap: against the annotated masks of the {int(a6['n'])} reference images, the upper, lip-side gingiva edge is accurate "
          f"(mean absolute column-wise error {f(a6['gingiva_top_edge_mae_mm_mean'])} mm, bias {f(a6['gingiva_top_edge_bias_mm_mean'], 2, True)} mm) while the lower, festooned gingival margin is placed systematically too low "
          f"({f(a6['gingiva_bottom_edge_mae_mm_mean'])} mm, bias {f(a6['gingiva_bottom_edge_bias_mm_mean'], 2, True)} mm); gingiva mask IoU {f(a6['gingiva_mask_iou_mean'])}, lip mask IoU {f(a6['lip_mask_iou_mean'])}. "
-         f"Pooled over the whole test set the gingiva IoU is lower ({f(bset.loc['(c) test all', 'gingiva_mask_iou_mean'])}) because in low ({f(low6['gingiva_mask_iou_mean'])}) and average ({f(norm6['gingiva_mask_iou_mean'])}) smile lines the annotated gingiva is thin or absent "
-         f"(median annotated width {low6['gingiva_n_columns_gt_median']:.0f} image columns in the low group against {a6['gingiva_n_columns_gt_median']:.0f} in the high group).",
+         + (f"Pooled over the whole test set the gingiva IoU is lower ({f(bset.loc['(c) test all', 'gingiva_mask_iou_mean'])}) because in low ({f(low6['gingiva_mask_iou_mean'])}) and average ({f(norm6['gingiva_mask_iou_mean'])}) smile lines the annotated gingiva is thin or absent "
+            f"(median annotated width {low6['gingiva_n_columns_gt_median']:.0f} image columns in the low group against {a6['gingiva_n_columns_gt_median']:.0f} in the high group)."
+            if pooled_test_covered else
+            f"In low and average smile lines the annotated gingiva is thin or absent (median annotated width {low6['gingiva_n_columns_gt_median']:.0f} and {norm6['gingiva_n_columns_gt_median']:.0f} image columns against {a6['gingiva_n_columns_gt_median']:.0f} in the high group — a property of the annotation), "
+            "which is why those images are training material and the measurement is specified for the high smile line only."),
          "The reviewers ask for a quantitative investigation of the lip/gingiva gap and for the low gingiva value to be stated in the text.",
          "R2-8, R2-10", [S["seg"], S["bset"]], span=2)
     edit("manuscript", "3.x (new section)", "Clinical threshold-based classification",
@@ -267,13 +314,18 @@ def main() -> int:
          f"Measurement geometry was first evaluated on the annotated masks ({fm(G)}; method {method}, scale fitted on a 60 % development subset and applied unchanged to the remaining 40 %: MAE {f(G3['mae_holdout'])} mm, ICC {f(G3['icc2_1_holdout'], 3)}). "
          f"The full pipeline was then evaluated on the model's own masks, each image predicted by a model that had not seen it: {fm(P)}; agreement with the reference class was {100 * P['threshold_agreement']:.0f} % (linear-weighted κ {f(P['threshold_kappa_linear'], 2)}) and {100 * P['within_1_mm']:.0f} % of images were within 1 mm of the reference. "
          f"On the fixed test set with the final model: {fm(B)}. One image ({int(P['n_segmentation_failure'])} of {int(P['n']) + int(P['n_segmentation_failure'])}) produced no gingiva mask and is reported as a segmentation failure rather than as a 0 mm measurement. "
-         f"A post-hoc correction of the lower gingival margin (mask level, {abs(off_px)} px estimated on the development subset) is reported as a secondary analysis: MAE {f(Pc['mae'])} mm, mean difference {f(Pc['ba_bias'], 2, True)} mm, class agreement {100 * Pc['threshold_agreement']:.0f} %.\"",
+         + (f"A post-hoc correction of the lower gingival margin (mask level, {abs(off_px)} px estimated on the development subset) is reported as a secondary analysis: MAE {f(Pc['mae'])} mm, mean difference {f(Pc['ba_bias'], 2, True)} mm, class agreement {100 * Pc['threshold_agreement']:.0f} %.\""
+            if corrected else
+            "No post-hoc calibration is applied: a correction of the lower gingival margin was re-estimated for this model and dropped because its gain was below the repeatability of the clinical reference, so a single, uncorrected result set is reported.\""),
          "The manuscript reports no millimetre accuracy at all; this is the reviewers' central objection and the thresholds at 3, 4, 6 and 8 mm make the measurement error clinically decisive.",
          "R3-Results-5, R4-3, R4-4", [S["acc"], S["est3"], S["off"]])
     edit("manuscript", "3.4 Confusion matrix analysis", "For the gingiva class, the normalized diagonal value was ≈ 72 %",
-         f"On the fixed test set the model produced {int(g_tp)} correct gingiva instances, {int(g_fp)} false positives and {int(g_fn)} false negatives for the gingiva class "
-         f"(precision {f(sg['seg_precision'])}, recall {f(sg['seg_recall'])} for the mask), against {f(sl['seg_precision'])} and {f(sl['seg_recall'])} for the lip class. "
-         "Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation, because there is no fixed set of candidate regions and hence no count of true negatives; precision, recall, F1 and the confusion matrix are reported instead.",
+         (f"On the fixed test set the model produced {int(g_tp)} correct gingiva instances, {int(g_fp)} false positives and {int(g_fn)} false negatives for the gingiva class "
+            f"(precision {f(segc('gingiva', 'seg_precision'))}, recall {f(segc('gingiva', 'seg_recall'))} for the mask), against {f(segc('lip', 'seg_precision'))} and {f(segc('lip', 'seg_recall'))} for the lip class. "
+            if SEG["per_class"] and np.isfinite(g_tp) else
+            f"On the fixed test set the evaluation of this model gives precision {f(sp['precision'])}, recall {f(sp['recall'])} and F1 {f(sp['f1'])} over both classes; it produces no per-class confusion matrix of instance counts, and the previous model's matrix is not carried over. "
+            f"What is reported per class is the image-level outcome of the segmentation: on the {int(b6['n'])} high-smile-line test images the gingiva is missed in {int(b6['n_missed'])} and predicted where the annotation has none in {int(b6['n_spurious'])}, and on the {int(a6['n'])} out-of-fold reference images in {int(a6['n_missed'])} and {int(a6['n_spurious'])}. ")
+         + "Sensitivity and specificity in the epidemiological sense are not defined for instance segmentation, because there is no fixed set of candidate regions and hence no count of true negatives; precision, recall and F1 are reported instead, with the per-image missed and spurious counts above.",
          "The reviewer asks explicitly whether false positives and false negatives were computed, and whether 'performance' means sensitivity or specificity.",
          "R3-Results-4", [S["tm"], S["seg"]], span=2)
     edit("manuscript", "3.5 (Figure 6)", "To enable clinically interpretable output, the quantified gingival display values were integrated into a predefined threshold-based decision framework",
@@ -294,7 +346,9 @@ def main() -> int:
     edit("manuscript", "4 Discussion (limitations)", "the relatively limited demographic and phenotypic diversity of the dataset may have led to insufficient representation of rare smile patterns",
          "Expand the Limitations to state, each in its own sentence: single centre and single device, so the performance is an internal estimate; gingival and skin pigmentation and ethnicity were not recorded, so their effect on segmentation could not be assessed; "
          f"age and sex were recorded for part of the cohort only ({int(dem.loc['all', 'age_recorded'])} and {int(dem.loc['all', 'sex_recorded'])} of {int(dem.loc['all', 'n'])}); the E4 class (> 8 mm) does not occur in this cohort, so that branch of the decision table is not validated; "
-         f"gingival segmentation is the weakest component (test-set mask mAP@50 {f(sg['seg_map50'])}) and places the lower gingival margin {f(a6['gingiva_bottom_edge_bias_mm_mean'])} mm too low on average; "
+         + (f"gingival segmentation is the weakest component (test-set mask mAP@50 {f(segc('gingiva', 'seg_map50'))}) and places the lower gingival margin {f(a6['gingiva_bottom_edge_bias_mm_mean'])} mm too low on average; "
+            if SEG["per_class"] else
+            f"gingival segmentation is the weakest component (mask IoU {f(a6['gingiva_mask_iou_mean'])} against {f(a6['lip_mask_iou_mean'])} for the lip) and places the lower gingival margin {f(a6['gingiva_bottom_edge_bias_mm_mean'])} mm too low on average; ")
          + ("" if LC["plateau"] else
             "the learning curve had not plateaued within the available training-set size, so additional training data could still improve segmentation performance; ")
          + "and one image produced no gingiva mask, so a deployed system must flag such images for manual review rather than output a value.",
@@ -327,9 +381,7 @@ def main() -> int:
          "R2-5, R4-7, R4-8", [])
     edit("Appendix D", "D.1 (expanded version)", "Expanded version: Updated dataset used during the hyperparameter optimization phase, containing 3,403 images",
          f"Replace with the final training configuration actually used: dataset {int(dc.loc['total', 'kept'])} images partitioned at participant level ({int(dc.loc['total', 'train'])} / {int(dc.loc['total', 'valid'])} / {int(dc.loc['total', 'test'])}); "
-         f"model {cfg['yolo']['model']}; {int(train_args['epochs'])} epochs, batch {int(train_args['batch'])}, image size {int(train_args['imgsz'])}, {train_args['optimizer']} optimiser, initial learning rate {train_args['lr0']}, final learning-rate fraction {train_args['lrf']}, "
-         f"cosine schedule, close_mosaic {int(train_args['close_mosaic'])}, patience {int(train_args['patience'])}, seed {int(train_args['seed'])}, deterministic training; "
-         f"{env.get('torch', '?')} / Ultralytics {env.get('ultralytics', '?')} on an {env.get('gpu', '?')}.",
+         + train_desc + ".",
          "The appendix must describe the training that produced the reported model, not the superseded hyperparameter search on an augmented dataset version.",
          "R2-5, R2-9, R4-6, R4-7", [S["env"], S["cfg"]], span=3)
     edit("Appendix D", "D.1 (YOLOv8 screening)", "In the first Colab-based screening stage, YOLOv8-seg, YOLOv11-seg, and YOLO26-seg models were trained across multiple scales",
@@ -342,8 +394,10 @@ def main() -> int:
          "5,628 / 1,846 is exactly twice the v7 training-split count and is what Figure 4 reports; it is not an annotation count.",
          "R2-5", [S["dc"]])
     edit("Appendix E", "E.1", "Batch size: 16 (in advanced experiments increased to 32)",
-         f"Report the configuration of the reported model: batch {int(train_args['batch'])}, image size {int(train_args['imgsz'])}, {train_args['optimizer']}, initial learning rate {train_args['lr0']}, final fraction {train_args['lrf']}, cosine schedule, close_mosaic {int(train_args['close_mosaic'])}, patience {int(train_args['patience'])}, cache {train_args['cache']}, workers {int(train_args['workers'])}, seed {int(train_args['seed'])}. "
-         "Describe the earlier grid search as exploratory and state that it was performed on a superseded dataset version.",
+         f"Report the configuration of the reported model: {train_desc}. "
+         + ("Describe the earlier grid search as exploratory and state that it was performed on a superseded dataset version."
+            if SEG["per_class"] else
+            "Describe the earlier grid search as exploratory, performed on a superseded dataset version and on the previous final model; state that the reported model was not tuned, which removes the asymmetry the comparison had."),
          "The appendix should let a reader reproduce the reported model.",
          "R2-9, R4-6", [S["env"], S["cfg"]], span=3)
     edit("Appendix F", "F.1", "These results indicate that the YOLOv11 family provided the strongest overall balance among the compared models",

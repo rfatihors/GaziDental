@@ -1,4 +1,6 @@
 import json
+
+import pytest
 from pathlib import Path
 
 import pandas as pd
@@ -71,3 +73,42 @@ def test_learning_curve_yolo_curve_still_waits_for_its_runs(tmp_path):
     pd.DataFrame({"fraction": [0.25, 1.0], "run": ["lc25", "final"], "n_train_images": [211, 846],
                   "done": [True, False], "diseti_seg_map50": [0.40, 0.44]}).to_csv(tmp_path / "learning_curve.csv", index=False)
     assert T.learning_curve(tmp_path)[1]["status"] == "pending"
+
+
+def _write_table(dir_: Path, name: str, df: pd.DataFrame, meta: dict):
+    df.to_csv(dir_ / f"{name}.csv", index=False)
+    (dir_ / f"{name}.md").write_text(f"# {name}\n\n" + T.md_table(df) + "\n\n"
+                                     + "\n".join(f"- {k}: {v}" for k, v in meta.items()) + "\n", encoding="utf-8")
+
+
+def test_segmentation_metrics_facts_reads_both_table_shapes(tmp_path):
+    """Stage 7 writes one table per evaluator and they are not the same quantities: Ultralytics gives
+    a row per class, RF-DETR's COCO evaluation gives metric/value rows pooled over both classes. The
+    reader must say which one it has, so that no answer quotes a per-class mAP that does not exist."""
+    per_class = pd.DataFrame({"settings": ["standard"] * 3, "class": ["diseti", "dudak", "all"],
+                              "seg_map50": [0.41, 0.98, 0.70], "seg_map50_95": [0.16, 0.69, 0.43],
+                              "box_map50": [0.57, 0.99, 0.78]})
+    _write_table(tmp_path, "segmentation_metrics_test", per_class, {"source": "outputs/05_predictions/test_metrics.json"})
+    F = T.segmentation_metrics_facts(tmp_path)
+    assert F["per_class"] and F["format"] == "per_class" and F["settings_kind"] == "standard"
+    assert F["classes"]["gingiva"]["seg_map50"] == 0.41 and F["pooled"]["seg_map50"] == 0.70
+    assert "Ultralytics" in F["evaluator"]
+
+    coco = pd.DataFrame({"metric": ["test/mAP_50", "test/mAP_50_95", "test/segm_mAP_50", "test/segm_mAP_50_95",
+                                    "test/mAP_75", "test/mAR", "test/precision", "test/recall", "test/F1"],
+                         "value": [0.84, 0.53, 0.81, 0.47, 0.57, 0.68, 0.85, 0.81, 0.83]})
+    _write_table(tmp_path, "segmentation_metrics_test", coco,
+                 {"source": "outputs/08_architecture/rfdetr_metrics_rfdetr-seg-large_s42.json",
+                  "model": "RF-DETR-Seg Large @624, seed 42",
+                  "evaluator": "RF-DETR's own COCO evaluation (pycocotools, iouType='segm')"})
+    F = T.segmentation_metrics_facts(tmp_path)
+    assert not F["per_class"] and F["format"] == "coco_pooled" and F["classes"] == {}
+    assert F["pooled"]["seg_map50"] == 0.81 and F["pooled"]["box_map50"] == 0.84   # split prefix stripped, box != mask
+    assert F["model"].startswith("RF-DETR") and "pooled over the two classes" in F["provenance"]
+
+
+def test_segmentation_metrics_facts_refuses_a_pending_table(tmp_path):
+    (tmp_path / "segmentation_metrics_test.md").write_text("# x\n\nPENDING — needs: Stage 6 for this model\n", encoding="utf-8")
+    (tmp_path / "segmentation_metrics_test.csv").write_text("class,seg_map50\ndiseti,0.41\n", encoding="utf-8")
+    with pytest.raises(SystemExit):
+        T.segmentation_metrics_facts(tmp_path)

@@ -22,7 +22,7 @@ PANEL_DPI = 150   # photo panels (kept under 2 MB)
 
 MERMAID = """```mermaid
 flowchart LR
-    A[Smile photograph] --> B[YOLOv11x-seg<br/>imgsz 640, retina_masks]
+    A[Smile photograph] --> B[{model}]
     B --> C[Class-separated masks<br/>gingiva / lip, union of instances,<br/>original resolution]
     C --> D[Column-wise thickness profile t(x)<br/>longest vertical run, empty columns = 0]
     D --> E[Tooth regioning<br/>midline-anchored zeniths (C), fallback A]
@@ -43,11 +43,13 @@ def placeholder(path: Path, title: str, needs: str) -> Path:
     return path
 
 
-def block_diagram(out_md: Path, out_png: Path) -> Dict[str, Any]:
+def block_diagram(out_md: Path, out_png: Path, model: str = "Instance segmentation model") -> Dict[str, Any]:
+    """The pipeline diagram. ``model`` names the segmentation model this report is built for, so the
+    first box is never the previous final model's."""
     out_md.parent.mkdir(parents=True, exist_ok=True)
-    out_md.write_text("# System block diagram (Reviewer 1)\n\n" + MERMAID + "\n", encoding="utf-8")
+    out_md.write_text("# System block diagram (Reviewer 1)\n\n" + MERMAID.format(model=model.replace("\n", "<br/>")) + "\n", encoding="utf-8")
     boxes = [
-        ("Smile\nphotograph", "#e8eef7"), ("YOLOv11x-seg\nimgsz 640\nretina_masks", "#dbe9d8"),
+        ("Smile\nphotograph", "#e8eef7"), (model, "#dbe9d8"),
         ("Class-separated\nmasks (gingiva, lip)\nunion of instances,\noriginal resolution", "#dbe9d8"),
         ("Thickness profile\nt(x): longest vertical\nrun per column,\nempty columns = 0", "#fbe9d0"),
         ("Tooth regioning\nmidline-anchored\nzeniths (C),\nfallback A", "#fbe9d0"),
