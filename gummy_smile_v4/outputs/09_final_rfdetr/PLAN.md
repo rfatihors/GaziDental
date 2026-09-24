@@ -226,3 +226,43 @@ restores the YOLO appendix — and the finding it belongs to is described in
 the method and the scale of Stage 3, and the fallback rule of §7 are untouched. The 0.52 mm primary
 result is the uncorrected number that was pre-registered as primary; dropping the correction removes a
 secondary column, not the headline.
+
+## Amendment 4 — 24 Sep 2026: the learning curve of §3 has not plateaued
+
+**The result, before its reading.** RF-DETR-Seg Large @624, seed 42, each point evaluated by RF-DETR's
+own COCO evaluation on the same `val` split, metric `val/segm_mAP_50`:
+
+| subset | n_train images | val/segm_mAP_50 |
+|---|---|---|
+| 25 % | 211 | 0.7599 |
+| 50 % | 423 | 0.7868 |
+| 75 % | 635 | 0.7763 |
+| 100 % (final model, reused) | 846 | 0.8037 |
+
+Gain 25→50 %: +0.0269; 50→75 %: −0.0105; 75→100 %: +0.0274. The rule fixed with the YOLO curve —
+plateau when the 75→100 gain is under a quarter of the 25→50 gain — does not trigger: the late gain is
+the larger of the two. The curve is also not monotonic; the 75 % point falls below the 50 % point.
+
+**How it is reported.** "Performance had not plateaued within the available training-set size; the
+increments between adjacent points are of the same order as run-to-run variation, so the curve
+indicates that additional data could still improve segmentation performance. This is stated as a
+limitation." Each point is a single training run with a single seed, so the run-to-run spread was not
+measured: the curve carries no error bars, and the order of two adjacent points is not a result on its
+own. That caveat is stated wherever the curve is quoted.
+
+**What it changes.** The manuscript can no longer say the dataset is at the plateau of its learning
+curve. The three reviewer answers that leaned on a plateau — R2-9 (no meaningful gain), R2-sample-size
+and R4-external-validity — now carry the sentence above; `scripts/build_rebuttal.py` and
+`scripts/build_manuscript_edits.py` take the wording from the verdict in
+`outputs/07_report/tables/learning_curve.md`, so neither can report a plateau the curve does not show.
+The Limitations gain one sentence: additional training data could still improve segmentation.
+
+**This is consistent with Reviewer 4, not a concession against us.** Reviewer 4 argued that the cohort
+size does not establish external validity and that more, and more varied, data are needed. A curve that
+has not plateaued says the same thing from the model's side. The claim that is withdrawn is the one that
+was never supported — that this dataset is sufficient — and nothing in the measurement results, the
+architecture comparison or the primary outcome of §5 depends on it.
+
+**Unchanged.** §3 itself: the same subsets, the same validation set, the same 100 % point reused rather
+than retrained, one evaluator and one split for all four points. Reporting a curve that does not
+plateau is what §3 pre-registered as one of its two possible outcomes.

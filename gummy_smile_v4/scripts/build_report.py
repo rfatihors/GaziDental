@@ -107,8 +107,12 @@ def main() -> int:
     df, st = T.demographics(manifest); emit("demographics", df, st, "Demographic coverage (Reviewer 3)")
     df, st = T.measurement_accuracy(oracle_dir, prediction_eval_dir); emit("measurement_accuracy", df, st, "Millimetre accuracy vs clinical reference (Reviewers 2, 4; Figure 6 replacement)")
     df, st = T.segmentation_metrics(pred_dir, prediction_eval_dir); emit("segmentation_metrics_test", df, st, "Segmentation metrics on the fixed test set (per class)")
-    lc_dir = prediction_eval_dir if (prediction_eval_dir / "learning_curve.csv").exists() else pred_dir
-    df, st = T.learning_curve(lc_dir); emit("learning_curve", df, st, "Learning curve points (Supplementary S1)")
+    # the points come from the same directory as the figure above: the curve of the model this report
+    # reports, never the previous final model's curve standing in for it (PLAN.md 4, Amendment 2)
+    lc_dir = pred_dir if (args.stage6 == "06_prediction" and not (prediction_eval_dir / "learning_curve.csv").exists()) else prediction_eval_dir
+    lc_producer = ("gsv4.train.learning_curve --collect on the workstation" if lc_dir == pred_dir else
+                   f"scripts/build_rfdetr_learning_curve.py --out {args.stage6} on the workstation metrics")
+    df, st = T.learning_curve(lc_dir, lc_producer); emit("learning_curve", df, st, "Learning curve points (Supplementary S1)")
     df, st = T.expert_agreement(expert_dir); emit("expert_agreement", df, st, "Model vs expert agreement (Reviewer 4: clinical validity)")
     intra = oracle_dir / "intra_observer.md"
     status.append({"item": "Table: intra-observer reliability of the reference", "status": "done" if intra.exists() else "pending", "path": str(intra)})

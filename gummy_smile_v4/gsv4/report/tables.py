@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -184,16 +185,75 @@ def segmentation_metrics(pred_dir: Path, stage6_dir: Optional[Path] = None) -> T
     return df, st
 
 
-def learning_curve(pred_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+def learning_curve(pred_dir: Path, producer: str = "gsv4.train.learning_curve --collect on the workstation") -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:
+    """The learning-curve points of whichever model this report is built for.
+
+    Two producers write ``learning_curve.csv`` and the table takes either: the YOLO curve
+    (`gsv4/train/learning_curve.py`), whose rows appear one training run at a time and carry a
+    ``done`` flag, and the RF-DETR curve (`scripts/build_rfdetr_learning_curve.py`), which is written
+    only once all four points exist and instead names its metric, split and evaluator. ``producer``
+    is the command the caller expects the file from, and it is what the pending row tells the reader
+    to run.
+    """
     p = pred_dir / "learning_curve.csv"
-    if not p.exists() or "done" not in pd.read_csv(p).columns or not pd.read_csv(p)["done"].all():
-        return None, {"status": "pending", "needs": f"{p} with all four points trained (learning_curve --collect on the workstation)"}
+    if not p.exists():
+        return None, {"status": "pending", "needs": f"{p} — write it with {producer}"}
     df = pd.read_csv(p)
-    verdict = ""
+    if "done" in df.columns and not df["done"].all():
+        return None, {"status": "pending", "needs": f"{p} with all four points trained ({producer})"}
+    st: Dict[str, Any] = {"status": "done", "source": str(p)}
+    for key in ("metric", "split", "evaluator"):     # the RF-DETR curve names these in the file itself
+        if key in df.columns and df[key].notna().any():
+            st[key] = str(df[key].dropna().iloc[0])
     md = pred_dir / "learning_curve.md"
     if md.exists():
-        verdict = md.read_text().split("→ **")[1].split("**")[0] if "→ **" in md.read_text() else ""
-    return df, {"status": "done", "source": str(p), "verdict": verdict}
+        text = md.read_text()
+        st["verdict"] = text.split("→ **")[1].split("**")[0] if "→ **" in text else ""
+        st["reading"] = str(md)
+    return df, st
+
+
+def _and_list(items: list) -> str:
+    return " and ".join([", ".join(items[:-1]), items[-1]]) if len(items) > 1 else "".join(items)
+
+
+def _md_meta(md: Path, key: str) -> Optional[str]:
+    if not md.exists():
+        return None
+    m = re.search(rf"^- {re.escape(key)}: (.+)$", md.read_text(encoding="utf-8"), flags=re.M)
+    return m.group(1).strip() if m else None
+
+
+def learning_curve_facts(tab: Path, fallback_md: Path) -> Dict[str, Any]:
+    """The curve the report table carries: its metric, its points and its verdict, whichever produced it.
+
+    `tables/learning_curve.md` names the metric and the verdict of the curve that Stage 7 copied in —
+    the YOLO curve (gingiva mask mAP@50) or the RF-DETR one (`val/segm_mAP_50`, both classes). Nothing
+    here assumes which; the plateau wording downstream follows the verdict in the file, never the other
+    way round.
+    """
+    df = pd.read_csv(tab / "learning_curve.csv")
+    meta = tab / "learning_curve.md"
+    metric = _md_meta(meta, "metric") or ("diseti_seg_map50" if "diseti_seg_map50" in df.columns else "")
+    if metric not in df.columns:
+        raise SystemExit(f"{tab / 'learning_curve.csv'} carries no readable curve metric ({metric!r}); "
+                         "rebuild the report (scripts/build_report.py) so the table names its metric.")
+    short = metric.rsplit("/", 1)[-1]
+    label = ("gingiva mask mAP@50" if metric == "diseti_seg_map50" else
+             f"mask mAP@50 over both classes (COCO, `{metric}`)" if short.startswith("segm_mAP_50") and not short.endswith("50_95") else
+             f"`{metric}`")
+    verdict = (_md_meta(meta, "verdict") or "").strip()
+    reading = Path(_md_meta(meta, "reading") or fallback_md)
+    rule = ""
+    if reading.exists():
+        line = next((ln for ln in reading.read_text(encoding="utf-8").splitlines() if "\u2192 **" in ln), "")
+        rule = line.split("\u2192 **")[0].strip()          # the gains, not just the text before the first arrow
+    df = df.sort_values("fraction")
+    return {"df": df, "metric": metric, "label": label, "verdict": verdict,
+            "plateau": verdict.startswith("plateau"), "rule": rule,
+            "points": _and_list([f"{v:.3f}" for v in df[metric]]),
+            "sizes": _and_list(["?" if pd.isna(n) else str(int(n)) for n in df["n_train_images"]]),
+            "first": float(df[metric].iloc[0]), "last": float(df[metric].iloc[-1])}
 
 
 def expert_agreement(expert_dir: Path) -> Tuple[Optional[pd.DataFrame], Dict[str, Any]]:

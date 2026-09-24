@@ -106,8 +106,8 @@ def main() -> int:
     dem = pd.read_csv(tab / "demographics.csv").set_index("group"); S["dem"] = src(tab / "demographics.csv", root)
     seg, seg_kind = read_segmentation_metrics(tab / "segmentation_metrics_test.csv"); S["seg"] = src(tab / "segmentation_metrics_test.csv", root)
     tm = json.loads((o5 / "test_metrics.json").read_text()); S["tm"] = src(o5 / "test_metrics.json", root)
-    lc = pd.read_csv(tab / "learning_curve.csv"); S["lc"] = src(tab / "learning_curve.csv", root)
-    lc_md = (o5 / "learning_curve.md").read_text(encoding="utf-8").splitlines()[2]; S["lcmd"] = src(o5 / "learning_curve.md", root)
+    LC = T.learning_curve_facts(tab, o5 / "learning_curve.md"); lc = LC["df"]
+    S["lc"] = src(tab / "learning_curve.csv", root); S["lcmd"] = src(tab / "learning_curve.md", root)
     acc = pd.read_csv(o6 / "measurement_accuracy.csv").set_index("set"); S["acc"] = src(o6 / "measurement_accuracy.csv", root)
     est3 = pd.read_csv(o3 / "estimator_comparison.csv").set_index("combo"); S["est3"] = src(o3 / "estimator_comparison.csv", root)
     sens3 = pd.read_csv(o3 / "sensitivity.csv").set_index("subset"); S["sens3"] = src(o3 / "sensitivity.csv", root)
@@ -186,6 +186,18 @@ def main() -> int:
     settings_note = ("at the standard evaluation settings (confidence floor 0.001, NMS IoU 0.7, 300 detections per image)" if std_ok else
                      "at the pipeline's operating point (confidence 0.25, NMS IoU 0.5, 20 detections per image); the standard-settings figure is being recomputed and will replace it")
     lc100 = lc[lc["fraction"] == 1.0].iloc[0]; lc25 = lc[lc["fraction"] == 0.25].iloc[0]
+    # What the curve shows, in the words the manuscript uses. Written once and reused by the three
+    # answers below, so a curve that does not plateau cannot be reported as a plateau in one of them.
+    lc_finding = (f"{LC['label']} rose from {LC['first']:.3f} to {LC['last']:.3f} and reached a plateau ({LC['rule']})"
+                  if LC["plateau"] else
+                  f"{LC['label']} was {LC['points']} at {LC['sizes']} training images respectively ({LC['rule']}). "
+                  "Performance had not plateaued within the available training-set size; the increments between adjacent "
+                  "points are of the same order as run-to-run variation, so the curve indicates that additional data could "
+                  "still improve segmentation performance. This is stated as a limitation")
+    lc_seed_note = ("" if LC["plateau"] else
+                    " The curve was drawn from a single training run per point (one seed), so the run-to-run spread was "
+                    "not measured and no error bars are given; this is why the ordering of two adjacent points is not read "
+                    "as a result on its own.")
 
     def f(x, d=2, sign=False):
         return (f"{x:+.{d}f}" if sign else f"{x:.{d}f}")
@@ -236,8 +248,8 @@ def main() -> int:
     A["power"] = dict(status="READY", text=(
         "The reviewer is right to question it, and the answer is that the approach is not appropriate; we have removed the calculation rather than defend it. A χ² test on counts of correct and incorrect detections is not an analysis performed in this study, "
         "and conventional hypothesis-testing sample-size methods do not determine how much data a deep-learning segmentation model needs. The revised manuscript replaces it with two separate, explicit justifications. "
-        f"(i) For model development, data adequacy is assessed empirically with a learning curve: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images), "
-        f"gingiva mask mAP@50 rising from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])} and reaching a plateau ({lc_md.split('→')[0].strip()}). "
+        f"(i) For model development, data adequacy is assessed empirically with a learning curve: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images), and "
+        f"{lc_finding}.{lc_seed_note} "
         f"(ii) For the millimetre-level agreement analysis, the sample size is justified by estimation precision rather than power: {precision_note} "
         f"(iii) For the agreement between the model's class assignment and the clinicians' assignment, a sample-size calculation appropriate to that analysis was performed by the study statistician with the `kappaSize` package in R: for a four-category classification with a minimum acceptable kappa of 0.40, "
         "an expected kappa of 0.60, a two-sided alpha of 0.05 and 80 % power, and a conservative 2 % prevalence for the rarest class, the minimum required sample is 110 images, rising to 123 after allowing for about 10 % data loss. "
@@ -255,9 +267,12 @@ def main() -> int:
     A["external_validity"] = dict(status="READY", text=(
         "We agree with the reviewer on both points and have removed the claim. External validity cannot be established by the size of a single-centre cohort, and the χ² calculation addressed a comparison of correct and incorrect detections that this study never performs; "
         "it therefore says nothing about the data requirement of a segmentation model either. The calculation, the appendix containing it and the sentence claiming that the cohort size supports external validity have all been removed. "
-        f"Data adequacy is now shown empirically instead: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) with the validation set held constant, "
-        f"and gingiva mask mAP@50 rose from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])} with the gain between the last two points a small fraction of the gain between the first two ({lc_md.split('→')[0].strip()}), i.e. the dataset is at the plateau of its learning curve. "
-        "We also accept the reviewer's point about external testing and we do not attempt to disguise it: no external data were available, so the study reports an internal estimate only. "
+        f"Data adequacy is now shown empirically instead: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) with the validation set held constant: "
+        f"{lc_finding}.{lc_seed_note} "
+        + ("" if LC["plateau"] else
+           "We note that this result runs with the reviewer's argument rather than against it: the curve does not establish that the present cohort is sufficient, and we do not use it to claim so. "
+           "It says that the segmentation model has not exhausted what more data of this kind could give it, which is one more reason for the larger and more varied datasets the reviewer asks for. ")
+        + "We also accept the reviewer's point about external testing and we do not attempt to disguise it: no external data were available, so the study reports an internal estimate only. "
         + (f"The Limitations state: \"{m_single.group(1)}\" " if m_single else "The Limitations state that all images come from a single centre and a single imaging device, that the reported performance is an internal estimate, and that external validation on other centres, devices and populations is required before clinical use. ")
         + "We have not performed external validation and we do not claim it; it is named as the necessary next step rather than as a limitation in passing."),
         changes="Methods 2.1 — sample-size paragraph and Appendix A removed; 'supports the reliability and external validity' sentence deleted; [Supplementary Figure S1 — learning curve]; Limitations — single centre / single device / internal estimate", files=["outputs/07_report/figures/learning_curve.png", "outputs/07_report/tables/learning_curve.md", "outputs/07_report/MANUSCRIPT_EDITS.md"], sources=[S["lc"], S["lcmd"], S["guc"]])
@@ -371,10 +386,14 @@ def main() -> int:
         changes="Results 3.1 — gingiva mAP stated explicitly with its evaluation settings; [Table — segmentation metrics at both settings]; Limitations — new paragraph; Discussion — link to the boundary analysis", files=["outputs/07_report/tables/segmentation_metrics_test.md", "outputs/06_prediction/boundary_by_set.md", "outputs/08_architecture/PROTOCOL.md"], sources=[S["seg"], S["acc"], S["dec"]])
     A["no_improvement"] = dict(status="READY", text=(
         "The reviewer is right that there was no meaningful gain, and the honest explanation is twofold. First, the comparison was not sound: the preliminary figure and the final figure came from different dataset versions and different validation sets, so the near-identical numbers were not evidence of anything. "
-        "All performance figures in the revision come from a single fixed, participant-level test set evaluated once. Second, the dataset is at the plateau of its learning curve, which we now show empirically instead of asserting it: retraining the final architecture on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition "
-        f"({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) raises gingiva mask mAP@50 from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])}, and the gain between the last two points is a small fraction of the gain between the first two ({lc_md.split('→')[0].strip()}). "
-        "Additional data of the same kind, further hyperparameter search and larger model scales are therefore not expected to help; what limits the gingiva class is the annotation of a thin, festooned boundary, which is where we direct the analysis and the remaining error."),
-        changes="Results 3.1 — comparison across dataset versions removed; [Supplementary Figure S1 — learning curve]; Discussion — why performance plateaus", files=["outputs/07_report/figures/learning_curve.png", "outputs/07_report/tables/learning_curve.md", "outputs/07_report/tables/segmentation_metrics_test.md"], sources=[S["lc"], S["lcmd"], S["seg"]])
+        "All performance figures in the revision come from a single fixed, participant-level test set evaluated once. Second, we no longer assert where the dataset sits on its learning curve; we measured it. Retraining the final architecture on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition "
+        f"({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) with the validation set held constant: {lc_finding}.{lc_seed_note} "
+        + ("Additional data of the same kind, further hyperparameter search and larger model scales are therefore not expected to help; what limits the gingiva class is the annotation of a thin, festooned boundary, which is where we direct the analysis and the remaining error."
+           if LC["plateau"] else
+           "The absence of a gain between the earlier submissions is therefore explained by the comparison itself, not by a ceiling in the data: we cannot claim that more data would not help, and we do not. "
+           "What limits the gingiva class within this dataset is the annotation of a thin, festooned boundary, which is where we direct the analysis and the remaining error, and a larger and more varied training set remains the other open route.")),
+        changes="Results 3.1 — comparison across dataset versions removed; [Supplementary Figure S1 — learning curve]; Discussion — "
+                + ("why performance plateaus" if LC["plateau"] else "what the learning curve does and does not show, and the data limitation that follows from it"), files=["outputs/07_report/figures/learning_curve.png", "outputs/07_report/tables/learning_curve.md", "outputs/07_report/tables/segmentation_metrics_test.md"], sources=[S["lc"], S["lcmd"], S["seg"]])
     A["validation_vs_test"] = dict(status="READY", text=(
         "The reviewer is right, and this was a genuine methodological error rather than a presentational one: the figures reported as final results were validation-set metrics of a model whose architecture, scale and hyperparameters had been chosen on that same validation set. "
         f"In the revision the dataset is partitioned once at participant level into training, validation and test ({int(dc.loc['total', 'train'])} / {int(dc.loc['total', 'valid'])} / {int(dc.loc['total', 'test'])} images), the test set is fixed and untouched during development, and it is evaluated once with the final model. "

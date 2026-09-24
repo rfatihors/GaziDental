@@ -36,10 +36,17 @@ sys.path.insert(0, str(ROOT))
 from gsv4.config import load_config, resolve  # noqa: E402
 from gsv4.report.figures import PLOT_DPI  # noqa: E402
 
-# The metric the plateau rule reads, in order of preference. RF-DETR's evaluate() returns whatever
-# its pycocotools wrapper produces, so the name is resolved against the file rather than assumed.
+# The metric the plateau rule reads, in order of preference. It is mask mAP@50 first, the same
+# metric family the YOLO learning curve plots (`gsv4/train/learning_curve.py`, mask mAP@50); the two
+# curves therefore answer the same question, even though this one is averaged over both classes by
+# pycocotools while the YOLO rule reads the gingiva class alone.
+#
+# RF-DETR's evaluate() returns whatever its pycocotools wrapper produces, and it prefixes every key
+# with the split it evaluated on (`val/segm_mAP_50`), so a candidate also matches the part after the
+# last "/" rather than the whole name.
 METRIC_CANDIDATES = ("segm_mAP_50", "segm_map50", "segm_mAP50", "segm_mAP_50_95", "segm_mAP",
                      "segm_map", "map50_segm", "segm_AP50", "segm_AP")
+META_COLUMNS = ("fraction", "run", "n_train_images", "split", "evaluator", "metric", "source")
 FRACTIONS = {25: 0.25, 50: 0.50, 75: 0.75}
 
 
@@ -54,16 +61,30 @@ def load_point(path: Path, fraction: float, run: str) -> dict:
             **{k: v for k, v in m.items() if isinstance(v, (int, float)) and k != "seed"}}
 
 
+def numeric_keys(df: pd.DataFrame) -> list[str]:
+    return sorted(c for c in df.columns if c not in META_COLUMNS and df[c].dtype != object)
+
+
+def find_column(df: pd.DataFrame, name: str) -> str | None:
+    """The column called ``name``, with or without RF-DETR's ``<split>/`` prefix."""
+    if name in df.columns:
+        return name
+    hits = [c for c in df.columns if c.rsplit("/", 1)[-1] == name]
+    return hits[0] if len(hits) == 1 else None
+
+
 def pick_metric(df: pd.DataFrame, wanted: str | None) -> str:
     if wanted:
-        if wanted not in df.columns:
-            raise SystemExit(f"metric {wanted!r} is not in the evaluation files; available: {sorted(c for c in df.columns if df[c].dtype != object)}")
-        return wanted
-    for c in METRIC_CANDIDATES:
-        if c in df.columns:
+        c = find_column(df, wanted)
+        if c is None:
+            raise SystemExit(f"metric {wanted!r} is not in the evaluation files; available: {numeric_keys(df)}")
+        return c
+    for name in METRIC_CANDIDATES:
+        c = find_column(df, name)
+        if c is not None:
             return c
     raise SystemExit("none of the expected segmentation-mAP keys is in the evaluation files; pass --metric explicitly. "
-                     f"Available numeric keys: {sorted(c for c in df.columns if df[c].dtype != object and c != 'fraction')}")
+                     f"Available numeric keys: {numeric_keys(df)}")
 
 
 def main() -> int:
@@ -98,21 +119,26 @@ def main() -> int:
     df["n_train_images"] = [len([ln for ln in (lists / counts[r]).read_text().splitlines() if ln.strip()])
                             if (lists / counts[r]).exists() else pd.NA for r in df["run"]]
     metric = pick_metric(df, args.metric)
-    df = df[["fraction", "run", "n_train_images", "split", "evaluator", "source", metric]
-            + [c for c in df.columns if c not in ("fraction", "run", "n_train_images", "split", "evaluator", "source", metric)]]
+    df["metric"] = metric                         # which key the curve was read on, in the file itself
+    df = df[list(META_COLUMNS) + [metric] + [c for c in df.columns if c not in META_COLUMNS and c != metric]]
     df.to_csv(out_dir / "learning_curve.csv", index=False)
 
     v = df.set_index("fraction")[metric]
     gain_early, gain_late = float(v[0.50] - v[0.25]), float(v[1.00] - v[0.75])
     plateau = gain_late < gain_early / 4          # the rule the YOLO curve used, unchanged
-    verdict = "plateau" if plateau else "still rising"
+    verdict = "plateau" if plateau else "not plateaued (report as limitation)"
+    steps = [(a, b, float(v[b] - v[a])) for a, b in zip(df["fraction"][:-1], df["fraction"][1:])]
+    steps_txt = "; ".join(f"{100 * a:.0f}→{100 * b:.0f} %: {d:+.4f}" for a, b, d in steps)
+    dips = [f"{100 * b:.0f} %" for _, b, d in steps if d < 0]
+    dip_note = (f"The curve is not monotonic: the {' and the '.join(dips)} point falls below the one before it, "
+                "so the steps between neighbouring points are of the same order as the noise between runs. " if dips else "")
 
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(df["fraction"] * 100, df[metric], "o-", color="#0072B2", lw=1.8)
     for _, r in df.iterrows():
         ax.annotate(f"{r[metric]:.3f}", (r["fraction"] * 100, r[metric]), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8)
     ax.set_xlabel("training subset, % of the training partition"); ax.set_ylabel(f"{metric} ({split} split)")
-    ax.set_title(f"RF-DETR-Seg Large @624 learning curve — {verdict}", fontsize=10)
+    ax.set_title(f"RF-DETR-Seg Large @624 learning curve — {metric} on {split}, seed {args.seed} — {verdict}", fontsize=9)
     ax.spines[["top", "right"]].set_visible(False); ax.grid(axis="y", color="0.9", lw=0.6); ax.set_axisbelow(True)
     fig.tight_layout(); fig.savefig(out_dir / "learning_curve.png", dpi=PLOT_DPI); plt.close(fig)
 
@@ -124,6 +150,10 @@ final model of PLAN.md 1, reused rather than retrained and evaluated on the same
 learning curve is not mixed in here: it belongs to the previous final model and stays in the appendix.
 
 {metric} gain 25→50 %: {gain_early:+.4f}; 75→100 %: {gain_late:+.4f} → **{verdict}** (rule: 75→100 gain < 1/4 of the 25→50 gain).
+
+Increments between adjacent points: {steps_txt}. {dip_note}Each point is one training run with one
+seed (seed {args.seed}); the run-to-run spread was not measured, so the curve carries no error bars and the order
+of two adjacent points is not evidence on its own.
 
 | fraction | run | n_train_images | {metric} |
 |---|---|---|---|

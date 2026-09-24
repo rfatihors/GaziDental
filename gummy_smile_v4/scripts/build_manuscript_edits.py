@@ -101,8 +101,8 @@ def main() -> int:
     dem = pd.read_csv(tab / "demographics.csv").set_index("group")
     seg, seg_kind = read_segmentation_metrics(tab / "segmentation_metrics_test.csv")
     tm = json.loads((o5 / "test_metrics.json").read_text())
-    lc = pd.read_csv(tab / "learning_curve.csv")
-    lc_rule = (o5 / "learning_curve.md").read_text(encoding="utf-8").splitlines()[2]
+    LC = T.learning_curve_facts(tab, o5 / "learning_curve.md")
+    lc = LC["df"]
     acc = pd.read_csv(o6 / "measurement_accuracy.csv").set_index("set")
     est3 = pd.read_csv(o3 / "estimator_comparison.csv").set_index("combo")
     bset = pd.read_csv(o6 / "boundary_by_set.csv").set_index("set")
@@ -192,8 +192,11 @@ def main() -> int:
     edit("manuscript", "2.1 Study design (sample size)", "The sample size for this study was calculated using G*Power software",
          "REMOVE the whole sample-size paragraph and Appendix A, and replace with: \"No formal power calculation was applied to the segmentation training set, because conventional hypothesis-testing sample-size methods do not determine the data requirements of deep-learning models. "
          f"Data adequacy was instead assessed empirically: the final architecture was retrained on stratified 25 %, 50 %, 75 % and 100 % subsets of the training partition ({int(lc25['n_train_images'])} to {int(lc100['n_train_images'])} images) with the validation set held constant, "
-         f"and gingiva mask mAP@50 rose from {f(lc25['diseti_seg_map50'])} to {f(lc100['diseti_seg_map50'])}, reaching a plateau (Supplementary Figure S1). "
-         f"For the millimetre-level agreement analysis the sample size is justified by precision rather than power: {ms.get('precision_note', '')}\"",
+         + (f"and {LC['label']} rose from {LC['first']:.3f} to {LC['last']:.3f}, reaching a plateau (Supplementary Figure S1). " if LC["plateau"] else
+            f"and {LC['label']} was {LC['points']} at {LC['sizes']} training images respectively (Supplementary Figure S1). "
+            "Performance had not plateaued within the available training-set size; the increments between adjacent points are of the same order as run-to-run variation, "
+            "so the curve indicates that additional data could still improve segmentation performance. This is stated as a limitation. ")
+         + f"For the millimetre-level agreement analysis the sample size is justified by precision rather than power: {ms.get('precision_note', '')}\"",
          "The χ² calculation describes a comparison of correct and incorrect detections that the study never performs, and it cannot determine the data requirement of a segmentation model.",
          "R2-sample-size, R4-external-validity", [S["lc"]], span=4, action="replace whole paragraph")
     edit("manuscript", "2.1 Study design (external validity)", "the sample size of the present study supports the reliability and external validity of the model",
@@ -292,7 +295,9 @@ def main() -> int:
          "Expand the Limitations to state, each in its own sentence: single centre and single device, so the performance is an internal estimate; gingival and skin pigmentation and ethnicity were not recorded, so their effect on segmentation could not be assessed; "
          f"age and sex were recorded for part of the cohort only ({int(dem.loc['all', 'age_recorded'])} and {int(dem.loc['all', 'sex_recorded'])} of {int(dem.loc['all', 'n'])}); the E4 class (> 8 mm) does not occur in this cohort, so that branch of the decision table is not validated; "
          f"gingival segmentation is the weakest component (test-set mask mAP@50 {f(sg['seg_map50'])}) and places the lower gingival margin {f(a6['gingiva_bottom_edge_bias_mm_mean'])} mm too low on average; "
-         "and one image produced no gingiva mask, so a deployed system must flag such images for manual review rather than output a value.",
+         + ("" if LC["plateau"] else
+            "the learning curve had not plateaued within the available training-set size, so additional training data could still improve segmentation performance; ")
+         + "and one image produced no gingiva mask, so a deployed system must flag such images for manual review rather than output a value.",
          "The reviewers ask for pigmentation, rare classes and the gingiva performance to be discussed as limitations; the current sentence is vague.",
          "R2-8, R3-Results-1, R3-Discussion-5", [S["dem"], S["seg"], S["bset"]])
     edit("manuscript", "5 Conclusion", "This study presents a segmentation-based analytical pipeline that enables the objective measurement of gingival display",
